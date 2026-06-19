@@ -3,7 +3,7 @@
   "info": {
     "title": "Turjuman API",
     "description": "Deterministic REST API for the Turjuman developer CLI and CI sync.\n\n**Base URL:** your own deployment's `ApiUrl` (printed by `turjuman deploy`); replace the server below with it.\n\n**Auth:** every `/v1/projects` route requires `Authorization: Bearer <api-key>`. The meta endpoints (`/`, `/v1/formats`, `/v1/openapi.json`) are public.",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "servers": [
     {
