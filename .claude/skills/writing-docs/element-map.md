@@ -48,7 +48,7 @@ relative to the repo root; doc pages are under `docs/`.
 
 ## Infra / ops
 
-- **CDK stack / deploy** (`packages/deploy/src/`, `turjuman-deploy` bin)
+- **CDK construct / deploy** (`packages/aws-cdk/src/`, `packages/aws-deploy/src/`, `turjuman-aws-deploy` bin)
   → `self-hosting.mdx` (deploy, options, cost, teardown).
 
 - **Tests / tiers** (`packages/*/`, `.github/workflows/`)

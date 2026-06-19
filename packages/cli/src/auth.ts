@@ -9,7 +9,7 @@ import { usageError } from "./errors.js";
  * TURJUMAN_API_URL / TURJUMAN_API_KEY override the file.
  *
  * This module is published under the `@turjuman/cli/auth` subpath so the
- * separate `@turjuman/deploy` tool can write/remove credentials through the
+ * separate `@turjuman/aws-deploy` tool can write/remove credentials through the
  * same single source as the CLI.
  */
 

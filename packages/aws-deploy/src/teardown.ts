@@ -2,14 +2,13 @@ import { existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { CloudFormationClient } from "@aws-sdk/client-cloudformation";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { S3Client } from "@aws-sdk/client-s3";
 import * as p from "@clack/prompts";
 import { AUTH_FILE, removeAuth } from "@turjuman/cli/auth";
 import { clientConfig } from "./aws.js";
-import { DEPLOY_CONFIG_FILE, loadDeployConfig } from "./config.js";
+import { DEPLOY_CONFIG_FILE, loadLocalConfig } from "./config.js";
 import { deleteTable, enableTableDeletionProtection } from "./dynamo.js";
 import { unwrap } from "./prompts.js";
-import { emptyAndDeleteBucket } from "./s3.js";
+import { deleteSsmConfig, ssmConfigPath } from "./ssm-config.js";
 import { deleteStack, describeStack } from "./stack.js";
 
 export interface TeardownOptions {
@@ -23,14 +22,16 @@ export interface TeardownOptions {
 
 /**
  * Remove a Turjuman installation: delete the CloudFormation stack (and with it
- * the DynamoDB table and ALL data), delete the separately-managed S3 deploy
- * bucket, then optionally remove local config/credentials. Idempotent — each
- * step checks existence so a re-run after a partial teardown won't crash.
+ * the Lambdas/roles/Function URLs), handle the retained DynamoDB table, and
+ * delete the stack's SSM config parameter. It deliberately does NOT touch the
+ * shared CDK bootstrap (`CDKToolkit`) stack or its staging bucket, which other
+ * stacks may share. Idempotent — each step checks existence so a re-run after a
+ * partial teardown won't crash.
  */
 export async function runTeardown(opts: TeardownOptions = {}): Promise<void> {
   p.intro("Turjuman teardown");
 
-  const existing = loadDeployConfig();
+  const existing = loadLocalConfig();
   const stackName = opts.stackName ?? existing?.stackName;
   if (!stackName) {
     throw new Error(
@@ -40,8 +41,6 @@ export async function runTeardown(opts: TeardownOptions = {}): Promise<void> {
   const region =
     opts.region ?? existing?.region ?? process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION;
   if (!region) throw new Error("Provide --region or set AWS_REGION.");
-  // The deploy bucket name (random suffix) is only known from the saved config.
-  const deployBucket = existing?.deployBucket;
 
   const cfn = new CloudFormationClient(clientConfig(region));
 
@@ -65,10 +64,9 @@ export async function runTeardown(opts: TeardownOptions = {}): Promise<void> {
         keepTable
           ? `The DynamoDB table${tableName ? ` (${tableName})` : ""} will be RETAINED with its data.`
           : `It also deletes the DynamoDB table${tableName ? ` (${tableName})` : ""} and ALL translation data — permanently.`,
-        deployBucket ? `The deploy bucket "${deployBucket}" will also be removed.` : "",
-      ]
-        .filter(Boolean)
-        .join("\n"),
+        `The SSM config parameter (${ssmConfigPath(stackName)}) will also be removed.`,
+        "The shared CDK bootstrap (CDKToolkit) stack is left untouched.",
+      ].join("\n"),
     );
     const typed = unwrap(
       await p.text({
@@ -118,29 +116,15 @@ export async function runTeardown(opts: TeardownOptions = {}): Promise<void> {
     );
   }
 
-  // 3. Empty and delete the deploy bucket (lives outside the stack).
-  if (deployBucket) {
-    const s3 = new S3Client(clientConfig(region, { s3: true }));
-    const bucketSpin = p.spinner();
-    bucketSpin.start(`Removing deploy bucket ${deployBucket}`);
-    try {
-      await emptyAndDeleteBucket(s3, deployBucket);
-      bucketSpin.stop("Deploy bucket removed");
-    } catch (err: any) {
-      if (err?.name === "BucketNotEmpty") {
-        bucketSpin.stop("Deploy bucket not empty");
-        p.log.warn(
-          `Bucket "${deployBucket}" could not be emptied (it may have versioning enabled). Remove it manually.`,
-        );
-      } else {
-        bucketSpin.stop("Deploy bucket removal failed");
-        throw err;
-      }
-    }
-  } else {
-    p.log.warn(
-      `No deploy bucket recorded in config — skipping. Look for a bucket named "turjuman-deploy-${region}-*" and remove it manually if present.`,
-    );
+  // 3. Delete the stack's canonical SSM config parameter (idempotent).
+  const ssmSpin = p.spinner();
+  ssmSpin.start("Removing the SSM config parameter");
+  try {
+    await deleteSsmConfig(region, stackName);
+    ssmSpin.stop("SSM config parameter removed");
+  } catch (err) {
+    ssmSpin.stop("Could not remove the SSM config parameter");
+    p.log.warn(`Remove ${ssmConfigPath(stackName)} manually if it remains: ${(err as Error).message}`);
   }
 
   // 4. Offer to remove local config + credentials.

@@ -1,22 +1,28 @@
 ---
 title: Self-host on AWS
-description: "Deploy Turjuman to your own AWS account with one command — a single DynamoDB table and three Lambda Function URLs, defined with the AWS CDK."
+description: "Deploy Turjuman to your own AWS account with one command — a single DynamoDB table and Lambda Function URLs, defined with the AWS CDK and shipped as pre-bundled assets."
 ---
 
-Turjuman deploys to your own AWS account. The whole stack is **one DynamoDB table and three Lambda
-functions** exposed as Function URLs. The infrastructure is defined with the
-[AWS CDK](https://docs.aws.amazon.com/cdk/); the `turjuman-deploy deploy` command bundles the
-functions, uploads them, deploys the stack with the CDK toolkit, and creates your first owner — in
-one step.
+Turjuman deploys to your own AWS account. The whole stack is **one DynamoDB table and up to three
+Lambda functions** exposed as Function URLs (the MCP server is always deployed; the REST API and the
+webhook dispatcher are optional). The infrastructure is the
+[`@turjuman/aws-cdk`](https://github.com/mogharsallah/turjuman/tree/main/packages/aws-cdk) construct,
+built on the [AWS CDK](https://docs.aws.amazon.com/cdk/). The `turjuman-aws-deploy deploy` command
+self-bootstraps the CDK environment, deploys the stack from pre-bundled Lambda assets, and creates
+your first owner — in one step.
 
 <Note>
-  Self-hosting lives in a **separate package, `@turjuman/deploy`** (binary `turjuman-deploy`),
+  Self-hosting lives in a **separate package, `@turjuman/aws-deploy`** (binary `turjuman-aws-deploy`),
   so the day-to-day [`turjuman` developer CLI](/reference/cli-commands) stays a lean install with
-  no AWS SDK. Run the deploy tool with `npx @turjuman/deploy <command>` from a clone of this repo.
+  no AWS SDK. Run the deploy tool with `npx @turjuman/aws-deploy <command>` — the Lambda code ships
+  pre-bundled inside the published `@turjuman/mcp-server` / `@turjuman/api` packages, so you no longer
+  need a clone of the repo to deploy.
 </Note>
 
 <Note>
-  **No SAM CLI and no `cdk bootstrap` required** — it deploys with your own credentials.
+  **No SAM CLI.** The CLI self-bootstraps the standard CDK environment (the shared `CDKToolkit`
+  stack — a staging bucket + roles) on first run, so a deploy stays one command. Pass
+  `--skip-bootstrap` if you bootstrap your accounts yourself (`cdk bootstrap`).
 </Note>
 
 <Warning>
@@ -29,46 +35,71 @@ one step.
 
 - An AWS account and credentials configured (`aws configure`, or any standard AWS env vars).
 - Node.js 20+.
-- A clone of this repo (`deploy` builds the Lambdas from source, so it runs from the repo).
+- Permission to create the CDK bootstrap resources on first deploy (CloudFormation, S3, IAM, SSM) —
+  or a pre-bootstrapped account plus `--skip-bootstrap`.
 
 ## Deploy
 
 ```bash
-npm install
-npm run build                   # compile all packages
-npx @turjuman/deploy deploy   # interactive: stack name, region, options, first owner
+npx @turjuman/aws-deploy deploy   # interactive: stack name, region, options, first owner
 ```
 
 `deploy` will:
 
-1. bundle each Lambda with esbuild and upload the zips to an S3 deploy bucket (created on first run);
-2. synthesize the CDK stack and deploy/update it with the CDK toolkit (using your credentials — no
-   `cdk bootstrap` step);
+1. self-bootstrap the standard CDK environment (idempotent — creates/updates the shared `CDKToolkit`
+   stack), unless you pass `--skip-bootstrap`;
+2. synthesize the CDK stack — with the pre-bundled Lambda assets — and deploy/update it with the CDK
+   toolkit using your credentials, publishing the assets through the bootstrap staging bucket;
 3. create the first owner and print the API key **once**, saving it to `~/.turjuman/auth.json` so
    you're immediately logged in.
 
-Your answers are saved to `turjuman.deploy.json`, so re-running `npx @turjuman/deploy deploy`
-updates the stack non-interactively (e.g. after `git pull`). Use
-`npx @turjuman/deploy deploy --reconfigure` to change them.
+The resolved configuration is stored as the **canonical copy in AWS SSM**
+(`/turjuman/<stack>/deploy-config`) and cached locally in `turjuman.deploy.json`. Because the
+canonical copy lives in AWS, re-running `npx @turjuman/aws-deploy deploy` updates the stack
+non-interactively **from any machine or CI** — it reads SSM first, falling back to the local cache,
+then prompts. Use `npx @turjuman/aws-deploy deploy --reconfigure` to re-prompt. (Owner email/name are
+PII and are kept in the local cache only, never written to SSM.)
 
 Outputs printed at the end:
 
 | Output | Use |
 |---|---|
 | `McpUrl` | MCP server URL for your `.mcp.json` |
-| `ApiUrl` | REST API URL for `turjuman login --url` |
+| `ApiUrl` | REST API URL for `turjuman login --url` (omitted if the API surface is disabled) |
 | `TableName` | the DynamoDB table |
 
 ### Options
 
-`deploy` prompts for these; all default to the values below (the prior behavior):
+`deploy` prompts for these; all default to the values below (the prior topology):
 
 | Setting | Default | Notes |
 |---|---|---|
 | CORS origins | `*` | Comma-separated list of allowed origins for the Function URLs |
 | Lambda memory | `256` MB | |
 | Lambda timeout | `15` s | |
+| REST API surface | on | The CLI/CI REST API. Disable to run MCP-only |
+| Webhook surface | on | The DynamoDB Streams → webhook dispatcher |
+| Point-in-time recovery | off | Continuous DynamoDB backups |
+| Deletion protection | off | Block table deletion at the API level |
 | VPC | off | Optionally supply subnet + security-group ids to run the functions in a VPC |
+
+Re-running `deploy` is the one path for any change. For non-interactive single-knob edits (handy in
+CI), skip the prompts with flags — each reads the canonical config, applies the change, and
+redeploys:
+
+```bash
+npx @turjuman/aws-deploy deploy --disable webhook        # remove a surface (api|webhook)
+npx @turjuman/aws-deploy deploy --enable webhook         # add it back
+npx @turjuman/aws-deploy deploy --set mcp.memorySize=512 # tune one function
+npx @turjuman/aws-deploy deploy --set table.billingMode=PROVISIONED
+```
+
+<Note>
+  The table's **Stream stays on even when the webhook surface is disabled**, so re-enabling webhooks
+  later never replaces the table. Switching `table.billingMode` is subject to DynamoDB's
+  once-per-24h limit, and provisioned `readCapacity`/`writeCapacity` (default 25/25) are split across
+  the table and its three GSIs.
+</Note>
 
 ### The first owner
 
@@ -103,13 +134,14 @@ Every other non-`POST` verb returns `405` with an `Allow` header. Clients that s
 To see whether Turjuman is already installed in an AWS account/region:
 
 ```bash
-npx @turjuman/deploy status                 # uses turjuman.deploy.json / AWS_REGION
-npx @turjuman/deploy status --region eu-west-1
+npx @turjuman/aws-deploy status                 # uses turjuman.deploy.json / AWS_REGION
+npx @turjuman/aws-deploy status --region eu-west-1
 ```
 
 `status` reports the stack named in `turjuman.deploy.json` (if present) **and** scans the region
-for any Turjuman-managed stacks by tag — so it finds installs even from a fresh checkout with no
-local config, or when the stack was renamed. Every `deploy` tags its stack `app=turjuman` /
+for any Turjuman-managed stacks by tag — so it finds installs even from a fresh machine with no
+local config, or when the stack was renamed. For each stack it reads the canonical config from SSM
+and prints which surfaces/knobs are configured. Every `deploy` tags its stack `app=turjuman` /
 `turjuman:managed=true`, which is what the scan keys off. CloudFormation is regional, so run it
 once per region you want to check.
 
@@ -118,14 +150,16 @@ once per region you want to check.
 To remove an installation entirely:
 
 ```bash
-npx @turjuman/deploy teardown               # uses turjuman.deploy.json
-npx @turjuman/deploy teardown --stack-name turjuman --region us-east-1
+npx @turjuman/aws-deploy teardown               # uses turjuman.deploy.json
+npx @turjuman/aws-deploy teardown --stack-name turjuman --region us-east-1
 ```
 
 `teardown` deletes the CloudFormation stack (Lambdas, IAM roles, Function URLs, **and the DynamoDB
-table with all translation data**), then empties and deletes the S3 deploy bucket. It asks you to
-type the stack name to confirm, then offers to remove the local `turjuman.deploy.json` and
-`~/.turjuman/auth.json`. It's idempotent — re-running after a partial teardown won't error.
+table with all translation data**) and removes the stack's SSM config parameter. It asks you to type
+the stack name to confirm, then offers to remove the local `turjuman.deploy.json` and
+`~/.turjuman/auth.json`. It **does not** touch the shared CDK bootstrap (`CDKToolkit`) stack or its
+staging bucket, which other stacks may share. It's idempotent — re-running after a partial teardown
+won't error.
 
 <Warning>
   This **permanently destroys all data** unless you pass `--keep-table`. Export anything you need
@@ -137,7 +171,7 @@ type the stack name to confirm, then offers to remove the local `turjuman.deploy
 To remove the install but **preserve the DynamoDB table and its data**:
 
 ```bash
-npx @turjuman/deploy teardown --keep-table
+npx @turjuman/aws-deploy teardown --keep-table
 ```
 
 The table is declared with `RemovalPolicy.RETAIN`, so deleting the stack always leaves it in place;
@@ -150,28 +184,25 @@ aws dynamodb update-table --table-name <TableName> --no-deletion-protection-enab
 aws dynamodb delete-table --table-name <TableName> --region <region>
 ```
 
-If you ran a `deploy` from a different checkout, the deploy bucket name lives in that checkout's
-`turjuman.deploy.json`. Without it, `teardown` deletes the stack and warns you to remove the
-leftover `turjuman-deploy-<region>-*` bucket by hand.
-
 ## Bootstrapping an owner against an existing table
 
 If you provisioned the table some other way (or want a second org's owner), create an owner against
 the deployed table directly:
 
 ```bash
-npx @turjuman/deploy bootstrap --table <TableName> --region <region> --email you@example.com --name "You"
+npx @turjuman/aws-deploy bootstrap --table <TableName> --region <region> --email you@example.com --name "You"
 ```
 
-This is the same client-side bootstrap `npx @turjuman/deploy deploy` runs; it prints the API key
+This is the same client-side bootstrap `npx @turjuman/aws-deploy deploy` runs; it prints the API key
 once and refuses to create a second owner once the org has users.
 
 ## Cost
 
-- **DynamoDB**: on-demand (`PAY_PER_REQUEST`) — you pay per request, nothing when idle. Typical
-  team usage stays within the free tier (25 GB storage + generous request allowances).
+- **DynamoDB**: on-demand (`PAY_PER_REQUEST`) by default — you pay per request, nothing when idle.
+  Typical team usage stays within the free tier (25 GB storage + generous request allowances).
 - **Lambda**: arm64, 256 MB, only billed per invocation; the free tier covers 1M requests/month.
 - **Function URLs**: no API Gateway, no hourly cost.
+- **CDK bootstrap**: a one-time staging S3 bucket (negligible — it only holds deploy assets).
 
 For a small team this is effectively free to run.
 
@@ -191,10 +222,10 @@ and call `bootstrapOwner` from `@turjuman/core`.
 ## Updating
 
 ```bash
-git pull
-npm install && npm run build
-npx @turjuman/deploy deploy   # re-runs non-interactively using turjuman.deploy.json
+npx @turjuman/aws-deploy deploy   # re-runs non-interactively using the canonical SSM config
 ```
 
-DynamoDB schema changes are additive (new item types reuse the existing keys/GSIs), so updates are
-normally just a redeploy.
+Pinning the deploy CLI version (`npx @turjuman/aws-deploy@<version> deploy`) ships a coherent
+construct + MCP + API triple, so the code updates in place (URLs stay stable, the table is
+untouched). DynamoDB schema changes are additive (new item types reuse the existing keys/GSIs), so
+updates are normally just a redeploy.

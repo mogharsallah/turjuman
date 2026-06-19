@@ -11,8 +11,8 @@ import { registerPull } from "./commands/pull.js";
 import { registerPush } from "./commands/push.js";
 import { registerCheck } from "./commands/check.js";
 
-/** The self-host/deploy verbs moved to the separate `@turjuman/deploy` tool so
- * the sync CLI install stays free of the AWS SDK + CDK. Point users there. */
+/** The self-host/deploy verbs moved to the separate `@turjuman/aws-deploy` tool
+ * so the sync CLI install stays free of the AWS SDK + CDK. Point users there. */
 const DEPLOY_VERBS = new Set(["deploy", "status", "teardown", "bootstrap"]);
 
 function registerDeployHint(program: Command): void {
@@ -21,7 +21,7 @@ function registerDeployHint(program: Command): void {
     if (cmd && DEPLOY_VERBS.has(cmd)) {
       process.stderr.write(
         `"${cmd}" is part of the Turjuman self-host tooling. Run it with:\n` +
-          `  npx @turjuman/deploy ${cmd}\n`,
+          `  npx @turjuman/aws-deploy ${cmd}\n`,
       );
     } else {
       process.stderr.write(`Unknown command "${cmd ?? ""}". Run "turjuman --help".\n`);

@@ -60,12 +60,14 @@ npm run e2e:down
 
 ### Tier B — deployed e2e
 
-`scripts/e2e-deploy.mjs` deploys the CDK stack into LocalStack by reusing the `@turjuman/deploy`
-building blocks (`packages/deploy/src`): it bundles each Lambda with esbuild, uploads the zips to
-LocalStack S3, deploys with
-the CDK programmatic toolkit (no `cdk bootstrap`), seeds two bootstrap owners, and writes the stack
-outputs to `packages/e2e/.e2e/env.json`. The vitest specs under `packages/e2e/src/` are then black
-boxes that only talk HTTP to the deployed Function URLs and the webhook receiver.
+`scripts/e2e-deploy.mjs` deploys the CDK stack into LocalStack by reusing the `@turjuman/aws-deploy`
+toolkit (`packages/aws-deploy/src`): it deploys the `@turjuman/aws-cdk` construct with the CDK
+programmatic toolkit, which ships the pre-bundled `@turjuman/mcp-server` / `@turjuman/api` Lambda
+assets via `Code.fromAsset` and **self-bootstraps** the standard CDK environment in LocalStack. It
+then seeds two bootstrap owners and writes the stack outputs to `packages/e2e/.e2e/env.json`. The
+vitest specs under `packages/e2e/src/` are then black boxes that only talk HTTP to the deployed
+Function URLs and the webhook receiver. (If LocalStack bootstrap is flaky, set
+`TURJUMAN_E2E_SKIP_BOOTSTRAP=1` and run `cdklocal bootstrap` first.)
 
 ```bash
 npm run test:e2e          # one-shot: start → deploy → test → teardown
@@ -103,7 +105,8 @@ authorization or domain logic in a transport.
   `src/program.ts`, and unit-test the pure function with a fake `ApiClient` + `OutputSink`. Talk to the
   API only through `ApiClient` (`src/client.ts`), whose request bodies reuse core's zod schemas. See
   [CLI commands](/reference/cli-commands). The AWS self-host tooling is a **separate** package,
-  `packages/deploy` (`turjuman-deploy`) — keep AWS/CDK deps there, not in the CLI.
+  `packages/aws-deploy` (`turjuman-aws-deploy`), over the `packages/aws-cdk` construct — keep
+  AWS/CDK deps there, not in the CLI.
 
 ## Documentation
 

@@ -29,7 +29,7 @@ model of "what is approved" vs "what is still being worked on" (see the dual-slo
 
 ```
   ┌─────────────────────────────────────────────────────────────────────┐
-  │  0. PROVISION         turjuman-deploy deploy · bootstrap · API keys │  one-time
+  │  0. PROVISION     turjuman-aws-deploy deploy · bootstrap · API keys │  one-time
   ├─────────────────────────────────────────────────────────────────────┤
   │  1. SETUP             create_project(baseLocale) · add_locale ·       │
   │                       add_member(roles) · glossary terms              │
@@ -62,7 +62,7 @@ advances to the next.
 
 ### 0 — Provision *(one-time)*
 - **Actor:** operator (becomes the first OWNER).
-- **How:** `npx @turjuman/deploy deploy` stands up the AWS stack; client-side bootstrap mints the
+- **How:** `npx @turjuman/aws-deploy deploy` stands up the AWS stack; client-side bootstrap mints the
   first OWNER and an API key (shown once). Additional keys via `create_api_key`.
 
 ### 1 — Setup

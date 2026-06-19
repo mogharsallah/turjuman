@@ -10,7 +10,9 @@ and CI sync; all business logic and authorization live in
 served at `GET /v1/openapi.json`.
 
 It's normally deployed for you by
-[`@turjuman/deploy`](https://github.com/mogharsallah/turjuman/tree/main/packages/deploy).
+[`@turjuman/aws-deploy`](https://github.com/mogharsallah/turjuman/tree/main/packages/aws-deploy),
+which ships this package's pre-bundled Lambda assets (`lambda/handler.mjs` and
+`lambda-webhook/webhook.mjs`).
 
 ## License
 

@@ -19,8 +19,8 @@ The CLI is part of this repo (`packages/cli`). Build it (`npm run build`) and ru
 
 <Note>
   Self-hosting (`deploy`, `status`, `teardown`, `bootstrap`) lives in a separate package,
-  [`@turjuman/deploy`](/self-hosting) (binary `turjuman-deploy`), so it can carry the heavy
-  AWS/CDK dependencies without bloating this CLI. Run those with `npx @turjuman/deploy <command>`.
+  [`@turjuman/aws-deploy`](/self-hosting) (binary `turjuman-aws-deploy`), so it can carry the heavy
+  AWS/CDK dependencies without bloating this CLI. Run those with `npx @turjuman/aws-deploy <command>`.
 </Note>
 
 ## Configuration
@@ -83,7 +83,7 @@ independently — each overrides only its own value from the file — so you can
 
 See [Sync files with the CLI](/guides/sync-with-cli) for `push`/`pull` semantics (deprecation,
 `--prune`, dry runs, and the approved-vs-working slot), and [Self-host on AWS](/self-hosting) for the
-`turjuman-deploy` commands.
+`turjuman-aws-deploy` commands.
 
 ## Machine-readable output (`--json`)
 

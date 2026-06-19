@@ -78,10 +78,11 @@ behaviour or permissions.
 | `packages/schema` | The pure, AWS-free base: domain model, zod schemas, RBAC policy, ICU helpers, QA engine (the shared brain) |
 | `packages/formats` | Localization file-format adapters (JSON/YAML/ARB/CSV/Android/iOS) over a canonical ICU representation |
 | `packages/core` | Server core: the single-table DynamoDB repository + services, built on `@turjuman/schema` |
-| `packages/mcp-server` | Stateless Streamable HTTP MCP server → Lambda |
-| `packages/api` | REST API for the CLI/CI → Lambda, plus the webhook dispatcher |
+| `packages/mcp-server` | Stateless Streamable HTTP MCP server → Lambda (ships a pre-bundled Lambda asset) |
+| `packages/api` | REST API for the CLI/CI → Lambda, plus the webhook dispatcher (ships pre-bundled Lambda assets) |
 | `packages/cli` | The lightweight `turjuman` developer CLI (no AWS SDK) |
-| `packages/deploy` | The `turjuman-deploy` self-host tooling (AWS CDK deployer) |
+| `packages/aws-cdk` | The `@turjuman/aws-cdk` CDK construct — the composable deploy topology |
+| `packages/aws-deploy` | The `turjuman-aws-deploy` self-host CLI (deploys the construct, self-bootstraps) |
 
 ## Where to next
 

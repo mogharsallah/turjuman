@@ -80,21 +80,20 @@ talking to it.
 
 ### 1. Deploy to your AWS account
 
-One command bundles the Lambdas, deploys the CloudFormation stack, and creates your first owner — no
-SAM CLI needed (see [Self-hosting](docs/self-hosting.mdx) for options):
+One command self-bootstraps the CDK environment, deploys the CloudFormation stack from pre-bundled
+Lambda assets, and creates your first owner — no SAM CLI, no clone needed (see
+[Self-hosting](docs/self-hosting.mdx) for options):
 
 ```bash
-npm install
-npm run build
-npx @turjuman/deploy deploy   # interactive; prints McpUrl/ApiUrl and your API key
+npx @turjuman/aws-deploy deploy   # interactive; prints McpUrl/ApiUrl and your API key
 ```
 
-Self-hosting ships as a separate `@turjuman/deploy` package (binary `turjuman-deploy`) so the
+Self-hosting ships as a separate `@turjuman/aws-deploy` package (binary `turjuman-aws-deploy`) so the
 day-to-day `turjuman` developer CLI stays a lean, AWS-free install.
 
 ### 2. Your first owner + API key
 
-`turjuman-deploy deploy` creates the first owner at the end and prints the API key **once** (also
+`turjuman-aws-deploy deploy` creates the first owner at the end and prints the API key **once** (also
 saved to `~/.turjuman/auth.json`, so you're logged in). It refuses to create a second owner once the
 org has users, so re-running `deploy` to update the stack is safe.
 

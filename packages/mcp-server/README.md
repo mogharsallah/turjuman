@@ -9,7 +9,8 @@ connects to it with a bearer API key and does the translating; all business logi
 live in [`@turjuman/core`](https://github.com/mogharsallah/turjuman/tree/main/packages/core).
 
 It's normally deployed for you by
-[`@turjuman/deploy`](https://github.com/mogharsallah/turjuman/tree/main/packages/deploy). See the
+[`@turjuman/aws-deploy`](https://github.com/mogharsallah/turjuman/tree/main/packages/aws-deploy),
+which ships this package's pre-bundled Lambda asset (`lambda/handler.mjs`). See the
 [architecture docs](https://github.com/mogharsallah/turjuman/blob/main/docs/concepts/architecture.mdx)
 for the request flow.
 
