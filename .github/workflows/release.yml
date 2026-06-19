@@ -5,8 +5,23 @@ name: release
 # On a push to main this either (a) opens/updates a "Version Packages" PR when
 # there are pending changesets, or (b) — when none are pending — publishes any
 # package whose current version isn't on the registry yet. The very first run
-# publishes the initial 0.1.0 set; nothing is published until the NPM_TOKEN
-# secret is configured (npm publish has no credentials without it).
+# publishes the initial 0.1.0 set.
+#
+# Authentication uses npm Trusted Publishing (OIDC): there is no long-lived
+# NPM_TOKEN secret. npm trusts this specific workflow in this repo and mints a
+# short-lived, workflow-scoped credential at publish time, so there is no token
+# to steal, rotate, or exfiltrate — the mitigation for the 2025 npm
+# supply-chain (Shai-Hulud) class of attack. It also makes provenance
+# attestations automatic (no --provenance flag needed).
+#
+# Setup required once on npmjs.com (per package, by an account maintainer):
+#   Package → Settings → Trusted Publisher → GitHub Actions →
+#   org/repo = mogharsallah/turjuman, workflow = release.yml.
+# Until that's configured, the publish step has no credentials and nothing is
+# published; the Version Packages PR flow still works. See docs/contributing.mdx.
+#
+# Third-party actions are pinned to a commit SHA (not a floating tag) so a
+# compromised tag can't silently change what runs here.
 on:
   push:
     branches: [main]
@@ -16,26 +31,26 @@ concurrency: release-${{ github.ref }}
 jobs:
   release:
     name: changesets release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # Trusted Publishing requires a cloud-hosted runner
     permissions:
       contents: write # create the Version Packages PR / tags
       pull-requests: write # open/update the Version Packages PR
-      id-token: write # npm provenance (OIDC)
+      id-token: write # OIDC token for npm Trusted Publishing + provenance
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: 20
           cache: npm
           registry-url: https://registry.npmjs.org
+      # Trusted Publishing requires npm CLI >= 11.5.1; Node 20 ships an older npm.
+      - run: npm install -g npm@11
       - run: npm ci
       - run: npm run build
       - name: Create Version Packages PR or publish
-        uses: changesets/action@v1
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:
           version: npm run version-packages
           publish: npm run release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: "true"
