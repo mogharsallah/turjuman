@@ -2,7 +2,7 @@ import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { type E2EEnv, loadEnv } from "./helpers/env.js";
 import { makeMcpClient } from "./helpers/mcp.js";
-import { startReceiver } from "./helpers/receiver.js";
+import { type CapturedRequest, startReceiver } from "./helpers/receiver.js";
 
 /**
  * Full deployed end-to-end test. The CDK stack is deployed into
@@ -71,7 +71,13 @@ describe.skipIf(!env)("deployed e2e against LocalStack", () => {
         entries: [{ name: "greeting", value: "Bonjour" }],
       });
 
-      const delivery = await receiver.next(90_000);
+      // Scan for the translation.updated delivery rather than consuming the first
+      // arrival: with the stream poller reading from the horizon, an earlier
+      // (filtered) record could still surface, and a redelivered batch could
+      // duplicate — waitFor tolerates both, next() would not.
+      const isTranslationUpdated = (r: CapturedRequest) =>
+        r.headers["x-turjuman-event"] === "translation.updated";
+      const delivery = await receiver.waitFor(isTranslationUpdated, 90_000);
       expect(delivery.headers["x-turjuman-event"]).toBe("translation.updated");
       const expectedSig =
         "sha256=" + createHmac("sha256", webhook.secret).update(delivery.body).digest("hex");
