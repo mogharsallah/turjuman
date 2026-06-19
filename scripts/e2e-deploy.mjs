@@ -53,7 +53,15 @@ const { deployStack } = await import("../packages/aws-deploy/dist/toolkit.js");
 //    toolkit self-bootstraps LocalStack and talks to it via AWS_ENDPOINT_URL.
 console.log("Deploying CDK stack with the toolkit...");
 const outputs = await deployStack({
-  props: { stackName: STACK, functionDefaults: { architecture: ARCH } },
+  props: {
+    stackName: STACK,
+    functionDefaults: { architecture: ARCH },
+    // Read the change stream from the shard horizon rather than LATEST. The stack
+    // is freshly deployed per run, so there is no history to replay; reading from
+    // the horizon removes the flaky race where a webhook-triggering write lands
+    // before LocalStack's stream poller is actually live and is silently missed.
+    webhook: { streamStartingPosition: "TRIM_HORIZON" },
+  },
   region: REGION,
   skipBootstrap: process.env.TURJUMAN_E2E_SKIP_BOOTSTRAP === "1",
 });

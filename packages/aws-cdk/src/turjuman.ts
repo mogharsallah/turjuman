@@ -151,7 +151,10 @@ export class Turjuman extends Construct {
       table.grantStreamRead(webhook);
       webhook.addEventSource(
         new eventsources.DynamoEventSource(table, {
-          startingPosition: lambda.StartingPosition.LATEST,
+          startingPosition:
+            props.webhook?.streamStartingPosition === "TRIM_HORIZON"
+              ? lambda.StartingPosition.TRIM_HORIZON
+              : lambda.StartingPosition.LATEST,
           batchSize: 10,
           retryAttempts: 2,
           bisectBatchOnError: true,

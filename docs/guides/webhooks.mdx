@@ -70,6 +70,11 @@ non-2xx status, or does not respond within the delivery timeout — 5s by defaul
 `TURJUMAN_WEBHOOK_TIMEOUT_MS` on the webhook function to change it. A single failing endpoint never
 blocks delivery to the others.
 
+The dispatcher reads the change stream from `LATEST`, so only changes made after the mapping exists
+are delivered and a redeploy never replays history. The `@turjuman/aws-cdk` construct can override
+this per stack with `webhook.streamStartingPosition` (`"TRIM_HORIZON"` reads from the start of the
+shard — mainly useful for short-lived, freshly-deployed stacks such as the e2e suite).
+
 <Note>
   Treat events as fire-and-forget hints, not a guaranteed log. If you need exactly-once or
   replayable processing, make your handler idempotent and reconcile against the API (for example,
