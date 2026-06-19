@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# SAM / build artifacts
+.aws-sam/
+packaged.yaml
+
+# Local env / credentials
+.env
+.env.*
+!.env.example
+.turjuman/
+turjuman.auth.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Test / coverage
+coverage/
+
+# e2e artifacts (deployed Function URLs + seeded API key)
+packages/e2e/.e2e/

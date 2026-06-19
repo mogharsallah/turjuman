@@ -1,0 +1,46 @@
+{
+  "name": "turjuman",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open-source, self-hosted translation management platform managed primarily through an MCP server connected to an LLM/agent.",
+  "license": "MIT",
+  "workspaces": [
+    "packages/schema",
+    "packages/formats",
+    "packages/core",
+    "packages/mcp-server",
+    "packages/api",
+    "packages/cli",
+    "packages/deploy",
+    "packages/e2e"
+  ],
+  "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true",
+    "build": "npm run build --workspaces --if-present",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "npm run build && changeset publish",
+    "gen:openapi": "node scripts/gen-openapi.mjs",
+    "dev:setup": "node scripts/dev-setup.mjs",
+    "test": "npm run test --workspaces --if-present",
+    "test:unit": "npm run test --workspaces --if-present",
+    "test:integration": "AWS_ENDPOINT_URL_DYNAMODB=http://localhost:4566 AWS_REGION=us-east-1 AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test TURJUMAN_TABLE=TurjumanIntegration npm run test -w @turjuman/core -w @turjuman/api",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "clean": "npm run clean --workspaces --if-present",
+    "e2e:up": "docker compose up -d localstack && node scripts/wait-for-localstack.mjs",
+    "e2e:deploy": "node scripts/e2e-deploy.mjs",
+    "e2e:test": "npm run test -w @turjuman/e2e",
+    "e2e:teardown": "node scripts/e2e-teardown.mjs",
+    "e2e:down": "docker compose down -v",
+    "test:e2e": "npm run e2e:up && npm run e2e:deploy && npm run e2e:test; code=$?; npm run e2e:down; exit $code"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.31.0",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,41 @@
+name: release
+
+# Publish the public @turjuman/* packages to npm via Changesets.
+#
+# On a push to main this either (a) opens/updates a "Version Packages" PR when
+# there are pending changesets, or (b) — when none are pending — publishes any
+# package whose current version isn't on the registry yet. The very first run
+# publishes the initial 0.1.0 set; nothing is published until the NPM_TOKEN
+# secret is configured (npm publish has no credentials without it).
+on:
+  push:
+    branches: [main]
+
+concurrency: release-${{ github.ref }}
+
+jobs:
+  release:
+    name: changesets release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the Version Packages PR / tags
+      pull-requests: write # open/update the Version Packages PR
+      id-token: write # npm provenance (OIDC)
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - run: npm run build
+      - name: Create Version Packages PR or publish
+        uses: changesets/action@v1
+        with:
+          version: npm run version-packages
+          publish: npm run release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"

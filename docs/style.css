@@ -1,0 +1,126 @@
+/* ===========================================================================
+   Turjuman documentation — brand theming
+   Auto-loaded by Mintlify (any style.css at the docs root is included).
+   The palette is derived from the logo's teal gradient (hue 180).
+   Selectors are scoped to Turjuman utility classes used in the MDX, so this
+   never depends on Mintlify's internal class names.
+   =========================================================================== */
+
+:root {
+  --doc-teal-300: #5eeaea;
+  --doc-teal-400: #2fd4d4;
+  --doc-teal-500: #16a2a2;
+  --doc-teal-600: #0e8181;
+  --doc-teal-700: #0c6b6b;
+  --doc-ink: #0f172a;
+}
+
+/* --- Landing hero ---------------------------------------------------------- */
+.doc-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  margin: 1.5rem 0 2.75rem;
+  padding: 1.9rem 2rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(22, 162, 162, 0.22);
+  background:
+    radial-gradient(130% 130% at 0% 0%, rgba(94, 234, 234, 0.16), transparent 55%),
+    linear-gradient(135deg, rgba(14, 129, 129, 0.10), rgba(22, 162, 162, 0.03));
+}
+.dark .doc-hero {
+  border-color: rgba(94, 234, 234, 0.18);
+  background:
+    radial-gradient(130% 130% at 0% 0%, rgba(94, 234, 234, 0.14), transparent 55%),
+    linear-gradient(135deg, rgba(22, 162, 162, 0.14), rgba(14, 129, 129, 0.04));
+}
+
+.doc-hero__body { min-width: 0; }
+
+.doc-hero__eyebrow {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--doc-teal-600);
+  background: rgba(22, 162, 162, 0.10);
+  border: 1px solid rgba(22, 162, 162, 0.20);
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  margin: 0 0 0.95rem;
+}
+.dark .doc-hero__eyebrow {
+  color: var(--doc-teal-300);
+  border-color: rgba(94, 234, 234, 0.22);
+}
+
+.doc-hero__lead {
+  font-size: 1.2rem;
+  line-height: 1.5;
+  font-weight: 500;
+  max-width: 48ch;
+  margin: 0 0 1.4rem;
+}
+
+.doc-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+
+.doc-hero__mark {
+  width: 116px;
+  height: 116px;
+  flex: none;
+  filter: drop-shadow(0 12px 26px rgba(14, 129, 129, 0.35));
+}
+@media (max-width: 760px) {
+  .doc-hero { gap: 1rem; padding: 1.5rem 1.4rem; }
+  .doc-hero__mark { display: none; }
+}
+
+/* --- Buttons --------------------------------------------------------------- */
+.doc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-decoration: none;
+  padding: 0.62rem 1.15rem;
+  border-radius: 0.7rem;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+.doc-btn:hover { transform: translateY(-1px); }
+
+.doc-btn--primary {
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--doc-teal-500), var(--doc-teal-600));
+  box-shadow: 0 6px 18px -8px rgba(14, 129, 129, 0.7);
+}
+.doc-btn--primary:hover { box-shadow: 0 10px 22px -8px rgba(14, 129, 129, 0.78); }
+
+.doc-btn--ghost {
+  color: var(--doc-teal-600);
+  background: transparent;
+  border: 1px solid rgba(22, 162, 162, 0.35);
+}
+.doc-btn--ghost:hover { background: rgba(22, 162, 162, 0.08); }
+.dark .doc-btn--ghost { color: var(--doc-teal-300); border-color: rgba(94, 234, 234, 0.30); }
+.dark .doc-btn--ghost:hover { background: rgba(94, 234, 234, 0.10); }
+
+/* --- Gradient text utility ------------------------------------------------- */
+.doc-gradient {
+  background: linear-gradient(120deg, var(--doc-teal-600), var(--doc-teal-400));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.dark .doc-gradient {
+  background: linear-gradient(120deg, var(--doc-teal-300), var(--doc-teal-500));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}

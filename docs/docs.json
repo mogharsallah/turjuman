@@ -1,0 +1,85 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Turjuman",
+  "description": "Open-source, self-hosted translation management driven by your AI agent over MCP, with a thin developer CLI for locale files.",
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#0E8181",
+    "light": "#53DFDF",
+    "dark": "#16A2A2"
+  },
+  "background": {
+    "decoration": "gradient"
+  },
+  "fonts": {
+    "family": "Inter"
+  },
+  "navigation": {
+    "groups": [
+      {
+        "group": "Get started",
+        "pages": ["index", "quickstart", "self-hosting"]
+      },
+      {
+        "group": "Concepts",
+        "pages": [
+          "concepts/architecture",
+          "concepts/roles-and-permissions",
+          "concepts/lifecycle"
+        ]
+      },
+      {
+        "group": "Guides",
+        "pages": [
+          "guides/translate-with-mcp",
+          "guides/sync-with-cli",
+          "guides/quality-checks",
+          "guides/webhooks"
+        ]
+      },
+      {
+        "group": "Reference",
+        "pages": [
+          "reference/mcp-tools",
+          "reference/cli-commands",
+          "reference/file-formats",
+          "reference/qa-checks"
+        ]
+      },
+      {
+        "group": "API reference",
+        "openapi": "api-reference/openapi.json"
+      },
+      {
+        "group": "Contributing",
+        "pages": ["contributing"]
+      }
+    ]
+  },
+  "contextual": {
+    "options": ["copy", "view", "chatgpt", "claude"]
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "GitHub",
+        "href": "https://github.com/mogharsallah/turjuman"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Get started",
+      "href": "/quickstart"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/mogharsallah/turjuman"
+    }
+  }
+}

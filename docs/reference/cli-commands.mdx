@@ -1,0 +1,114 @@
+---
+title: CLI commands
+description: "Reference for the turjuman CLI: configuration files, every command and flag, and the supported file formats."
+---
+
+The `turjuman` CLI handles the deterministic locale-file work. For a task-oriented walkthrough see
+[Sync files with the CLI](/guides/sync-with-cli).
+
+<Note>
+  The CLI talks to the same REST API used in CI. Its endpoints have an interactive **API reference**
+  (in the sidebar), generated from the OpenAPI spec the API serves at `GET /v1/openapi.json`.
+</Note>
+
+## Install
+
+The CLI is part of this repo (`packages/cli`). Build it (`npm run build`) and run via
+`node packages/cli/dist/index.js`, or publish/link it as `turjuman`. It's a lean install —
+`commander` + `@turjuman/formats` + `@turjuman/schema` only, no AWS SDK.
+
+<Note>
+  Self-hosting (`deploy`, `status`, `teardown`, `bootstrap`) lives in a separate package,
+  [`@turjuman/deploy`](/self-hosting) (binary `turjuman-deploy`), so it can carry the heavy
+  AWS/CDK dependencies without bloating this CLI. Run those with `npx @turjuman/deploy <command>`.
+</Note>
+
+## Configuration
+
+Two pieces, kept deliberately separate — `turjuman.config.json` says **what and where you
+sync**, `~/.turjuman/auth.json` says **who you are**:
+
+### `turjuman.config.json` (committed, per repo)
+
+Created by `turjuman init`. A project can declare **multiple targets** (different
+formats/paths/namespaces), which is how mixed web + native apps and iOS's two-file output are handled:
+
+```json
+{
+  "projectId": "proj_xxx",
+  "targets": [
+    { "format": "json-nested",    "path": "locales/{locale}.json", "namespace": "default" },
+    { "format": "android",        "path": "android/values-{locale}/strings.xml" },
+    { "format": "ios-strings",    "path": "ios/{locale}.lproj/Localizable.strings" },
+    { "format": "ios-stringsdict","path": "ios/{locale}.lproj/Localizable.stringsdict" }
+  ]
+}
+```
+
+The legacy single-target shape (`{ projectId, format, path, namespace }`) is still accepted and read
+as one target. `path` is a pattern; `{locale}` is replaced with each locale code (e.g.
+`locales/fr.json`). `pull`/`push` iterate every target.
+
+### `~/.turjuman/auth.json` (NOT committed)
+
+API URL + key, created by `turjuman login`. The key is scoped to your **user**, not a
+project — a single key works across every project you have a role on, and per-project access is
+resolved per request from your memberships (there's no per-project key). See
+[Roles & permissions](/concepts/roles-and-permissions).
+
+In CI, set `TURJUMAN_API_URL` and `TURJUMAN_API_KEY` env vars instead. They can be set
+independently — each overrides only its own value from the file — so you can keep the URL in
+`auth.json` and inject just the key as a secret.
+
+<Note>
+  **Key scope matters.** `push` writes data, so it needs a **write-scoped, unexpired** API key — a
+  read-only or expired key makes it fail with an authorization/authentication error. Read-only keys
+  can still `pull`, `projects`, `locales`, and `check`, which makes them a good fit for verify-only CI
+  gates. See [Roles & permissions](/concepts/roles-and-permissions) for key scope and expiry.
+</Note>
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `login --url <url> --key <key>` | Save credentials for this machine |
+| `init --project <id> [--format <fmt>] [--path <pattern>] [--namespace <ns>]` | Write `turjuman.config.json` |
+| `projects` | List projects you can access |
+| `locales` | List the project's locales |
+| `formats` | List supported file formats |
+| `pull` | Download translations and write locale files |
+| `build` | Alias of `pull` (build files from stored translations) |
+| `push [--prune] [--dry-run] [--check]` | Upload local files. The base-locale file creates/updates keys; other locale files set translations |
+| `check [--locale <code>] [--check <id...>] [--approved]` | Run advisory QA checks; exits non-zero on error findings |
+
+See [Sync files with the CLI](/guides/sync-with-cli) for `push`/`pull` semantics (deprecation,
+`--prune`, dry runs, and the approved-vs-working slot), and [Self-host on AWS](/self-hosting) for the
+`turjuman-deploy` commands.
+
+## Machine-readable output (`--json`)
+
+Every command accepts a global `--json` flag. In JSON mode the command writes **one** JSON document
+to stdout (progress text is suppressed; diagnostics go to stderr), so CI jobs and agents can parse the
+result. For example `turjuman push --json` reports per-file counts, and `turjuman check --json`
+returns the QA report (`counts` + `findings`).
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Success — no QA error findings |
+| `1` | QA error findings present (`check`, or `push --check`) |
+| `2` | Usage error — bad flags, missing `turjuman.config.json`, or not logged in |
+| `3` | API or network error |
+
+On a non-zero exit, `--json` still emits a document (`{ "error": "…" }`) so failures stay parseable.
+API errors also carry the server's `requestId` — appended to the human message as `(request <id>)`
+and included in the `--json` document (`{ "error", "code", "requestId" }`) — so a failure can be
+correlated with the server-side log line (handy when an unexpected `500` returns a generic message).
+
+## Formats
+
+`json-nested` (i18next-style), `json-flat`, `yaml`, `arb` (Flutter), `properties` (Java), `csv`,
+`android` (`strings.xml`, incl. `<plurals>`), `ios-strings`, `ios-stringsdict`. Run
+`turjuman formats` for the live list. See [File formats](/reference/file-formats) for details and
+plural handling.

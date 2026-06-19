@@ -1,0 +1,76 @@
+---
+title: QA checks
+description: "The full catalogue of Turjuman's advisory quality-assurance checks, their default severities, the report shape, and how the engine is built."
+---
+
+The deterministic QA layer validates translations and reports problems through the MCP server, the
+REST API, and the CLI. QA is **advisory** — it never changes a translation or auto-approves anything.
+See [Run quality checks](/guides/quality-checks) for how to run and configure it.
+
+## The catalogue
+
+Each check runs over a single target translation paired with its **base-locale** value and the key's
+metadata. By default QA inspects the working `value`; pass `slot: "approved"` / `--approved` to
+inspect the delivered `approvedValue` snapshot instead. **Deprecated keys are never checked.**
+
+| id | default | what it catches |
+|---|---|---|
+| `icu_syntax` | error | value isn't valid ICU MessageFormat (unbalanced braces, malformed plural/select) |
+| `placeholders` | error | the target's variable set differs from the base (`{name}` missing or extra) |
+| `plural_forms` | error | a plural key isn't an ICU plural, or is missing the required `other` form |
+| `markup` | warning | HTML/XML tags differ from the base (dropped `</b>`, added `<i>`) — compared by tag name |
+| `length` | warning | the value exceeds the key's `maxLength` (measured in code points) |
+| `whitespace` | warning | leading/trailing-whitespace mismatch vs base, or consecutive spaces |
+| `punctuation` | info | terminal punctuation differs from the base (locale marks like `。？！।؟` are accepted) |
+| `empty` | error | a translated/approved translation has a blank value |
+| `glossary` | error/warn | a do-not-translate term isn't preserved (error); a preferred per-locale term is unused (warning) |
+| `duplicate` | info | two keys share an identical non-empty value in the same locale |
+| `stale` | info | the source value changed since this translation was written (also see `list_stale`) |
+| `coverage` | info | a key has no value for the locale — **disabled by default** (incomplete translation is normal mid-loop) |
+
+Deliberate limits:
+
+- **Plurals:** only the CLDR `other` form is required. Locale-specific required categories
+  (`one`/`few`/`many`/…) would need a CLDR rules dependency and make findings locale-dependent — a
+  future enhancement.
+- **Markup** compares tags by name and ignores attributes (whose values are often legitimately
+  translated), using a tolerant regex rather than a full HTML parser.
+- **Glossary** matching uses word boundaries for alphanumeric terms (so "art" doesn't match inside
+  "start") and respects each term's `caseSensitive` flag.
+- **Whitespace/punctuation never error** — conventions vary by locale, so they can't block CI.
+
+## Surfaces
+
+| Surface | How |
+|---|---|
+| MCP | `run_qa_checks { projectId, locale?, checks?, slot? }`, `get_qa_config`, `set_qa_config` |
+| REST | `POST /v1/projects/:id/checks`; `GET`/`PUT /v1/projects/:id/qa-config` |
+| CLI | `turjuman check [--locale <code>] [--check <id...>] [--approved]`; `turjuman push --check` |
+
+## The report
+
+```jsonc
+{
+  "projectId": "proj_…",
+  "baseLocale": "en",
+  "locales": ["fr", "de"],
+  "checks": ["icu_syntax", "placeholders", "…"],  // checks actually run (enabled ∩ filter)
+  "counts": { "error": 2, "warning": 5, "info": 1 },
+  "findings": [
+    { "checkId": "placeholders", "severity": "error", "namespace": "default",
+      "keyName": "greeting", "localeCode": "fr", "message": "Placeholder mismatch: missing {name}" }
+  ],
+  "byLocale": { "fr": ["…"], "de": ["…"] }         // the same findings, grouped
+}
+```
+
+`findings` is stable-sorted by locale, namespace, key, then check id.
+
+## How it's built
+
+A **pure engine** in `packages/schema/src/qa/` (a `CHECKS` registry in `@turjuman/schema`, mirroring the
+format-adapter registry) where each check is a pure function over a `QaContext`. The engine knows
+nothing about storage or the lifecycle state machine. `QaService` (`core/src/services/qa.ts`) is the
+single seam
+that loads data, derives the lifecycle-dependent context fields (`expectsValue`, `stale`, slot), runs
+the engine, and applies the per-project config. To add a check, see [Contributing](/contributing).

@@ -1,0 +1,188 @@
+---
+title: MCP tools
+description: "The full catalogue of Turjuman MCP tools — projects, locales, keys, translations, glossary, QA, webhooks, and administration."
+---
+
+The MCP server exposes the tools below. See [Translate with MCP](/guides/translate-with-mcp) for
+how to connect and example workflows. Every call carries a static `Authorization: Bearer <api-key>`
+that both authenticates the caller and determines permissions
+([Roles & permissions](/concepts/roles-and-permissions)).
+
+## Projects & locales
+
+| Tool | Purpose |
+|---|---|
+| `list_projects` | List projects you can access |
+| `get_project` | Fetch a single project |
+| `create_project` | Create a project (with `baseLocale`) |
+| `update_project` | Update project settings |
+| `list_locales` | List a project's locales |
+| `add_locale` | Add a target locale |
+
+## Keys
+
+| Tool | Purpose |
+|---|---|
+| `list_keys` | List keys (supports `limit` + `nextCursor`/`cursor` paging) |
+| `search_keys` | Search keys (paged: `limit` default 100/max 200 + `nextCursor`/`cursor`) |
+| `get_key` | Fetch a single key |
+| `create_key` | Create a key (set `description`, `tags`, `maxLength`, `plural`) |
+| `update_key` | Update a key's metadata |
+| `delete_key` | **Destructive** — hard-delete a key and all its translations; requires `confirm: true` |
+
+## Translations
+
+| Tool | Purpose |
+|---|---|
+| `get_translations` | By key (all locales) or by locale (paged: `limit` default 100/max 200 + `nextCursor`/`cursor`) |
+| `list_untranslated` | Keys with no value for a locale (paged: `limit` default 100/max 200 + `nextCursor`/`cursor`) |
+| `list_stale` | Translations whose source changed since they were written (paged: `limit` default 100/max 200 + `nextCursor`/`cursor`) |
+| `set_translation` | Write one working `value` |
+| `bulk_set_translations` | Write many (up to 500 `entries` per call); skips and reports unknown keys |
+| `set_translation_status` | Advance status (e.g. promote to `approved`) |
+
+## Glossary & translation memory
+
+| Tool | Purpose |
+|---|---|
+| `list_glossary` | List glossary terms (do-not-translate + preferred) |
+| `add_glossary_term` | Add a term |
+| `update_glossary_term` | Update a term |
+| `remove_glossary_term` | Remove a term |
+| `lookup_translation_memory` | Find prior phrasing (exact, normalized, bigram-fuzzy) |
+
+## Quality (QA)
+
+| Tool | Purpose |
+|---|---|
+| `run_qa_checks` | Advisory checks — run before approving (`{ projectId, locale?, checks?, slot? }`) |
+| `get_qa_config` | Read per-project QA config |
+| `set_qa_config` | Write per-project QA config (`{ checks?, ignore? }`) |
+
+See the [QA checks reference](/reference/qa-checks).
+
+## Webhooks & lifecycle
+
+| Tool | Purpose |
+|---|---|
+| `list_webhooks` | List registered webhooks |
+| `add_webhook` | Register a webhook (returns the `secret` once) |
+| `remove_webhook` | Remove a webhook |
+| `delete_project` | **Destructive** — requires `confirm: true` |
+
+## Administration
+
+| Tool | Purpose |
+|---|---|
+| `list_users` / `create_user` | Manage org users |
+| `set_user_role` | Set a global role (OWNER-gated for privileged roles) |
+| `list_members` / `add_member` / `set_member_role` / `remove_member` | Manage per-project membership |
+| `create_api_key` / `list_api_keys` / `revoke_api_key` | Manage API keys (secret shown once; revocation is immediate). `create_api_key` takes optional `readOnly` and `expiresAt` — see [key scope and expiry](/concepts/roles-and-permissions#api-key-scope-and-expiry) |
+
+<Note>
+  Tool errors (a missing key, a permission denial) come back as `isError` content so the agent can
+  read the reason and adjust. An unexpected internal fault is masked instead — the agent gets a
+  generic `Internal error (ref: <id>)` with a correlation id (also returned as the `x-request-id`
+  response header) that an operator can match to the server logs; the underlying detail never
+  reaches the model context.
+</Note>
+
+## Structured output
+
+Every tool returns a human-readable JSON text block (what most clients display). Tools that return a
+single object **also** emit it as MCP [`structuredContent`](https://modelcontextprotocol.io/specification/2025-11-25/server/tools#structured-content),
+so a client can consume the result without re-parsing text. Tools that return a list (e.g.
+`list_keys`, `list_projects`) carry text only — structured content must be a JSON object per the spec.
+
+A growing subset also declares an `outputSchema` (the SDK validates the structured result against it).
+These schemas are the canonical entity/result schemas from `@turjuman/core`, so a tool's structured
+output is exactly the shape the REST API documents and returns for the same data — one definition, no drift.
+
+| Tool | Structured shape |
+|---|---|
+| `get_project`, `create_project`, `update_project` | the project |
+| `add_locale` | the locale |
+| `get_key` | `{ key, translations[] }` |
+| `search_keys` | `{ keys[], nextCursor? }` |
+| `create_key`, `update_key` | the translation key |
+| `set_translation`, `set_translation_status` | the translation |
+| `bulk_set_translations` | `{ written, skipped[] }` |
+| `list_untranslated` | `{ locale, count, keys[], nextCursor? }` |
+| `list_stale` | `{ locale, count, keys[], nextCursor? }` |
+| `add_glossary_term`, `update_glossary_term` | the glossary term |
+| `add_webhook` | the webhook (including its signing secret) |
+| `create_user` | the user |
+| `add_member`, `set_member_role` | the membership |
+| `create_api_key` | `{ id, name, prefix, readOnly, expiresAt?, secret }` (secret shown once) |
+| `get_qa_config`, `set_qa_config` | the QA config |
+| `run_qa_checks` | the QA report `{ counts, findings[], byLocale, … }` |
+
+## Behaviour hints
+
+Each tool carries MCP [annotations](https://modelcontextprotocol.io/specification/2025-11-25/server/tools#tool-annotations)
+so a client can reason about a call before making it — for example to auto-approve reads or to confirm
+before a destructive change. These are advisory hints, not a substitute for server-side authorization.
+
+| Hint | Set on |
+|---|---|
+| `readOnlyHint: true` | `list_*`, `get_*`, `search_*`, `lookup_*`, and `run_qa_checks` |
+| `destructiveHint: true` | `delete_*`, `revoke_*`, `remove_*` |
+| `idempotentHint: true` | `set_*`, `update_*` |
+
+Other writes (`create_*`, `add_*`) are marked read-write but non-destructive.
+
+## Scoping the toolset
+
+The advertised toolset (`tools/list`) is scoped in two narrowing layers; permissions are always
+enforced on every call regardless ([Roles & permissions](/concepts/roles-and-permissions)).
+
+**By the API key (automatic).** The server only advertises tools the key could actually use, derived
+from the key's global signals:
+
+- A **read-only** key sees only the read tools (`list_*`/`get_*`/`search_*`/`lookup_*`/`run_qa_checks`).
+- A key whose **global role** can never reach an org-level action is not shown that tool —
+  `create_project`, `create_user`, and `set_user_role` are hidden from a global `MEMBER` (they need
+  `project.create` / `user.manage`).
+
+Project-scoped permissions are intentionally **not** applied here (they vary per project, so a key
+that's a `MANAGER` on some project still sees member/key/translation tools); those calls are still
+authorized at execution time.
+
+**By the client (optional).** A client can further narrow the set at connect time with query
+parameters on the connection URL — useful to cut context and ambiguity when it only needs part of
+the surface (e.g. a CI/pull integration that only reads):
+
+| Param | Value | Example |
+|---|---|---|
+| `tools` | comma-separated tool names (allowlist) | `?tools=list_untranslated,bulk_set_translations` |
+| `groups` | comma-separated groups | `?groups=keys,translations` |
+
+Valid groups are the domains `projects`, `keys`, `translations`, `glossary`, `webhooks`, `qa`,
+`admin`, plus a synthetic **`read`** group (every read-only tool — `list_*`/`get_*`/`search_*`/
+`lookup_*`/`run_qa_checks`). `tools` and `groups` combine (union). With neither param the full set is
+advertised. An unknown tool or group name is rejected with `400` (so a typo can't silently hide
+tools).
+
+```text
+https://<your-mcp-url>/?groups=read,glossary
+```
+
+<Note>
+  Tool scoping is a client convenience that shrinks `tools/list` (and the tools a client can call) —
+  **not** a security boundary. Permissions are always enforced by the API key's role
+  ([Roles & permissions](/concepts/roles-and-permissions)); a narrower URL never grants more than the
+  key allows, and a broader one never grants more than the key already has.
+</Note>
+
+## Tool naming
+
+Tool names follow a consistent verb convention so it's clear which tool to reach for:
+
+| Verb | Means | Examples |
+|---|---|---|
+| `create` | make a new top-level entity | `create_project`, `create_key` |
+| `add` | attach a child to an existing parent | `add_locale`, `add_member` |
+| `set` | write a value (create or replace it) | `set_translation` |
+| `update` | patch an entity's metadata fields | `update_key`, `update_project` |
+| `delete` | hard, cascading removal | `delete_key`, `delete_project` |
+| `remove` | detach a child without deleting the parent | `remove_member` |

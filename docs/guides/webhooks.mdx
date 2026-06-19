@@ -1,0 +1,77 @@
+---
+title: Receive webhooks
+description: "Register HMAC-signed webhooks to receive Turjuman change events — translation and key updates, locale additions — delivered via DynamoDB Streams."
+---
+
+Register a webhook to receive change events. The dispatcher (a Lambda fed by the table's DynamoDB
+stream) POSTs a JSON body for `translation.updated`, `key.created`, `key.updated`, `key.deleted`,
+`locale.added`, and `translation.stale`.
+
+## Register
+
+Use the `add_webhook` MCP tool (or the REST equivalent):
+
+> "Add a webhook to https://example.com/hooks/turjuman for this project."
+
+`add_webhook` → returns the webhook (including its `secret`, shown once). Manage with `list_webhooks`
+and `remove_webhook`.
+
+## Payload
+
+```json
+{
+  "event": "translation.updated",
+  "projectId": "proj_x",
+  "timestamp": "...",
+  "data": { "key": "greeting", "locale": "fr", "status": "translated" }
+}
+```
+
+Each request carries:
+
+- `X-Turjuman-Event` — the event name.
+- `X-Turjuman-Signature: sha256=<hex>` — an HMAC-SHA256 of the raw body using the webhook's
+  `secret`.
+
+## Verify the signature
+
+Always verify the signature before trusting the payload:
+
+```js
+import crypto from "node:crypto";
+
+const expected = "sha256=" + crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
+// timing-safe compare `expected` against the X-Turjuman-Signature header:
+const ok = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signatureHeader));
+```
+
+<Warning>
+  Compute the HMAC over the **raw** request body, before any JSON parsing/re-serialization — otherwise
+  the signature won't match.
+</Warning>
+
+## Events
+
+| Event | Fired when |
+|---|---|
+| `translation.updated` | a translation's value or status changes |
+| `translation.stale` | a base value changes and dependent translations are flagged stale |
+| `key.created` / `key.updated` / `key.deleted` | a key is added, edited, or removed |
+| `locale.added` | a locale is added to a project |
+
+These are the trigger surface for the continuous-localization [loop](/concepts/lifecycle): a new key
+or a stale flag re-enters the translate stage automatically.
+
+## Delivery guarantees
+
+Delivery is **best-effort / at-most-once**. The dispatcher POSTs each event once; it does not retry.
+A delivery is considered failed (and logged, then skipped) when the endpoint is unreachable, returns a
+non-2xx status, or does not respond within the delivery timeout — 5s by default, set
+`TURJUMAN_WEBHOOK_TIMEOUT_MS` on the webhook function to change it. A single failing endpoint never
+blocks delivery to the others.
+
+<Note>
+  Treat events as fire-and-forget hints, not a guaranteed log. If you need exactly-once or
+  replayable processing, make your handler idempotent and reconcile against the API (for example,
+  re-pull a locale) rather than relying on receiving every event.
+</Note>

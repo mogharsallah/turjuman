@@ -1,0 +1,51 @@
+# Example CI workflow for syncing translations with Turjuman.
+# This file lives in examples/ on purpose so it is NOT executed by this repo.
+# Copy it to .github/workflows/translations-sync.yml in YOUR project and set the
+# repository secrets TURJUMAN_API_URL and TURJUMAN_API_KEY (use a key tied to
+# a DEVELOPER user).
+name: Translations sync
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  push-source:
+    # Upload source strings whenever locale files change on main.
+    runs-on: ubuntu-latest
+    env:
+      TURJUMAN_API_URL: ${{ secrets.TURJUMAN_API_URL }}
+      TURJUMAN_API_KEY: ${{ secrets.TURJUMAN_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run build
+      - name: Push source keys to Turjuman
+        run: node packages/cli/dist/index.js push
+
+  pull-translations:
+    # Open a PR when new translations are available (manual trigger).
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      TURJUMAN_API_URL: ${{ secrets.TURJUMAN_API_URL }}
+      TURJUMAN_API_KEY: ${{ secrets.TURJUMAN_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run build
+      - name: Pull translations from Turjuman
+        run: node packages/cli/dist/index.js pull
+      - name: Open PR with updated translations
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore(i18n): sync translations from Turjuman"
+          title: "Sync translations from Turjuman"
+          branch: turjuman/translations-sync

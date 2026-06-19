@@ -1,0 +1,80 @@
+---
+title: Roles & permissions
+description: "Turjuman's RBAC model: global OWNER/ADMIN/MEMBER roles plus per-project MANAGER/EDITOR/DEVELOPER/VIEWER, and how they map onto the translation lifecycle."
+---
+
+Every request carries a static `Authorization: Bearer <api-key>`. The key both **authenticates** the
+caller (it resolves to a user) and **determines their permissions** (the user's roles). There are
+two role dimensions: **global** roles on the org and **per-project** roles granted via membership.
+
+A key is scoped to a **user**, not a project: a single key works across every project that user has a
+role on, and access is resolved per request from their memberships — there is no per-project key.
+
+## The matrix
+
+| | OWNER/ADMIN | MANAGER | EDITOR | DEVELOPER | VIEWER |
+|---|---|---|---|---|---|
+| Read project/keys/translations | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Write translations | ✓ | ✓ | ✓ | ✓ | — |
+| Review translations | ✓ | ✓ | ✓ | — | — |
+| Manage keys | ✓ | ✓ | ✓ | ✓ | — |
+| Manage locales | ✓ | ✓ | — | ✓ | — |
+| Manage members | ✓ | ✓ | — | — | — |
+| Create projects / manage users | ✓ | — | — | — | — |
+
+OWNER/ADMIN act as MANAGER on every project in their org. A plain MEMBER's authority is exactly
+their per-project memberships. The matrix is enforced by `requireProject` / `requireOrg`
+(`core/rbac.ts`) before every mutating service call.
+
+## OWNER vs ADMIN
+
+OWNER and ADMIN share the project/org matrix above, but OWNER is strictly more powerful in one
+respect: only OWNER holds the `role.admin` org action, so only an OWNER may grant or change a
+**privileged** global role (OWNER/ADMIN). An ADMIN can manage MEMBER-level users but cannot mint or
+touch other admins/owners, nor promote itself. The last remaining OWNER cannot be demoted — the org
+always keeps at least one — so it can never be left unadministerable.
+
+## Roles across the lifecycle
+
+The RBAC matrix maps cleanly onto the [translation lifecycle](/concepts/lifecycle) — no new roles
+needed:
+
+| Actor | Role(s) | Owns |
+|---|---|---|
+| Operator | OWNER / ADMIN | Provision, Setup |
+| Developer | DEVELOPER (`key.manage`, `translation.write`) | Ingest, Enrich, Deliver, loop wiring |
+| Agent / LLM | API key — EDITOR (`translation.write`, and `translation.review` **iff** you want auto-approval) | Translate, optionally Approve |
+| Reviewer / Manager | EDITOR / MANAGER (`translation.review`) | Approve (the gate) |
+
+**Review is role-gated, not human-gated.** MCP is only a transport; humans and agents both act via
+API keys. Whether an agent can self-approve is purely a function of **what role you assign its key** —
+an agent keyed as EDITOR/MANAGER can promote `value → approvedValue` itself; an agent keyed with only
+`translation.write` produces `translated` work that a separate reviewer (human or reviewer-agent)
+must approve. That DEVELOPER has `translation.write` but **not** `translation.review` is the
+lifecycle's separation-of-duties baked into the permission model.
+
+<Tip>
+  Give a translator a key tied to a user with `EDITOR` on the relevant projects; give CI a
+  `DEVELOPER` key. Scope agent autonomy by scoping the role on its key.
+</Tip>
+
+## API key scope and expiry
+
+A key normally inherits its user's full authority, but `create_api_key` accepts two narrowing options
+for least-privilege credentials:
+
+- **`readOnly`** — the key may perform only read actions (every permission named `*.read`), regardless
+  of the user's role. Ideal for a CI job that only `pull`s, or a read-only dashboard: even if the key
+  leaks, it can't mutate anything. A read-only key for an OWNER is still read-only.
+- **`expiresAt`** — an ISO-8601 instant (must be in the future) after which the key stops
+  authenticating. An expired key is rejected exactly like an unknown one (`401`). Use short-lived keys
+  for temporary access; there is no auto-rotation, so re-issue before expiry.
+
+Both are set only at creation and are independent of the RBAC role above — `readOnly` can only *remove*
+authority, never add it.
+
+The same authority also shapes what the MCP server *advertises*: `tools/list` is scoped to the tools
+the key can actually use — a read-only key sees only the read tools, and tools a global role can never
+reach (e.g. `create_project`, `create_user`, `set_user_role` for a `MEMBER`) are hidden. This trims
+what the model sees without changing permissions; see
+[Scoping the toolset](/reference/mcp-tools#scoping-the-toolset).

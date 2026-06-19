@@ -1,0 +1,69 @@
+---
+title: Sync files with the CLI
+description: "Use the turjuman CLI to pull and push locale files between your repo and Turjuman — the deterministic file work, locally and in CI."
+---
+
+The `turjuman` CLI covers the deterministic file work that shouldn't be handed to an LLM:
+exporting/downloading locale files and uploading source keys/translations — locally and in CI.
+Everything else (managing keys, translating, administration) is done through the
+[MCP server](/guides/translate-with-mcp). For the full command and config reference, see
+[CLI commands](/reference/cli-commands).
+
+## Typical workflow
+
+```bash
+turjuman login --url https://<api-url>/ --key op_live_...
+turjuman init --project proj_123 --format json-nested --path "locales/{locale}.json"
+
+turjuman pull            # get current translations into the repo
+# ... develop, add source strings to locales/en.json ...
+turjuman push            # upload new/changed source keys + any translations
+```
+
+`login` saves credentials to `~/.turjuman/auth.json` (not committed). `init` writes
+`turjuman.config.json` (committed). See [CLI commands](/reference/cli-commands) for the config
+shape, including declaring **multiple targets** for mixed web + native apps.
+
+## `push` semantics
+
+- The **base-locale** file (e.g. `en`) upserts keys and sets their base values.
+- **Other locale** files set translations for existing keys (unknown keys are skipped and reported).
+- By default the base-locale file is authoritative: keys in that namespace that are **not** in the
+  file are **deprecated** — retained (with their translations) but hidden from listings and excluded
+  from `pull`, and automatically reactivated if the key reappears in a later push. This keeps an audit
+  trail and avoids losing translations to a transient or partial upload.
+- `--prune` upgrades that to a hard delete: absent keys (and their translations) are removed remotely.
+- `--dry-run` prints what *would* change (keys created / pruned, translations written / skipped)
+  without writing anything — handy in CI before a real push.
+- `--check` runs the [QA checks](/guides/quality-checks) after the push and exits non-zero if there
+  are any **error** findings, so CI fails on broken placeholders/ICU/etc. With `--dry-run` nothing is
+  written, so the checks reflect the current **remote** state (a pre-flight).
+
+<Warning>
+  **`pull` is not a perfect round-trip.** By default it writes each key's **approved** value (so
+  in-progress translations don't ship); it skips untranslated and deprecated keys. The base-locale
+  file you `push` remains the source of truth for which keys exist. Use `pull --working` to ship the
+  working draft for staging/preview.
+</Warning>
+
+## CI
+
+See [`examples/translations-sync.yml`](https://github.com/mogharsallah/turjuman/blob/main/examples/translations-sync.yml)
+for a GitHub Actions job that pushes source strings on every push to `main` and opens a PR when new
+translations are available. It uses `TURJUMAN_API_URL` / `TURJUMAN_API_KEY` secrets (these env
+vars override the `auth.json` file, which is what you want in CI).
+
+A typical CI gate:
+
+```bash
+# fail the build if the source strings introduce broken placeholders/ICU, without writing
+turjuman push --dry-run --check
+```
+
+A verify-only gate (`push --dry-run --check`, or `check`) only reads, so it can run with a **read-only**
+API key; a real `push` needs a **write-scoped** key (see [Roles & permissions](/concepts/roles-and-permissions)).
+
+Add `--json` to any command to get a single machine-readable document on stdout (per-file counts for
+`push`, the QA report for `check`) — useful when a job parses the result instead of grepping logs.
+Exit codes are stable: `0` success, `1` QA error findings, `2` usage error, `3` API/network error
+(see [CLI commands](/reference/cli-commands#exit-codes)).

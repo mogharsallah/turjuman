@@ -1,0 +1,78 @@
+name: ci
+
+# Run on PRs and on pushes to main. Feature branches are covered by their PR, so
+# this avoids the duplicate push+pull_request run on every branch push.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel an in-progress run when a newer commit is pushed to the same ref, so
+# rapid pushes don't pile up redundant (and slow) e2e runs.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-unit:
+    name: build + typecheck + unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: OpenAPI snapshot is current (regenerate + check for drift)
+        run: |
+          npm run gen:openapi
+          git diff --exit-code -- docs/api-reference/openapi.json \
+            || (echo "::error::docs/api-reference/openapi.json is stale — run 'npm run gen:openapi' and commit." && exit 1)
+      - run: npm run typecheck
+      - run: npm run test:unit # hermetic — integration/e2e suites self-skip
+
+  docs:
+    name: docs link check (Mintlify)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+      - name: Check internal doc links
+        run: npx --yes mint broken-links
+        working-directory: docs
+
+  e2e:
+    name: integration + deployed e2e (LocalStack)
+    runs-on: ubuntu-latest
+    needs: build-and-unit
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+      - name: Start LocalStack
+        run: docker compose up -d localstack
+      - name: Wait for LocalStack
+        run: node scripts/wait-for-localstack.mjs
+
+      - name: Tier A — integration vs LocalStack DynamoDB
+        run: npm run test:integration
+
+      - name: Tier B — deploy CDK stack + deployed e2e
+        run: npm run e2e:deploy && npm run e2e:test
+
+      - name: LocalStack logs (on failure)
+        if: failure()
+        run: docker compose logs --tail=200 localstack
+
+      - name: Tear down LocalStack
+        if: always()
+        run: docker compose down -v

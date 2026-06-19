@@ -1,0 +1,29 @@
+# LocalStack — AWS emulator used for Turjuman's integration (Tier A) and full
+# deployed end-to-end (Tier B) tests. Community edition; no auth token required.
+#
+#   docker compose up -d localstack   # start
+#   docker compose down -v            # stop and wipe
+#
+# The Docker socket is mounted so LocalStack can run Lambda functions as sibling
+# containers. LAMBDA_DOCKER_FLAGS adds a host.docker.internal route into each
+# Lambda container so the deployed webhook dispatcher can reach a webhook
+# receiver running on the host during the e2e test.
+services:
+  localstack:
+    image: localstack/localstack:4
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=dynamodb,dynamodbstreams,lambda,cloudformation,s3,iam,sts,logs,cloudwatch
+      - DEBUG=${LOCALSTACK_DEBUG:-0}
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - LAMBDA_DOCKER_FLAGS=--add-host=host.docker.internal:host-gateway
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30

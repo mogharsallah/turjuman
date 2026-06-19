@@ -1,0 +1,51 @@
+---
+title: File formats
+description: "The locale file formats Turjuman's CLI can read and write, and how ICU-canonical plurals convert to each format's native plural form."
+---
+
+Turjuman stores translation values as **ICU MessageFormat** strings. The CLI's format adapters
+convert to and from each format's native representation on `pull`/`push`. Run `turjuman formats`
+for the live list.
+
+## Supported formats
+
+| Format id | File | Notes |
+|---|---|---|
+| `json-nested` | `.json` | i18next-style nested objects |
+| `json-flat` | `.json` | flat dotted keys |
+| `yaml` | `.yaml` / `.yml` | |
+| `arb` | `.arb` | Flutter Application Resource Bundle; carries per-entry descriptions |
+| `properties` | `.properties` | Java; carries descriptions as comments |
+| `csv` | `.csv` | carries descriptions |
+| `android` | `strings.xml` | incl. `<plurals>` |
+| `ios-strings` | `.strings` | iOS singular strings; carries descriptions |
+| `ios-stringsdict` | `.stringsdict` | iOS plurals |
+
+<Note>
+  iOS singular strings live in `.strings` and plurals in `.stringsdict`; configure both as separate
+  targets pointing at the same `.lproj` directory. See the multi-target
+  [config](/reference/cli-commands#configuration).
+</Note>
+
+gettext PO and XLIFF (1.2/2.0) adapters are planned — see the
+[roadmap](https://github.com/mogharsallah/turjuman/blob/main/ROADMAP.md).
+
+## Plurals
+
+Plural values are stored canonically as **ICU MessageFormat** and converted to/from each format's
+native plural form on export/import:
+
+- **ICU canonical** — `{count, plural, one {# item} other {# items}}` is the stored form.
+- **Android** — converts to/from `<plurals>` with `<item quantity="one|other|…">`.
+- **iOS** — converts to/from `.stringsdict` `NSStringPluralRuleType` entries.
+- **Flutter ARB** — uses ICU directly (ARB is ICU-native).
+
+Per-entry **descriptions** are carried through formats that support them (ARB, CSV, `.properties`,
+iOS `.strings`) so the key's translator context survives a round-trip.
+
+## Adding a format
+
+A new adapter implements the `FormatAdapter` interface under `packages/formats/src/` (the
+`@turjuman/formats` package) and is registered in the `ADAPTERS` array in `formats/src/index.ts`. Plurals
+convert to/from the canonical ICU form via `@turjuman/schema`'s `plural.ts`. See
+[Contributing](/contributing).

@@ -1,0 +1,116 @@
+import { describe, expect, it, vi } from "vitest";
+import {
+  type TurjumanService,
+  type Repository,
+  forbidden,
+  hashApiKey,
+  notFound,
+} from "@turjuman/core";
+import { type RouterDeps, createApp } from "./router.js";
+
+/**
+ * Hermetic HTTP-layer tests for the error, authz, validation and pagination
+ * paths. The router only touches `deps.repo` to authenticate and `deps.service`
+ * to do work, so a tiny fake of each exercises the full request → response shape
+ * without DynamoDB.
+ */
+
+const SECRET = "test-secret";
+const user = { id: "user_1", orgId: "default", globalRole: "OWNER" as const };
+
+/** A repo that authenticates exactly one bearer secret. */
+function fakeRepo(): Repository {
+  return {
+    getApiKeyByHash: async (hash: string) =>
+      hash === hashApiKey(SECRET)
+        ? { id: "key_1", orgId: "default", userId: user.id, name: "t", hash, prefix: "op_live_t", createdAt: "now" }
+        : undefined,
+    getUser: async (id: string) => (id === user.id ? { ...user, email: "t@t.com", name: "T", createdAt: "now", updatedAt: "now" } : undefined),
+    touchApiKey: async () => {},
+  } as unknown as Repository;
+}
+
+/** Build an app whose service sub-objects are the given stubs. */
+function appWith(service: Record<string, unknown>) {
+  return createApp({ repo: fakeRepo(), service: service as unknown as TurjumanService } as RouterDeps);
+}
+
+const auth = { headers: { authorization: `Bearer ${SECRET}` } };
+
+describe("REST router — error, authz, validation & pagination", () => {
+  it("maps a service FORBIDDEN to 403 with the typed envelope", async () => {
+    const app = appWith({ projects: { get: async () => { throw forbidden("nope"); } } });
+    const res = await app.request("/v1/projects/p1", auth);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ code: "FORBIDDEN", error: "nope" });
+  });
+
+  it("maps a service NOT_FOUND to 404", async () => {
+    const app = appWith({ projects: { get: async () => { throw notFound("gone"); } } });
+    const res = await app.request("/v1/projects/p1", auth);
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("rejects an invalid request body with 400 before calling the service", async () => {
+    const add = vi.fn();
+    const app = appWith({ locales: { add } });
+    // addLocaleBodySchema requires `code`; an empty body must fail validation.
+    const res = await app.request("/v1/projects/p1/locales", {
+      method: "POST",
+      headers: { ...auth.headers, "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ code: "VALIDATION" });
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  it("never leaks an internal error message, returning a generic 500 + requestId", async () => {
+    const app = appWith({ projects: { list: async () => { throw new Error("secret stack detail"); } } });
+    const res = await app.request("/v1/projects", auth);
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { error: string; code: string; requestId: string };
+    expect(body).toMatchObject({ error: "Internal error", code: "INTERNAL" });
+    expect(body.requestId).toBeTruthy();
+    expect(JSON.stringify(body)).not.toContain("secret stack detail");
+  });
+
+  it("uses the paginated key path only when limit/cursor are present", async () => {
+    const list = vi.fn(async () => [{ name: "a" }]);
+    const listPage = vi.fn(async () => ({ keys: [{ name: "a" }], nextCursor: "c2" }));
+    const app = appWith({ keys: { list, listPage } });
+
+    const plain = await app.request("/v1/projects/p1/keys", auth);
+    expect(await plain.json()).toMatchObject({ keys: [{ name: "a" }] });
+    expect(list).toHaveBeenCalledOnce();
+    expect(listPage).not.toHaveBeenCalled();
+
+    const paged = await app.request("/v1/projects/p1/keys?limit=2", auth);
+    expect(await paged.json()).toMatchObject({ nextCursor: "c2" });
+    expect(listPage).toHaveBeenCalledWith(expect.anything(), "p1", expect.objectContaining({ limit: 2 }));
+  });
+
+  it("paginates translations via limit/cursor and passes the cursor through", async () => {
+    const listForLocale = vi.fn(async () => [{ keyName: "a" }]);
+    const listForLocalePage = vi.fn(async () => ({ translations: [{ keyName: "a" }], nextCursor: "next" }));
+    const app = appWith({ translations: { listForLocale, listForLocalePage } });
+
+    const res = await app.request("/v1/projects/p1/translations?locale=fr&cursor=x", auth);
+    expect(await res.json()).toMatchObject({ locale: "fr", nextCursor: "next" });
+    expect(listForLocalePage).toHaveBeenCalledWith(
+      expect.anything(),
+      "p1",
+      "fr",
+      expect.objectContaining({ cursor: "x" }),
+    );
+    expect(listForLocale).not.toHaveBeenCalled();
+  });
+
+  it("requires the locale query param on translations", async () => {
+    const app = appWith({ translations: {} });
+    const res = await app.request("/v1/projects/p1/translations", auth);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ code: "VALIDATION" });
+  });
+});

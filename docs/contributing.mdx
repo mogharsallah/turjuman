@@ -1,0 +1,124 @@
+---
+title: Contributing
+description: "Develop on Turjuman: the build and test commands, the three testing tiers (unit, LocalStack integration, deployed e2e), and where to make each kind of change."
+---
+
+Turjuman is an npm-workspaces monorepo. Pick an unchecked item from the
+[roadmap](https://github.com/mogharsallah/turjuman/blob/main/ROADMAP.md) and open a PR —
+contributions are welcome.
+
+## Develop
+
+```bash
+npm install
+npm run build          # builds every workspace in dependency order (core first)
+npm run typecheck      # tsc --noEmit across workspaces
+npm run test           # == test:unit — hermetic unit tests (integration/e2e self-skip)
+npm run clean
+```
+
+Run one package's tests, or one file/case:
+
+```bash
+npm run test -w @turjuman/core                       # one package
+npm run test -w @turjuman/core -- services.test.ts   # one file (path substring)
+npm run test -w @turjuman/core -- -t "rejects a viewer"  # one test by name
+```
+
+<Note>
+  **Dependents import core's built `dist`, not its source.** After editing `core`, run `npm run build`
+  (or at least build core) before the typecheck or tests of `mcp-server`/`api`/`cli` will see the
+  change. Core's own tests run against source and don't need a build.
+</Note>
+
+### Conventions
+
+- **ESM + NodeNext.** `"type": "module"` everywhere; relative imports use explicit `.js` extensions.
+  TypeScript is strict, with `noUncheckedIndexedAccess` and `noImplicitOverride`.
+- **Node ≥ 20**, Lambda runtime `nodejs20.x`, default arch `arm64`.
+
+## Testing tiers
+
+Turjuman has three layers of tests. The first runs anywhere; the other two run against
+[LocalStack](https://localstack.cloud) (a local AWS emulator) so we can exercise the real serverless
+stack — Lambda Function URLs + DynamoDB + DynamoDB Streams — without an AWS account. All three run in
+CI.
+
+| Layer | What it covers | Command |
+|---|---|---|
+| Unit | Pure domain/RBAC/format logic, hermetic | `npm run test:unit` |
+| Tier A — integration | Repository + services + webhook handler against a real DynamoDB engine | `npm run test:integration` |
+| Tier B — deployed e2e | The deployed stack: MCP + REST Function URLs and the real DynamoDB Streams → webhook Lambda | `npm run test:e2e` |
+
+### Tier A — integration
+
+```bash
+npm run e2e:up            # docker compose up + health wait
+npm run test:integration  # points AWS_ENDPOINT_URL_DYNAMODB at LocalStack
+npm run e2e:down
+```
+
+### Tier B — deployed e2e
+
+`scripts/e2e-deploy.mjs` deploys the CDK stack into LocalStack by reusing the `@turjuman/deploy`
+building blocks (`packages/deploy/src`): it bundles each Lambda with esbuild, uploads the zips to
+LocalStack S3, deploys with
+the CDK programmatic toolkit (no `cdk bootstrap`), seeds two bootstrap owners, and writes the stack
+outputs to `packages/e2e/.e2e/env.json`. The vitest specs under `packages/e2e/src/` are then black
+boxes that only talk HTTP to the deployed Function URLs and the webhook receiver.
+
+```bash
+npm run test:e2e          # one-shot: start → deploy → test → teardown
+```
+
+The integration and e2e suites **self-skip** when their endpoint env vars are unset, which keeps the
+default `npm test` hermetic. Don't make them run unconditionally.
+
+<Note>
+  No Docker? The e2e tiers self-skip locally — open a PR and let GitHub Actions run them.
+</Note>
+
+## Where to make changes
+
+Turjuman is a pure shared core (`@turjuman/schema`) plus a server brain (`@turjuman/core`) wrapped by two thin
+transports. **All business logic and all authorization live in the core packages** — never put
+authorization or domain logic in a transport.
+
+- **New capability / business rule** → add it to the matching domain sub-service in `core/services/`
+  (e.g. `core/services/keys.ts`, with its `rbac` check). A brand-new domain gets its own `XService`
+  wired onto the `TurjumanService` facade in `core/services/service.ts`. Then expose it: register an
+  MCP tool in `mcp-server/src/tools/` and/or a route in `api/src/router.ts`.
+- **Authorization** → `@turjuman/schema`'s `rbac.ts`. The matrix is enforced by `requireProject` /
+  `requireOrg` before every mutating service call. See [Roles & permissions](/concepts/roles-and-permissions).
+- **New file format** → add an adapter under `packages/formats/src/` implementing `FormatAdapter` and
+  register it in the `ADAPTERS` array in `formats/src/index.ts` (`@turjuman/formats`). Plurals are stored
+  canonically as ICU and converted per format using `@turjuman/schema`'s `plural.ts`. See
+  [File formats](/reference/file-formats).
+- **New QA check** → add a pure `QaCheck` under `packages/schema/src/qa/checks/`, register it in the
+  `CHECKS` array in `qa/index.ts` (`@turjuman/schema`), and cover it in `qa/checks.test.ts`. Checks are
+  pure functions over a `QaContext`; all I/O and lifecycle coupling live in `core/services/qa.ts`. See
+  [QA checks](/reference/qa-checks).
+- **New CLI command / flag** → add a `src/commands/<name>.ts` in `packages/cli` exporting a pure
+  `run<Cmd>(api, config, opts, out)` plus a thin `register<Cmd>(program, deps)`, wire it in
+  `src/program.ts`, and unit-test the pure function with a fake `ApiClient` + `OutputSink`. Talk to the
+  API only through `ApiClient` (`src/client.ts`), whose request bodies reuse core's zod schemas. See
+  [CLI commands](/reference/cli-commands). The AWS self-host tooling is a **separate** package,
+  `packages/deploy` (`turjuman-deploy`) — keep AWS/CDK deps there, not in the CLI.
+
+## Documentation
+
+These docs are the **single source of truth** — they serve human readers (this site), external agents
+(Mintlify auto-generates `llms.txt` / `llms-full.txt` and the contextual "open in Claude/ChatGPT"
+menu), and the contributor agents working in this repo. **Update the docs in the same PR as the
+code.** When documenting a new format adapter, QA check, service, or MCP tool, use the project's
+`writing-docs` skill (in `.claude/skills/`) so structure and tone stay consistent.
+
+The **API reference** is auto-generated from the REST API's OpenAPI spec (served at
+`GET /v1/openapi.json`). After changing any route in `packages/api/src/router.ts`, annotate it with
+`describeRoute(...)`. A pre-commit hook (`.githooks/pre-commit`, installed by `npm install`)
+rebuilds, regenerates `docs/api-reference/openapi.json`, and stages it for you whenever API/core
+source is staged — so you normally don't run anything by hand. You can refresh it manually with
+`npm run gen:openapi`, and CI fails if the snapshot is stale. Don't hand-write endpoint pages.
+
+Keep the MCP-first / developer-first scope: no web UI, no built-in MT engine, no vendor marketplace
+(see the roadmap's "Explicitly out of scope").

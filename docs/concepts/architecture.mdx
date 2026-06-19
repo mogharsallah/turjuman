@@ -1,0 +1,91 @@
+---
+title: Architecture
+description: "How Turjuman is built: one shared core wrapped by two thin transports, a single-table DynamoDB data model, and Lambda Function URLs."
+---
+
+Turjuman is a small serverless system with a pure shared core (`@turjuman/schema`) and a server brain
+(`@turjuman/core`, the DynamoDB repository + services) wrapped by two thin transports (the MCP server
+and the REST API).
+
+```
+Claude Code / agent ──Streamable HTTP + Bearer key──► McpFunction ─┐
+Developer CLI / CI ──REST + Bearer key──────────────► ApiFunction ─┤
+                                                                    ├─► @turjuman/core
+                                                                    │     ├─ authenticate (API key → user)
+                                                                    │     ├─ RBAC (roles → permissions)
+                                                                    │     ├─ services (business logic)
+                                                                    │     └─ repository (single table)
+                                                                    ▼
+                                                            DynamoDB (Turjuman)
+```
+
+All business logic and **all authorization** live in `core/services/` (the `TurjumanService`
+facade over per-domain sub-services). The MCP and REST layers only translate transport ↔ service
+calls, so the two surfaces can never drift in behaviour or permissions.
+
+## Domain model
+
+`User`, `ApiKey` (stored as a `sha256` hash, with an optional `readOnly` scope and `expiresAt`),
+`Project` (base locale), `Locale`, `TranslationKey` (namespace, name,
+description/context, plural, tags, and a source `state` — `active`/`deprecated` — with `lastSeenAt`),
+`Translation` (per key+locale: a working `value`, the approved snapshot `approvedValue`, a `status`
+of `untranslated → translated → approved`, an `origin`/provenance, and a `sourceRef` used to derive
+staleness), `Membership` (user ↔ project ↔ role). Every record carries an `orgId` so multi-tenant or
+public hosting is possible later; self-hosting defaults to a single `default` org.
+
+A translation `value` is an ICU MessageFormat string. The connected LLM authors values; there is no
+built-in machine-translation engine. The full element lifecycle — key deprecation, the dual-slot
+working/approved delivery model, source-change staleness, and provenance — is described in
+[Lifecycle](/concepts/lifecycle).
+
+## Authorization
+
+Roles and the permission matrix are enforced in `core/rbac.ts` before every mutating service call.
+See [Roles & permissions](/concepts/roles-and-permissions) for the full matrix.
+
+## DynamoDB single-table design
+
+One table (`Turjuman`), on-demand billing, with three GSIs (all projecting `ALL`):
+
+| Entity | PK | SK | Index use |
+|---|---|---|---|
+| User | `USER#<id>` | `USER#<id>` | GSI1 `ORG#<org>` → list org users |
+| UserEmail (unique lookup) | `USEREMAIL#<email>` | same | direct get; reserved in a transaction with the user |
+| ApiKey | `APIKEY#<sha256>` | same | direct get by hash; GSI2 `USER#<id>` → list a user's keys |
+| Project | `PROJECT#<id>` | `PROJECT#<id>` | GSI1 `ORG#<org>` → list org projects |
+| Membership | `PROJECT#<id>` | `MEMBER#<userId>` | GSI2 `USER#<id>` → projects-by-user |
+| Locale | `PROJECT#<id>` | `LOCALE#<code>` | — |
+| Key | `PROJECT#<id>` | `KEY#<ns>#<name>` | query by project / namespace prefix |
+| Translation | `PROJ#<id>#LOC#<code>` | `KEY#<ns>#<name>` | **export a locale** in one query; GSI3 `PROJ#<id>#KEY#<ns>#<name>` → all locales of a key |
+
+Access patterns covered: projects by org and by user, keys by project/namespace, all translations
+for a locale (export/build), all locales of a key, resolve API key by hash, user by email,
+list/manage members. Email uniqueness is enforced by a companion `USEREMAIL#` item written in the
+same `TransactWriteItems` as the user.
+
+## Transports
+
+- **MCP server** (`packages/mcp-server`): a stateless implementation of MCP over Streamable HTTP.
+  Each POST is one JSON-RPC message answered with one JSON response — no sessions, perfect for
+  Lambda. Supports `initialize`, `tools/list`, `tools/call`, `ping`. Auth is a static
+  `Authorization: Bearer <api-key>` header on every request.
+- **REST API** (`packages/api`): deterministic endpoints for the CLI — list projects/locales/keys,
+  export a locale, bulk-import keys and translations. Plus a no-trigger `BootstrapFunction`.
+
+Both run as **Lambda Function URLs** (`AuthType: NONE`, since Turjuman validates its own API
+keys) — no API Gateway, keeping the footprint and cost minimal.
+
+### Why the REST surface is intentionally narrow
+
+The two transports are **not** mirror images, by design. The REST API exposes only the deterministic,
+file-shaped operations a developer or CI pipeline needs — list, export, and bulk import of
+keys/translations, plus QA. Everything else — creating/updating/deleting projects, managing members,
+users, API keys, glossary terms, webhooks, and translation-memory lookup — lives **only** on the MCP
+server, where an agent (or a human via an MCP client) performs it.
+
+This is a deliberate scope decision, not a missing feature: management is interactive and
+judgment-driven (well suited to the agent/MCP model), while the REST surface stays small, stable, and
+safe to wire into automation. Because both transports call the same `core` services, this split is
+purely about *what each surface exposes* — never about behaviour or permissions, which are identical.
+If a future workflow genuinely needs an operation over REST (e.g. CI provisioning a project), it can be
+added as a thin route over the existing service — but the default is MCP-first.

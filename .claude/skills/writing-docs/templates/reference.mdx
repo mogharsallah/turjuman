@@ -1,0 +1,33 @@
+---
+title: <Reference subject, e.g. "MCP tools">
+description: "<One sentence: what this page lists exhaustively. Feeds llms.txt.>"
+---
+
+<!-- REFERENCE: exhaustive and dry. Tables, stable ordering, no narrative or opinions. This is what
+     agents scrape, so keep names verbatim from the source. Link to a guide for "how do I use this?". -->
+
+<One sentence pointing to the matching guide for usage, and stating the auth/permission needed.>
+
+## <Group / category>
+
+| Name | Purpose / parameters |
+|---|---|
+| `<exact_name>` | <what it does; params in `code`> |
+| `<exact_name>` | … |
+
+## <Another group>
+
+| … | … |
+|---|---|
+
+<!-- For payload/response shapes use a jsonc block: -->
+
+```jsonc
+{
+  "field": "value"   // comment
+}
+```
+
+<Note>
+  Note any stable-sort order, paging (`limit`/`cursor`), or error convention an agent needs.
+</Note>

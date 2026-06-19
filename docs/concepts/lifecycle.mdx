@@ -1,0 +1,240 @@
+---
+title: Lifecycle
+description: "The end-to-end continuous-localization lifecycle Turjuman supports — the stages, who drives each one, and the key/translation state model with dual-slot delivery."
+---
+
+This page defines the **end-to-end lifecycle** Turjuman supports — what happens to a localization
+project and its elements, in what order, who drives each step, and what triggers the next. It is the
+*narrative* layer above the capability surface: [Architecture](/concepts/architecture) says what the
+system *is*, the [roadmap](https://github.com/mogharsallah/turjuman/blob/main/ROADMAP.md) says
+what's *built/next*, and this page says how it's *used over time*.
+
+Turjuman's model is **continuous localization** — a DevOps-aligned workflow where translation is
+integrated into the software development lifecycle and updated automatically as code changes; content
+moves *with* the code, not after it. Strings sync as soon as a developer pushes. There is no manual
+file handoff and no project-manager batching step; the loop is event-driven, like testing and
+deployment.
+
+The defining twist is that **the connected LLM/agent is the translator** (BYO-LLM, no built-in MT
+engine). So the classic translate → review → QA stages compress into a single AI pass, while the
+ingest → deliver → loop stages stay intact and form the developer-facing surface.
+
+A second, deliberate bet sets Turjuman apart from every incumbent: **git is the release layer.**
+Developers `pull` translations into files committed to their repo, so git tags/commits *are* the
+frozen releases and branches *are* prod/staging. Turjuman therefore needs no over-the-air release
+objects or CDN snapshots to keep in-progress work out of production — only a clean per-translation
+model of "what is approved" vs "what is still being worked on" (see the dual-slot model below).
+
+## The loop at a glance
+
+```
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  0. PROVISION         turjuman-deploy deploy · bootstrap · API keys │  one-time
+  ├─────────────────────────────────────────────────────────────────────┤
+  │  1. SETUP             create_project(baseLocale) · add_locale ·       │
+  │                       add_member(roles) · glossary terms              │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │  2. INGEST  ◀──┐      developer adds keys in code →                   │
+  │     (source)   │      turjuman push (base file = source of truth)   │
+  ├────────────────┼──────────────────────────────────────────────────────┤
+  │  3. ENRICH     │      description · tags · maxLength · plural ·        │
+  │     (context)  │      (future: screenshots / usage notes)             │
+  ├────────────────┼──────────────────────────────────────────────────────┤
+  │  4. TRANSLATE  │      AGENT: list_untranslated / list_stale →         │
+  │     (agent)    │      list_glossary + lookup_translation_memory →     │
+  │                │      translate → writes working `value` (translated) │
+  ├────────────────┼──────────────────────────────────────────────────────┤
+  │  5. APPROVE    │      run_qa_checks (advisory) · actor w/ review role │
+  │     (role gate)│      approves → promotes value → approvedValue       │
+  ├────────────────┼──────────────────────────────────────────────────────┤
+  │  6. DELIVER    │      turjuman pull → writes approvedValue per      │
+  │                │      locale → commit alongside code (git = release)  │
+  ├────────────────┼──────────────────────────────────────────────────────┤
+  │  7. LOOP  ─────┘      webhooks(key.*, translation.*) + CI re-trigger; │
+  │     (continuous)      source change → translations auto-flag stale    │
+  └─────────────────────────────────────────────────────────────────────┘
+```
+
+## Stages
+
+Each stage lists its **actor**, the **tools/commands** that perform it, and the **trigger** that
+advances to the next.
+
+### 0 — Provision *(one-time)*
+- **Actor:** operator (becomes the first OWNER).
+- **How:** `npx @turjuman/deploy deploy` stands up the AWS stack; client-side bootstrap mints the
+  first OWNER and an API key (shown once). Additional keys via `create_api_key`.
+
+### 1 — Setup
+- **Actor:** OWNER/ADMIN or a project MANAGER.
+- **How:** `create_project` (with `baseLocale`) → `add_locale` per target → `add_member` to grant
+  roles → load **linguistic assets**: `add_glossary_term` (brand/do-not-translate terms). Translation
+  Memory is derived automatically from existing translations and needs no setup.
+
+### 2 — Ingest *(source of truth flows from code)*
+- **Actor:** developer (DEVELOPER role: `key.manage`).
+- **How:** keys live in the repo; `turjuman push` treats the **base-locale file as the source of
+  truth** for keys and base values. Keys present in the import are `active`; keys absent **within the
+  imported namespace** are `deprecated` (retained, not deleted); reappearing keys are reactivated.
+  Equivalent over REST: `POST /v1/projects/:id/keys/import`.
+
+### 3 — Enrich *(context for the translator)*
+- **Actor:** developer or manager.
+- **How:** `create_key`/`update_key` set `description` (LLM/reviewer context), `tags`, `maxLength`,
+  `plural`. Context is what lifts machine output from literal to correct.
+
+### 4 — Translate *(the agent core)*
+- **Actor:** the connected LLM/agent (API key with at least `translation.write`).
+- **How:** `list_untranslated` and `list_stale` find work → `list_glossary` +
+  `lookup_translation_memory` gather assets → the agent translates → writes the **working `value`**
+  via `set_translation` / `bulk_set_translations`, stamped with `origin` and the `sourceRef` it was
+  written against. Status becomes `translated`. Writing `value` never touches `approvedValue`.
+
+### 5 — Approve *(role gate, optionally automated)*
+- **Actor:** any actor holding `translation.review` (EDITOR/MANAGER) — a human reviewer **or** an
+  agent whose key carries the role.
+- **How:** `run_qa_checks` runs deterministic checks (placeholder/ICU integrity, length, glossary
+  consistency) as **advisory** input — it never auto-approves on its own. Approval **promotes**
+  `value → approvedValue` and sets status `approved`. The `origin` field tells a reviewer what to
+  scrutinize. DEVELOPER deliberately lacks `translation.review`, enforcing separation of duties.
+
+### 6 — Deliver
+- **Actor:** developer / CI.
+- **How:** `turjuman pull` writes the **`approvedValue`** for each key per the `turjuman.config.json`
+  targets; translations are committed alongside code. Because only approved values are written,
+  in-progress edits never reach the repo. `pull --working` ships the working `value` for
+  staging/preview. CI can gate with `push --check` (QA + coverage). **Git is the release layer:** tag
+  a commit to freeze a release, use branches for prod/staging.
+
+### 7 — Loop *(continuous)*
+- **Trigger surface:** webhooks (`key.*`, `translation.*`, `locale.added`) and CI events. A new key →
+  stage 4. A **changed base value → every dependent translation auto-flags `stale`** → stage 4. A new
+  locale → stage 4 for the whole project.
+
+## The state model
+
+This is the substance of the lifecycle. There are **two entities, each with exactly one lifecycle
+ladder, plus clearly-labelled orthogonal attributes** — and delivery is modelled by a *value slot*,
+not by a state.
+
+| Level | Primary lifecycle (one ladder) | Orthogonal attributes (not states) |
+|---|---|---|
+| **Key** (the source element) | `active → deprecated` (+ explicit hard delete) | `lastSeenAt`, namespace |
+| **Translation** (per key, per locale) | `untranslated → translated → approved` | freshness `current`/`stale` · `origin` (human/llm/tm/mt/import) · value slots (`value` + `approvedValue`) |
+
+<Note>
+  Key states are deliberately *existence* terms (`active`/`deprecated`) and translation states are
+  *progress* terms — the two ladders live at different levels and are never a flat list. Delivery
+  ships "approved" values, which is why the approved transition is named that way.
+</Note>
+
+### Key lifecycle
+
+```
+        push (key present)              push (key absent in namespace)
+  ───────────────────────────►  active ───────────────────────────►  deprecated
+                                  ▲                                       │
+                                  └─────────── push (key returns) ────────┘
+                                  │
+                                  └─────────── delete_key / push --prune ──► (removed)
+```
+
+- **active** — present in the latest source import for its namespace; translated and exported
+  normally.
+- **deprecated** — absent from the latest import but **retained** with a `lastSeenAt` stamp: hidden
+  from the translate loop, excluded from default export, kept for audit, and **instantly reactivated
+  if the key returns** (restore-on-reappear). Deprecation is **namespace-scoped** — a
+  partial upload of one module must never deprecate another module's keys.
+- **removed** — hard delete, explicit only (`delete_key`, or `push --prune`).
+
+### Translation: dual-slot + progress + orthogonal flags
+
+The core change. A translation holds **two value slots** — a working draft and the last approved
+snapshot — so in-progress work is delivery-isolated *by construction* and editing after approval can
+never destroy the last good shipped value.
+
+```
+  Translation (projectId, localeCode, namespace, keyName)
+    value          : working/draft text        (agent + editor write here)
+    approvedValue  : last approved snapshot     (set only by promotion at stage 5)
+    status         : untranslated | translated | approved
+    stale          : derived (sourceRef ≠ current base value)
+    origin         : human | llm | tm | mt | import
+    sourceRef      : the base value this `value` was written against
+
+   untranslated ──write value──► translated ──approve (promote)──► approved
+        ▲                            ▲      value → approvedValue      │
+        │                            │                                 │
+        │                            └──────── edit value ─────────────┘
+        │                                  (approvedValue retained;
+        │                                   status drops to translated)
+        │
+        └─ base value changes ─► stale = true on translated AND approved
+                                  (re-enter stage 4; nothing destroyed)
+```
+
+- **status `untranslated → translated → approved`** — `untranslated` stays *derived* (no working
+  value). The agent can reach `translated`; reaching `approved` requires `translation.review`.
+- **Two slots:**
+  - `value` is the live working draft. Agents and editors always write here.
+  - `approvedValue` is written **only** by the stage-5 promotion. Editing `value` after approval
+    leaves `approvedValue` intact and drops status to `translated` (the edit awaits re-approval).
+- **Delivery picks the slot, not a state:** `pull` ships `approvedValue` by default (so unreviewed and
+  edited-since-approval values never leak); `pull --working` ships `value`. A key with no
+  `approvedValue` falls back to source or is omitted (configurable per target).
+- **stale (derived, auto-set):** when a key's base value changes, every dependent translation is
+  flagged `stale` automatically. Stale values are **not** destroyed or
+  demoted — `approvedValue` still ships as the last-good text — but they surface via `list_stale` and a
+  `translation.stale` signal so the agent refreshes them on the next loop. An optional
+  `pull --exclude-stale` is available for teams that prefer to hold outdated text.
+- **origin (provenance):** how the current `value` was produced. Set by the writer (MCP tools default
+  to `llm`/`tm`; CLI import to `import`; a human edit to `human`). The primary signal a reviewer uses
+  at stage 5; orthogonal to status.
+
+## Roles across the lifecycle
+
+The RBAC matrix maps cleanly onto the stages — see
+[Roles & permissions](/concepts/roles-and-permissions). **Review is role-gated, not human-gated:**
+whether the agent can self-approve is purely a function of what role you assign its key.
+
+## Design decisions
+
+1. **Review is role-gated; auto-approval is allowed.** Approval requires `translation.review`; any
+   actor holding it — human or agent — can promote. Turjuman does not hardcode a human gate; it lets
+   the deployment choose the agent's autonomy by choosing the agent key's role.
+2. **Dual-slot delivery (`value` + `approvedValue`).** A translation keeps a working draft and the
+   last approved snapshot. `pull` ships the approved snapshot by default, so in-progress and
+   edited-since-approval work cannot leak into delivered output, and the last good value is never
+   destroyed by a new edit.
+3. **Source change auto-invalidates (staleness).** A base-value change automatically flags every
+   dependent translation `stale` and re-enters the loop, rather than silently shipping outdated text.
+   Non-destructive: `approvedValue` remains the last-good ship value; `stale` is a refresh signal.
+4. **Keys have a deprecation lifecycle.** `active → deprecated → removed` (soft, namespace-scoped,
+   `lastSeenAt`, restore-on-reappear) replaces hard-delete-on-prune.
+5. **Values carry provenance.** `origin` (human/llm/tm/mt/import) is an orthogonal field feeding the
+   approval gate — the signal most native to an agent-driven tool.
+6. **Git is the release layer.** No OTA/release/distribution objects; tags and branches provide frozen
+   releases and prod/staging.
+
+## Why these choices
+
+The model reflects the trustworthy defaults a continuous-localization workflow needs:
+
+- **An explicit draft/approved pair beats an export-time filter.** A common approach keeps one current
+  value plus history and computes the shipped value at export via a "reviewed-only" filter. Storing the
+  approved snapshot explicitly (`approvedValue`) makes delivery deterministic rather than
+  filter-dependent.
+- **Editing after approval must not lose the last good value.** Recovering a prior value from history is
+  fragile; the dual-slot retains the approved value by construction.
+- **Source changes should auto-invalidate.** Auto-flagging dependents `stale` on a base-value change is
+  the trustworthy default — it surfaces work to refresh instead of silently shipping outdated text, and
+  it stays non-destructive (`approvedValue` keeps shipping).
+- **Key deprecation should be reversible.** Soft, namespace-scoped deprecation with restore-on-reappear
+  retains absent keys (not exported, auto-restored) rather than hard-deleting them.
+- **Git is the release layer.** Frozen release bundles are just tags and branches — deploy-granularity
+  Turjuman gets from git for free, with no separate distribution objects.
+
+<Note>
+  The build status of each lifecycle capability is tracked on the
+  [roadmap](https://github.com/mogharsallah/turjuman/blob/main/ROADMAP.md).
+</Note>

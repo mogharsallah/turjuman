@@ -1,0 +1,84 @@
+---
+title: Run quality checks
+description: "Run Turjuman's advisory QA checks over your translations — from the MCP server, the REST API, or the CLI — and configure them per project."
+---
+
+Turjuman ships a deterministic **quality-assurance layer**: a set of checks that validate
+translations and report problems. QA is **advisory** — it never changes a translation or auto-approves
+anything. It is the input a reviewer (human or agent) uses at the *approve* stage of the
+[lifecycle](/concepts/lifecycle), and the gate CI uses on `push`. For the full catalogue of checks
+and the report shape, see the [QA checks reference](/reference/qa-checks).
+
+## Running checks
+
+<Tabs>
+  <Tab title="MCP (agent)">
+    Ask the agent to run `run_qa_checks` before approving:
+
+    > "Run the QA checks on the French locale and fix any errors before approving."
+
+    `run_qa_checks { projectId, locale?, checks?, slot? }` returns the report. Pass `slot: "approved"`
+    to inspect the delivered snapshot instead of the working draft.
+  </Tab>
+  <Tab title="CLI">
+    ```bash
+    # advisory: prints findings and a summary, exits non-zero on error findings
+    turjuman check --locale fr
+
+    # validate the delivered snapshot rather than the working draft
+    turjuman check --approved
+
+    # CI gate: push, then run checks across all non-base locales
+    turjuman push --check
+    ```
+  </Tab>
+  <Tab title="REST">
+    ```bash
+    curl -X POST https://<api-url>/v1/projects/<id>/checks \
+      -H "Authorization: Bearer op_live_..." \
+      -H "Content-Type: application/json" \
+      -d '{ "locale": "fr" }'
+    ```
+  </Tab>
+</Tabs>
+
+Running checks needs only `translation.read` (VIEWER and up).
+
+## What it inspects
+
+Each check runs over a single target translation paired with its **base-locale** value (the source of
+truth) and the key's metadata. By default QA inspects the working `value` (the text under review);
+pass `slot: "approved"` / `--approved` to inspect the delivered `approvedValue` snapshot instead.
+**Deprecated keys are never checked.**
+
+The catalogue covers ICU syntax, placeholder/variable parity, plural forms, markup integrity, length,
+whitespace, punctuation, empty values, glossary consistency, duplicates, staleness, and coverage. See
+the [reference](/reference/qa-checks) for the full table and default severities.
+
+## Configuring per project
+
+A project can override the built-in behaviour with a single config record:
+
+- **Per-check overrides** — `{ enabled?, severity? }` keyed by check id. Disable a check, or remap
+  *all* of its findings to a different severity (e.g. treat `glossary` as `warning`). Checks absent
+  from the config use their built-in defaults; `coverage` is off unless you enable it.
+- **Ignore rules** — mute findings matching every field a rule specifies
+  (`{ checkId?, namespace?, keyName?, locale? }`). A rule must specify at least one field.
+
+```bash
+# via MCP
+get_qa_config { projectId }
+set_qa_config { projectId, checks?, ignore? }
+
+# via CLI/REST
+GET  /v1/projects/:id/qa-config
+PUT  /v1/projects/:id/qa-config   # body { checks?, ignore? }
+```
+
+Reading config needs `project.read`; changing it needs `project.update` (MANAGER / OWNER / ADMIN).
+
+<Note>
+  QA is advisory by design — approval stays a role-gated promotion of `value → approvedValue`. The
+  checks tell a reviewer (or an agent acting as reviewer) what to look at; they never approve on their
+  own.
+</Note>

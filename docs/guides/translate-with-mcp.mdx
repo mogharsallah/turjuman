@@ -1,0 +1,99 @@
+---
+title: Translate with MCP
+description: "Connect an MCP client and drive Turjuman in natural language — stand up projects, translate with glossary and memory, run a review pass, and administer access."
+---
+
+The MCP server is the primary way to manage Turjuman. Connect it to Claude Code (or any MCP
+client) and drive everything in natural language. For the complete tool list, see the
+[MCP tools reference](/reference/mcp-tools).
+
+## Connecting
+
+Add the server to your `.mcp.json` (project- or user-level):
+
+```json
+{
+  "mcpServers": {
+    "turjuman": {
+      "type": "http",
+      "url": "https://<your-mcp-function-url>/",
+      "headers": { "Authorization": "Bearer op_live_..." }
+    }
+  }
+}
+```
+
+The same API key both authenticates you and determines your permissions (your roles). Give a
+translator a key tied to a user with `EDITOR` on the relevant projects; give CI a `DEVELOPER` key.
+See [Roles & permissions](/concepts/roles-and-permissions).
+
+<Tip>
+  To advertise only part of the toolset, add `?tools=` or `?groups=` to the `url` — e.g.
+  `"url": "https://<your-mcp-function-url>/?groups=read,translations"` for a client that only reads
+  and writes translations. This trims the tool list the model sees; it doesn't change permissions
+  (the key's role still governs every call). See
+  [Scoping the toolset](/reference/mcp-tools#scoping-the-toolset).
+</Tip>
+
+<Warning>
+  Keep your key out of version control. `.mcp.json` is often committed — prefer referencing the token
+  via an environment variable / secret manager rather than pasting the literal key. If a key ever
+  leaks, revoke it immediately with the `revoke_api_key` tool.
+</Warning>
+
+## Example workflows
+
+### Stand up a project and translate it
+
+> "Create a project 'Web App' with base locale en. Add fr and es. Create keys `app.title`
+> ('Turjuman'), `nav.home` ('Home') and `greeting` ('Hello {name}'), each with a short
+> description. Then translate everything into French and Spanish."
+
+The agent will: `create_project` → `add_locale` ×2 → `create_key` ×3 → `list_untranslated(fr)` →
+translate the values itself → `bulk_set_translations(fr, ...)` → repeat for `es`.
+
+### Review pass
+
+> "Show me the untranslated German strings, translate them, then mark the checkout keys approved."
+
+`list_untranslated(de)` → `bulk_set_translations` → `run_qa_checks(locale='de')` (fix any errors —
+advisory) → `set_translation_status(..., approved)`.
+
+### Translate consistently with glossary + memory
+
+> "Translate the untranslated French strings. First check the glossary and reuse any existing
+> phrasing from translation memory."
+
+`list_glossary` (honor `doNotTranslate` terms, prefer the given translations) → for each string,
+`lookup_translation_memory(locale='fr', text=...)` to reuse prior wording → `bulk_set_translations`.
+
+### Grant access (admin)
+
+> "Add maria@acme.com to the Web App project as an editor, and create a developer API key for CI."
+
+`add_member(email='maria@acme.com', role='EDITOR')` → `create_api_key(...)` (the secret is shown
+once). If maria isn't a user yet, `add_member` provisions her automatically when you have admin
+rights (pass `name` to set her display name); otherwise create the identity first with `create_user`.
+Send her the key over a secure channel.
+
+### Revoke a leaked key (admin)
+
+> "List CI's API keys and revoke the one named 'ci-old'."
+
+`list_api_keys(userId=...)` → `revoke_api_key(apiKeyId=...)`. A user can always revoke their own keys;
+revoking someone else's requires admin. Revocation is immediate — the key stops authenticating at
+once.
+
+## Tips
+
+- Always give keys a meaningful `description` on creation — it's the context the LLM (and human
+  translators) use to translate well.
+- `bulk_set_translations` skips unknown keys and reports them, so a partially-correct batch still
+  applies cleanly.
+- For large projects the listing tools are paged: `list_keys`, `search_keys`, `list_untranslated`,
+  `list_stale`, and `get_translations(locale)` each accept `limit` (default 100, max 200) and return
+  a `nextCursor` to pass back as `cursor` — page through them instead of pulling everything at once.
+  Walk a locale by calling `list_untranslated` and following `nextCursor` until it's absent.
+- Tool errors (e.g. a missing key, or a permission denial) come back as `isError` content so the
+  agent can read the reason and adjust.
+- The server is stateless: there's no session to manage, and every request carries the bearer key.

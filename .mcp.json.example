@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "turjuman": {
+      "type": "http",
+      "url": "https://REPLACE_WITH_McpUrl/",
+      "headers": {
+        "Authorization": "Bearer REPLACE_WITH_API_KEY"
+      }
+    }
+  }
+}

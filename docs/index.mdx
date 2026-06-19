@@ -1,0 +1,101 @@
+---
+title: Introduction
+description: "Turjuman is open-source, self-hosted translation management driven by your AI agent over MCP, with a thin developer CLI for deterministic locale-file work."
+mode: "wide"
+---
+
+<div className="doc-hero">
+  <div className="doc-hero__body">
+    <span className="doc-hero__eyebrow">Open-source translation management</span>
+    <p className="doc-hero__lead">
+      Manage projects, locales, and translations by <strong>talking to your coding agent</strong> —
+      self-hosted, serverless, and MCP-first.
+    </p>
+    <div className="doc-hero__actions">
+      <a className="doc-btn doc-btn--primary" href="/quickstart">Quickstart</a>
+      <a className="doc-btn doc-btn--ghost" href="https://github.com/mogharsallah/turjuman">View on GitHub</a>
+    </div>
+  </div>
+  <img className="doc-hero__mark" src="/favicon.svg" alt="" />
+</div>
+
+**Turjuman is a lightweight, open-source alternative to commercial translation-management SaaS.**
+Instead of a heavy web dashboard, you manage projects, keys, locales and
+translations through an **MCP server** connected to Claude Code (or any MCP client/agent). A thin
+**developer CLI** handles the deterministic file work — pulling and pushing locale files in your
+repo and CI.
+
+It runs on a **serverless AWS stack (Lambda + DynamoDB)** that costs next to nothing to host and
+fits comfortably in the free tier. No always-on servers, no Cognito.
+
+```
+Claude Code / agent ──Streamable HTTP + API key──┐
+Developer CLI / CI ──REST + API key──────────────┤
+                                                 ▼
+                          Lambda Function URLs ──► DynamoDB (single table)
+```
+
+## Why MCP-first?
+
+Translation management is mostly conversation and judgement: "add a French locale", "translate the
+untranslated checkout strings", "what does `cart.empty` say in German?". An agent with the right
+tools does this naturally. The connected LLM **does the translating itself** — there is no separate
+machine-translation engine to pay for or configure.
+
+The CLI exists for the things you should *not* hand to an LLM: deterministically exporting a
+JSON/YAML file, downloading translations, and syncing them in CI.
+
+## What's in v1
+
+<CardGroup cols={2}>
+  <Card title="MCP server" icon="robot">
+    Tools for projects, locales, keys (with descriptions/context), translations, bulk fill, the
+    review workflow, and full user/member/API-key administration.
+  </Card>
+  <Card title="First-class RBAC" icon="lock">
+    Global roles (`OWNER`/`ADMIN`/`MEMBER`) plus per-project roles
+    (`MANAGER`/`EDITOR`/`DEVELOPER`/`VIEWER`).
+  </Card>
+  <Card title="Developer CLI" icon="terminal">
+    `login`, `init`, `pull`, `push`, `build`, `check` with multi-target config and adapters for
+    JSON, YAML, Flutter ARB, Java `.properties`, CSV, Android, and iOS.
+  </Card>
+  <Card title="Glossary, memory & webhooks" icon="bell">
+    Glossary and translation memory to keep phrasing consistent, plus HMAC-signed webhooks for
+    change events (via DynamoDB Streams).
+  </Card>
+</CardGroup>
+
+## How the code is organized
+
+A pure shared core (`@turjuman/schema`) plus the server brain (`@turjuman/core`) wrapped by two thin
+transports. The transports only translate HTTP ↔ service calls — **all business logic and all
+authorization live in the core packages** — so the MCP and REST surfaces can never drift in
+behaviour or permissions.
+
+| Package | What it is |
+|---|---|
+| `packages/schema` | The pure, AWS-free base: domain model, zod schemas, RBAC policy, ICU helpers, QA engine (the shared brain) |
+| `packages/formats` | Localization file-format adapters (JSON/YAML/ARB/CSV/Android/iOS) over a canonical ICU representation |
+| `packages/core` | Server core: the single-table DynamoDB repository + services, built on `@turjuman/schema` |
+| `packages/mcp-server` | Stateless Streamable HTTP MCP server → Lambda |
+| `packages/api` | REST API for the CLI/CI → Lambda, plus the webhook dispatcher |
+| `packages/cli` | The lightweight `turjuman` developer CLI (no AWS SDK) |
+| `packages/deploy` | The `turjuman-deploy` self-host tooling (AWS CDK deployer) |
+
+## Where to next
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Run the whole stack locally against DynamoDB Local — no AWS account needed.
+  </Card>
+  <Card title="Self-host on AWS" icon="cloud" href="/self-hosting">
+    Deploy to your own AWS account with one command.
+  </Card>
+  <Card title="Architecture" icon="diagram-project" href="/concepts/architecture">
+    The data model, single-table design, and request flow.
+  </Card>
+  <Card title="Translate with MCP" icon="language" href="/guides/translate-with-mcp">
+    Connect an agent and drive translation in natural language.
+  </Card>
+</CardGroup>

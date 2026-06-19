@@ -1,0 +1,200 @@
+---
+title: Self-host on AWS
+description: "Deploy Turjuman to your own AWS account with one command — a single DynamoDB table and three Lambda Function URLs, defined with the AWS CDK."
+---
+
+Turjuman deploys to your own AWS account. The whole stack is **one DynamoDB table and three Lambda
+functions** exposed as Function URLs. The infrastructure is defined with the
+[AWS CDK](https://docs.aws.amazon.com/cdk/); the `turjuman-deploy deploy` command bundles the
+functions, uploads them, deploys the stack with the CDK toolkit, and creates your first owner — in
+one step.
+
+<Note>
+  Self-hosting lives in a **separate package, `@turjuman/deploy`** (binary `turjuman-deploy`),
+  so the day-to-day [`turjuman` developer CLI](/reference/cli-commands) stays a lean install with
+  no AWS SDK. Run the deploy tool with `npx @turjuman/deploy <command>` from a clone of this repo.
+</Note>
+
+<Note>
+  **No SAM CLI and no `cdk bootstrap` required** — it deploys with your own credentials.
+</Note>
+
+<Warning>
+  The CDK stack is conventional but has **not yet been verified end-to-end against a live AWS
+  account** (see the [roadmap](https://github.com/mogharsallah/turjuman/blob/main/ROADMAP.md)).
+  Use the [Quickstart](/quickstart) to evaluate, and treat the cloud deploy as beta.
+</Warning>
+
+## Prerequisites
+
+- An AWS account and credentials configured (`aws configure`, or any standard AWS env vars).
+- Node.js 20+.
+- A clone of this repo (`deploy` builds the Lambdas from source, so it runs from the repo).
+
+## Deploy
+
+```bash
+npm install
+npm run build                   # compile all packages
+npx @turjuman/deploy deploy   # interactive: stack name, region, options, first owner
+```
+
+`deploy` will:
+
+1. bundle each Lambda with esbuild and upload the zips to an S3 deploy bucket (created on first run);
+2. synthesize the CDK stack and deploy/update it with the CDK toolkit (using your credentials — no
+   `cdk bootstrap` step);
+3. create the first owner and print the API key **once**, saving it to `~/.turjuman/auth.json` so
+   you're immediately logged in.
+
+Your answers are saved to `turjuman.deploy.json`, so re-running `npx @turjuman/deploy deploy`
+updates the stack non-interactively (e.g. after `git pull`). Use
+`npx @turjuman/deploy deploy --reconfigure` to change them.
+
+Outputs printed at the end:
+
+| Output | Use |
+|---|---|
+| `McpUrl` | MCP server URL for your `.mcp.json` |
+| `ApiUrl` | REST API URL for `turjuman login --url` |
+| `TableName` | the DynamoDB table |
+
+### Options
+
+`deploy` prompts for these; all default to the values below (the prior behavior):
+
+| Setting | Default | Notes |
+|---|---|---|
+| CORS origins | `*` | Comma-separated list of allowed origins for the Function URLs |
+| Lambda memory | `256` MB | |
+| Lambda timeout | `15` s | |
+| VPC | off | Optionally supply subnet + security-group ids to run the functions in a VPC |
+
+### The first owner
+
+The first owner is created directly against the new table (the org-already-populated guard lives in
+core, so re-running `deploy` won't create a second owner — it keeps your existing key). The printed
+`apiKey` is your MCP/CLI bearer token; from there you manage users, projects and keys through the MCP
+server.
+
+## Runtime configuration
+
+The Lambda functions read these environment variables:
+
+| Variable | Default | Effect |
+|---|---|---|
+| `TURJUMAN_TABLE` | (set by deploy) | DynamoDB table name. |
+| `TURJUMAN_ALLOWED_ORIGIN` | `*` | The `Access-Control-Allow-Origin` the MCP server returns. Lock it to a single origin to restrict browser callers. |
+
+On the managed AWS deploy the **CORS origins** prompt is the primary lock-down — it configures CORS
+natively on the Function URL (which supersedes the function's own header), so set the allowed origins
+there. `TURJUMAN_ALLOWED_ORIGIN` is the app-level equivalent for running the function behind your
+own gateway or locally.
+
+### Health check
+
+The MCP server answers an unauthenticated `GET /health` with `200 {"status":"ok"}` — point a load
+balancer or uptime monitor at it to confirm liveness without a JSON-RPC round-trip or an API key.
+Every other non-`POST` verb returns `405` with an `Allow` header. Clients that send an unsupported
+`MCP-Protocol-Version` header get a `400`; an absent header is treated as the `2025-03-26` baseline.
+
+## Checking what's installed
+
+To see whether Turjuman is already installed in an AWS account/region:
+
+```bash
+npx @turjuman/deploy status                 # uses turjuman.deploy.json / AWS_REGION
+npx @turjuman/deploy status --region eu-west-1
+```
+
+`status` reports the stack named in `turjuman.deploy.json` (if present) **and** scans the region
+for any Turjuman-managed stacks by tag — so it finds installs even from a fresh checkout with no
+local config, or when the stack was renamed. Every `deploy` tags its stack `app=turjuman` /
+`turjuman:managed=true`, which is what the scan keys off. CloudFormation is regional, so run it
+once per region you want to check.
+
+## Removing Turjuman (teardown)
+
+To remove an installation entirely:
+
+```bash
+npx @turjuman/deploy teardown               # uses turjuman.deploy.json
+npx @turjuman/deploy teardown --stack-name turjuman --region us-east-1
+```
+
+`teardown` deletes the CloudFormation stack (Lambdas, IAM roles, Function URLs, **and the DynamoDB
+table with all translation data**), then empties and deletes the S3 deploy bucket. It asks you to
+type the stack name to confirm, then offers to remove the local `turjuman.deploy.json` and
+`~/.turjuman/auth.json`. It's idempotent — re-running after a partial teardown won't error.
+
+<Warning>
+  This **permanently destroys all data** unless you pass `--keep-table`. Export anything you need
+  first. Pass `--yes` (with an explicit `--stack-name`) to skip the typed confirmation in automation.
+</Warning>
+
+### Keeping your data
+
+To remove the install but **preserve the DynamoDB table and its data**:
+
+```bash
+npx @turjuman/deploy teardown --keep-table
+```
+
+The table is declared with `RemovalPolicy.RETAIN`, so deleting the stack always leaves it in place;
+`--keep-table` additionally enables deletion protection on the now-orphaned table. Your data is safe
+and no longer managed by CloudFormation. (A full teardown, without `--keep-table`, deletes the
+retained table explicitly.) To remove a kept table later, disable protection and delete it:
+
+```bash
+aws dynamodb update-table --table-name <TableName> --no-deletion-protection-enabled --region <region>
+aws dynamodb delete-table --table-name <TableName> --region <region>
+```
+
+If you ran a `deploy` from a different checkout, the deploy bucket name lives in that checkout's
+`turjuman.deploy.json`. Without it, `teardown` deletes the stack and warns you to remove the
+leftover `turjuman-deploy-<region>-*` bucket by hand.
+
+## Bootstrapping an owner against an existing table
+
+If you provisioned the table some other way (or want a second org's owner), create an owner against
+the deployed table directly:
+
+```bash
+npx @turjuman/deploy bootstrap --table <TableName> --region <region> --email you@example.com --name "You"
+```
+
+This is the same client-side bootstrap `npx @turjuman/deploy deploy` runs; it prints the API key
+once and refuses to create a second owner once the org has users.
+
+## Cost
+
+- **DynamoDB**: on-demand (`PAY_PER_REQUEST`) — you pay per request, nothing when idle. Typical
+  team usage stays within the free tier (25 GB storage + generous request allowances).
+- **Lambda**: arm64, 256 MB, only billed per invocation; the free tier covers 1M requests/month.
+- **Function URLs**: no API Gateway, no hourly cost.
+
+For a small team this is effectively free to run.
+
+## Local development
+
+You can run everything against [DynamoDB Local](https://hub.docker.com/r/amazon/dynamodb-local)
+without AWS — see the [Quickstart](/quickstart). The helper script creates the table (matching the
+deploy stack: PK/SK + GSI1/GSI2/GSI3, all `ALL` projection) and bootstraps an owner in one step:
+
+```bash
+node scripts/dev-setup.mjs you@example.com "You"
+```
+
+It's idempotent about the table (reuses an existing one). Alternatively, create the table yourself
+and call `bootstrapOwner` from `@turjuman/core`.
+
+## Updating
+
+```bash
+git pull
+npm install && npm run build
+npx @turjuman/deploy deploy   # re-runs non-interactively using turjuman.deploy.json
+```
+
+DynamoDB schema changes are additive (new item types reuse the existing keys/GSIs), so updates are
+normally just a redeploy.

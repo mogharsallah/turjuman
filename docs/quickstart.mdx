@@ -1,0 +1,81 @@
+---
+title: Quickstart
+description: "Run the entire Turjuman stack locally against DynamoDB Local — no AWS account, no LocalStack — and connect an MCP client in minutes."
+---
+
+The fastest way to see Turjuman work is to run everything against
+[DynamoDB Local](https://hub.docker.com/r/amazon/dynamodb-local). No cloud account is needed.
+
+<Steps>
+  <Step title="Install and build">
+    ```bash
+    npm install && npm run build
+    ```
+  </Step>
+  <Step title="Start DynamoDB Local">
+    ```bash
+    docker run -d --rm -p 8000:8000 amazon/dynamodb-local
+    ```
+  </Step>
+  <Step title="Create the table and your first owner">
+    This creates the table and the first `OWNER`, and prints your API key **once**:
+
+    ```bash
+    node scripts/dev-setup.mjs you@example.com "You"
+    ```
+
+    Copy the printed key — it is shown only this once.
+  </Step>
+  <Step title="Start the transports">
+    Point both servers at DynamoDB Local, then start each in its own shell:
+
+    ```bash
+    export AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000 TURJUMAN_TABLE=Turjuman
+    export AWS_ACCESS_KEY_ID=local AWS_SECRET_ACCESS_KEY=local AWS_REGION=us-east-1
+
+    node packages/mcp-server/dist/local.js   # MCP  on http://localhost:3000
+    node packages/api/dist/local.js          # REST on http://localhost:4000
+    ```
+  </Step>
+  <Step title="Connect your MCP client">
+    Point your MCP client (e.g. Claude Code) at `http://localhost:3000/` with the printed API key:
+
+    ```json
+    {
+      "mcpServers": {
+        "turjuman": {
+          "type": "http",
+          "url": "http://localhost:3000/",
+          "headers": { "Authorization": "Bearer <your-api-key>" }
+        }
+      }
+    }
+    ```
+
+    Then just ask: *"Create a project called Web App with base locale en, add fr and es, and
+    translate everything into French."*
+  </Step>
+</Steps>
+
+<Note>
+  The same API key both authenticates you and determines your permissions. See
+  [Roles & permissions](/concepts/roles-and-permissions) for how to scope keys to translators
+  and CI.
+</Note>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Translate with MCP" icon="language" href="/guides/translate-with-mcp">
+    Example agent workflows for setting up projects and translating.
+  </Card>
+  <Card title="Sync files with the CLI" icon="terminal" href="/guides/sync-with-cli">
+    Pull and push locale files in your repo and CI.
+  </Card>
+  <Card title="Self-host on AWS" icon="cloud" href="/self-hosting">
+    Move from local to a real serverless deployment.
+  </Card>
+  <Card title="Architecture" icon="diagram-project" href="/concepts/architecture">
+    Understand the system before you build on it.
+  </Card>
+</CardGroup>

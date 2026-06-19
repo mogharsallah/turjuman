@@ -1,0 +1,15 @@
+#!/bin/sh
+# Keep the committed OpenAPI snapshot (docs/api-reference/openapi.json) in sync
+# with the REST API. Runs only when API/core source or the generator is staged,
+# so most commits are untouched. The snapshot is regenerated from freshly-built
+# output and staged into the commit. Skip with `git commit --no-verify`.
+set -e
+
+if git diff --cached --name-only \
+  | grep -qE '^(packages/api/src/|packages/core/src/|packages/schema/src/|scripts/gen-openapi\.mjs$)'; then
+  echo "[pre-commit] API/core/schema changed — refreshing OpenAPI snapshot..."
+  # Build the OpenAPI dependency chain in order: schema → formats → core → api.
+  npm run --silent build -w @turjuman/schema -w @turjuman/formats -w @turjuman/core -w @turjuman/api >/dev/null
+  npm run --silent gen:openapi >/dev/null
+  git add docs/api-reference/openapi.json
+fi
