@@ -1,6 +1,6 @@
 {
   "name": "@turjuman/mcp-server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Turjuman MCP server (stateless Streamable HTTP) for AWS Lambda.",
   "license": "MIT",
   "author": "Turjuman contributors",
@@ -48,7 +48,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@turjuman/core": "0.1.0",
+    "@turjuman/core": "0.2.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {

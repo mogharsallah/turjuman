@@ -1,6 +1,6 @@
 {
   "name": "@turjuman/cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Turjuman developer CLI: pull, push and build translation files in your repo and CI.",
   "license": "MIT",
   "author": "Turjuman contributors",
@@ -44,8 +44,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@turjuman/formats": "0.1.0",
-    "@turjuman/schema": "0.1.0",
+    "@turjuman/formats": "0.2.0",
+    "@turjuman/schema": "0.2.0",
     "commander": "^12.1.0",
     "zod": "^3.24.1"
   }
