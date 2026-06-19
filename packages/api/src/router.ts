@@ -56,6 +56,14 @@ import pkg from "../package.json" with { type: "json" };
 
 const META = { name: "turjuman", version: pkg.version };
 
+// The OpenAPI document's version is the *API contract* version, not the npm
+// package version — its major tracks the `/v1` path prefix and only changes when
+// the REST contract changes (the convention used by Stripe/Kubernetes/Google
+// Cloud). Decoupling it from `pkg.version` keeps the committed openapi.json
+// snapshot from churning on every release. The deployed package version is still
+// reported at runtime by the `GET /` service-metadata endpoint (`META`).
+const API_VERSION = "1.0.0";
+
 /** Turn a Standard Schema validation failure into the platform's VALIDATION error. */
 function onInvalid(
   result: { success: boolean; error?: readonly { message: string }[] },
@@ -465,7 +473,7 @@ export function createApp(deps: RouterDeps): Hono<Env> {
         openapi: "3.1.0",
         info: {
           title: "Turjuman API",
-          version: META.version,
+          version: API_VERSION,
           description:
             "Deterministic REST API for the Turjuman developer CLI and CI sync.\n\n" +
             "**Base URL:** your own deployment's `ApiUrl` (printed by `turjuman deploy`); " +
