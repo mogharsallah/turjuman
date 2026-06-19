@@ -24,6 +24,9 @@ process.env.AWS_DEFAULT_REGION = REGION;
 process.env.AWS_ACCESS_KEY_ID ??= "test";
 process.env.AWS_SECRET_ACCESS_KEY ??= "test";
 process.env.AWS_ENDPOINT_URL ??= ENDPOINT; // routes the CDK toolkit at LocalStack
+// S3 (only) goes through LocalStack's wildcard-DNS endpoint so the toolkit's
+// virtual-host-style asset publishing resolves; see scripts/e2e-deploy.mjs.
+process.env.AWS_ENDPOINT_URL_S3 ??= "http://s3.localhost.localstack.cloud:4566";
 
 const { CloudFormationClient } = await import("@aws-sdk/client-cloudformation");
 const { DynamoDBClient, DeleteTableCommand } = await import("@aws-sdk/client-dynamodb");

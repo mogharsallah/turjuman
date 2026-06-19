@@ -35,6 +35,13 @@ process.env.AWS_DEFAULT_REGION = REGION;
 process.env.AWS_ACCESS_KEY_ID ??= "test";
 process.env.AWS_SECRET_ACCESS_KEY ??= "test";
 process.env.AWS_ENDPOINT_URL ??= ENDPOINT;
+// The CDK toolkit publishes the template + Lambda assets with a virtual-host-style
+// S3 client (bucket-as-subdomain), which LocalStack at localhost:4566 can't route.
+// Point S3 (only) at LocalStack's wildcard-DNS endpoint, where
+// `<bucket>.s3.localhost.localstack.cloud` resolves to 127.0.0.1. This per-service
+// override takes precedence over AWS_ENDPOINT_URL for S3; every other service
+// keeps using AWS_ENDPOINT_URL.
+process.env.AWS_ENDPOINT_URL_S3 ??= "http://s3.localhost.localstack.cloud:4566";
 
 const { DynamoDBClient } = await import("@aws-sdk/client-dynamodb");
 const { Repository, bootstrapOwner } = await import("@turjuman/core");
