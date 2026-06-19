@@ -19,7 +19,7 @@
     "prepare": "git config core.hooksPath .githooks || true",
     "build": "npm run build --workspaces --if-present",
     "changeset": "changeset",
-    "version-packages": "changeset version && npm run build && npm run gen:openapi",
+    "version-packages": "changeset version",
     "release": "npm run build && changeset publish",
     "gen:openapi": "node scripts/gen-openapi.mjs",
     "dev:setup": "node scripts/dev-setup.mjs",
