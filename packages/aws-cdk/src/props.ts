@@ -22,6 +22,19 @@ export interface TurjumanSurfaceOptions extends TurjumanFunctionTuning {
   enabled?: boolean;
 }
 
+/** The webhook dispatcher surface: a toggleable function plus the one knob that
+ * is specific to its DynamoDB Streams event-source mapping. */
+export interface TurjumanWebhookOptions extends TurjumanSurfaceOptions {
+  /**
+   * Where the stream poller begins reading (default "LATEST" — only changes made
+   * after the mapping exists, so a redeploy never replays history). Set
+   * "TRIM_HORIZON" to read from the start of the shard; this removes the
+   * race where records written before the poller is actually live are missed,
+   * which is useful for short-lived, freshly-deployed stacks (e.g. e2e).
+   */
+  streamStartingPosition?: "LATEST" | "TRIM_HORIZON";
+}
+
 /** DynamoDB single-table knobs. Defaults reproduce the on-demand, streamed,
  * retained table. */
 export interface TurjumanTableOptions {
@@ -65,7 +78,7 @@ export interface TurjumanProps {
   /** The REST API for the CLI/CI. Deployed unless `enabled: false`. */
   api?: TurjumanSurfaceOptions;
   /** The DynamoDB Streams → webhook dispatcher. Deployed unless `enabled: false`. */
-  webhook?: TurjumanSurfaceOptions;
+  webhook?: TurjumanWebhookOptions;
   /** CORS allowed origins for the Function URLs (default ["*"]). */
   corsAllowOrigins?: string[];
   vpc?: TurjumanVpcOptions;

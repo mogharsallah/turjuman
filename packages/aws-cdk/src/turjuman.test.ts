@@ -136,6 +136,12 @@ describe("CDK synth", () => {
     expect(props.BatchSize).toBe(10);
   });
 
+  it("reads the stream from the horizon when streamStartingPosition is TRIM_HORIZON", () => {
+    const t = synthWith({ webhook: { streamStartingPosition: "TRIM_HORIZON" } });
+    const mapping = resourcesOfType(t, "AWS::Lambda::EventSourceMapping")[0]![1];
+    expect(mapping.Properties.StartingPosition).toBe("TRIM_HORIZON");
+  });
+
   it("outputs the three values the deployer reads back", () => {
     expect(Object.keys(synth.Outputs).sort()).toEqual(["ApiUrl", "McpUrl", "TableName"]);
   });
