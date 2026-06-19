@@ -108,6 +108,45 @@ authorization or domain logic in a transport.
   `packages/aws-deploy` (`turjuman-aws-deploy`), over the `packages/aws-cdk` construct — keep
   AWS/CDK deps there, not in the CLI.
 
+## Releasing
+
+Releases are driven by [Changesets](https://github.com/changesets/changesets) and the `release`
+workflow (`.github/workflows/release.yml`). The `@turjuman/*` packages are versioned together (the
+`fixed` group in `.changeset/config.json`), so they share one version line.
+
+The flow, per PR and on merge to `main`:
+
+1. **Add a changeset in your PR.** Run `npm run changeset`, pick the bump (patch/minor/major), and
+   commit the generated `.changeset/*.md` file. A PR that changes published package source should
+   include one; docs-only or CI-only changes don't need one.
+2. **On merge to `main`,** the `release` workflow runs. If changesets are pending, it opens (or
+   updates) a **"Version Packages" PR** that applies the bumps and writes the changelogs.
+3. **Merge that PR.** The next `release` run sees no pending changesets and **publishes** any package
+   whose version isn't yet on npm.
+
+### Publishing auth — Trusted Publishing (OIDC), no token
+
+Publishing uses **npm [Trusted Publishing](https://docs.npmjs.com/trusted-publishers/) over OIDC** —
+there is **no `NPM_TOKEN` secret**. npm trusts this one workflow in this repo and mints a short-lived,
+workflow-scoped credential at publish time, so there is no long-lived token to leak, rotate, or
+exfiltrate. This is the deliberate mitigation for the 2025 npm supply-chain (Shai-Hulud) class of
+attack, where stolen CI tokens were used to auto-publish malicious versions. It also makes
+[provenance attestations](https://docs.npmjs.com/generating-provenance-statements/) automatic — every
+published version carries a verifiable "built from this commit, in this workflow" link.
+
+<Note>
+  **One-time setup, per package, by an npm account maintainer.** On npmjs.com, open each `@turjuman/*`
+  package → **Settings → Trusted Publisher → GitHub Actions**, and set org/repo to
+  `mogharsallah/turjuman` and the workflow to `release.yml`. Until this is configured for a package,
+  the publish step has no credentials and that package is skipped — the Version Packages PR flow still
+  works. Trusted Publishing requires the npm CLI ≥ 11.5.1 (the workflow upgrades it) and a cloud-hosted
+  runner.
+</Note>
+
+Third-party GitHub Actions in both workflows are **pinned to a commit SHA** (with the human-readable
+tag in a trailing comment), so a compromised or moved tag can't silently change what runs in CI or at
+publish time. When bumping an action, update the SHA and the comment together.
+
 ## Documentation
 
 These docs are the **single source of truth** — they serve human readers (this site), external agents
