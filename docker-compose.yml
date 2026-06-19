@@ -14,7 +14,10 @@ services:
     ports:
       - "4566:4566"
     environment:
-      - SERVICES=dynamodb,dynamodbstreams,lambda,cloudformation,s3,iam,sts,logs,cloudwatch
+      # ssm + ecr are needed by the standard CDK bootstrap (CDKToolkit): it
+      # writes a CdkBootstrapVersion SSM parameter and creates an ECR repo for
+      # image assets. The deploy CLI also stores its config in SSM.
+      - SERVICES=dynamodb,dynamodbstreams,lambda,cloudformation,s3,iam,sts,logs,cloudwatch,ssm,ecr
       - DEBUG=${LOCALSTACK_DEBUG:-0}
       - DOCKER_HOST=unix:///var/run/docker.sock
       - LAMBDA_DOCKER_FLAGS=--add-host=host.docker.internal:host-gateway

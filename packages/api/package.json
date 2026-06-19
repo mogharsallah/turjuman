@@ -7,8 +7,18 @@
   "type": "module",
   "main": "./dist/handler.js",
   "types": "./dist/handler.d.ts",
+  "exports": {
+    ".": "./dist/handler.js",
+    "./lambda/handler.mjs": "./lambda/handler.mjs",
+    "./lambda/package.json": "./lambda/package.json",
+    "./lambda-webhook/webhook.mjs": "./lambda-webhook/webhook.mjs",
+    "./lambda-webhook/package.json": "./lambda-webhook/package.json",
+    "./package.json": "./package.json"
+  },
   "files": [
-    "dist"
+    "dist",
+    "lambda",
+    "lambda-webhook"
   ],
   "publishConfig": {
     "access": "public"
@@ -32,10 +42,11 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/build-lambda.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist lambda lambda-webhook",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@aws-sdk/util-dynamodb": "^3.700.0",
@@ -47,6 +58,7 @@
     "zod-openapi": "^4.2.4"
   },
   "devDependencies": {
-    "@types/aws-lambda": "^8.10.146"
+    "@types/aws-lambda": "^8.10.146",
+    "esbuild": "^0.24.0"
   }
 }

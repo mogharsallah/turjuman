@@ -58,7 +58,7 @@ cases:
 | A **new domain/capability** (`core/services/`) | a new Guide and/or Concept page, plus its Reference surface; add to `docs.json` | depends |
 | A **data-model / schema field** (`packages/schema/src/domain.ts`, repository) | `concepts/architecture.mdx` (and `concepts/lifecycle.mdx` if it's lifecycle state) | Concept |
 | **Auth / RBAC** (`packages/schema/src/rbac.ts`) | `concepts/roles-and-permissions.mdx` | Concept |
-| **Deploy / infra** (`packages/deploy/`, `turjuman-deploy`) | `self-hosting.mdx` | Guide |
+| **Deploy / infra** (`packages/aws-cdk/`, `packages/aws-deploy/`, `turjuman-aws-deploy`) | `self-hosting.mdx` | Guide |
 
 A brand-new top-level area is a new group/tab in `docs.json`. Prefer extending an existing page over
 spawning a thin new one.

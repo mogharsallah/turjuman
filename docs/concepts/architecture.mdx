@@ -70,10 +70,12 @@ same `TransactWriteItems` as the user.
   Lambda. Supports `initialize`, `tools/list`, `tools/call`, `ping`. Auth is a static
   `Authorization: Bearer <api-key>` header on every request.
 - **REST API** (`packages/api`): deterministic endpoints for the CLI — list projects/locales/keys,
-  export a locale, bulk-import keys and translations. Plus a no-trigger `BootstrapFunction`.
+  export a locale, bulk-import keys and translations. The same package also ships the
+  `WebhookFunction`, a DynamoDB Streams consumer that POSTs change events to configured endpoints.
 
 Both run as **Lambda Function URLs** (`AuthType: NONE`, since Turjuman validates its own API
-keys) — no API Gateway, keeping the footprint and cost minimal.
+keys) — no API Gateway, keeping the footprint and cost minimal. The first owner is created
+client-side by the deploy CLI (there is no in-stack bootstrap function).
 
 ### Why the REST surface is intentionally narrow
 
@@ -87,5 +89,25 @@ This is a deliberate scope decision, not a missing feature: management is intera
 judgment-driven (well suited to the agent/MCP model), while the REST surface stays small, stable, and
 safe to wire into automation. Because both transports call the same `core` services, this split is
 purely about *what each surface exposes* — never about behaviour or permissions, which are identical.
+
+## Deployment & packaging
+
+The deploy topology is a published, composable CDK construct,
+[`@turjuman/aws-cdk`](https://github.com/mogharsallah/turjuman/tree/main/packages/aws-cdk) — the
+retained single-table store and up to three Lambda Function URLs, props-driven (billing mode, PITR,
+deletion protection, per-function tuning, CORS, VPC, and api/webhook toggles). Drop it into your own
+CDK app, or let the thin [`@turjuman/aws-deploy`](/self-hosting) CLI deploy it.
+
+The Lambda code ships as **pre-bundled assets baked into the npm packages**: each of
+`@turjuman/mcp-server` and `@turjuman/api` esbuild-bundles its handler (inlining `@turjuman/core` →
+`@turjuman/schema`) into a self-contained `lambda/*.mjs` directory at build time, and the construct
+references it with `Code.fromAsset`. So "what to deploy" (the construct + versioned assets) is
+separated from "how to deploy" (the CLI), and the deploy uses the **standard CDK bootstrap + asset
+pipeline** rather than a hand-rolled S3 upload.
+
+Resource identity is idiomatic CDK (hashed logical ids) **except the DynamoDB table**, whose
+construct id is deliberately fixed and which carries `RemovalPolicy.RETAIN` — so a refactor can never
+make CloudFormation replace (and thus wipe) the data. The table's Stream stays on even when the
+webhook surface is disabled, so re-enabling it later never replaces the table.
 If a future workflow genuinely needs an operation over REST (e.g. CI provisioning a project), it can be
 added as a thin route over the existing service — but the default is MCP-first.

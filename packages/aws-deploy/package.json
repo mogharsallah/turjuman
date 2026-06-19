@@ -1,0 +1,56 @@
+{
+  "name": "@turjuman/aws-deploy",
+  "version": "0.1.0",
+  "description": "Turjuman self-host tooling: deploy (with self-bootstrap), inspect and tear down the AWS stack via the CDK programmatic toolkit.",
+  "license": "MIT",
+  "author": "Turjuman contributors",
+  "type": "module",
+  "bin": {
+    "turjuman-aws-deploy": "./dist/main.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mogharsallah/turjuman.git",
+    "directory": "packages/aws-deploy"
+  },
+  "homepage": "https://github.com/mogharsallah/turjuman#readme",
+  "bugs": "https://github.com/mogharsallah/turjuman/issues",
+  "keywords": [
+    "turjuman",
+    "self-hosting",
+    "aws",
+    "cdk",
+    "deploy",
+    "i18n",
+    "translation"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@aws-cdk/toolkit-lib": "^1.29.0",
+    "@aws-sdk/client-cloudformation": "^3.700.0",
+    "@aws-sdk/client-dynamodb": "^3.700.0",
+    "@aws-sdk/client-ssm": "^3.700.0",
+    "@clack/prompts": "^0.8.2",
+    "@turjuman/aws-cdk": "0.1.0",
+    "@turjuman/cli": "0.1.0",
+    "@turjuman/core": "0.1.0",
+    "aws-cdk-lib": "^2.259.0",
+    "commander": "^12.1.0",
+    "constructs": "^10.6.0",
+    "zod": "^3.24.1"
+  }
+}

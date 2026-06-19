@@ -10,8 +10,9 @@
     "packages/core",
     "packages/mcp-server",
     "packages/api",
+    "packages/aws-cdk",
     "packages/cli",
-    "packages/deploy",
+    "packages/aws-deploy",
     "packages/e2e"
   ],
   "scripts": {

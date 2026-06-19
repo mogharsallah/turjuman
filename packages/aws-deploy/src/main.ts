@@ -1,28 +1,44 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
 import { Command } from "commander";
-import { runDeploy } from "./index.js";
+import { bootstrapFirstOwner } from "./bootstrap.js";
+import { type RunDeployOptions, runDeploy } from "./index.js";
 import { runStatus } from "./status.js";
 import { runTeardown } from "./teardown.js";
-import { bootstrapFirstOwner } from "./bootstrap.js";
 
 function version(): string {
-  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version?: string };
+  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
+    version?: string;
+  };
   return pkg.version ?? "0.0.0";
 }
 
+/** Accumulate a repeatable commander option into an array. */
+const collect = (value: string, previous: string[]): string[] => [...previous, value];
+
 const program = new Command();
 program
-  .name("turjuman-deploy")
+  .name("turjuman-aws-deploy")
   .description("Turjuman self-host tooling — deploy, inspect, and tear down the AWS stack.")
   .version(version());
 
 program
   .command("deploy")
   .description("Deploy (or update) the Turjuman stack to your AWS account and create the first owner.")
-  .option("--reconfigure", "Re-prompt for settings instead of reusing turjuman.deploy.json")
-  .action(async (opts: { reconfigure?: boolean }) => {
-    await runDeploy({ reconfigure: opts.reconfigure });
+  .option("--reconfigure", "Re-prompt for settings instead of reusing the saved config")
+  .option("--stack-name <name>", "Stack name (defaults to the saved config)")
+  .option("--region <region>", "AWS region (defaults to config / AWS_REGION)")
+  .option("--skip-bootstrap", "Skip the standard CDK bootstrap (for already-bootstrapped accounts)")
+  .option("--enable <surface>", "Enable a surface (api|webhook), then redeploy", collect, [])
+  .option("--disable <surface>", "Disable a surface (api|webhook), then redeploy", collect, [])
+  .option(
+    "--set <path=value>",
+    "Override a single config value, e.g. mcp.memorySize=512 (repeatable)",
+    collect,
+    [],
+  )
+  .action(async (opts: RunDeployOptions) => {
+    await runDeploy(opts);
   });
 
 program
@@ -35,7 +51,7 @@ program
 
 program
   .command("teardown")
-  .description("Delete the Turjuman stack, deploy bucket, and (optionally) local config. Destructive.")
+  .description("Delete the Turjuman stack, its SSM config, and (optionally) local config. Destructive.")
   .option("--stack-name <name>", "Stack name (defaults to turjuman.deploy.json)")
   .option("--region <region>", "AWS region (defaults to config / AWS_REGION)")
   .option("--keep-table", "Retain the DynamoDB table (and its data) instead of deleting it")

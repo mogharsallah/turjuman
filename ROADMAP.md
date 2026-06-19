@@ -20,8 +20,8 @@ Status legend: ✅ done · 🚧 in progress · ⬜ not started
 - ✅ First-class RBAC: global roles (OWNER/ADMIN/MEMBER) + project roles (MANAGER/EDITOR/DEVELOPER/VIEWER)
 - ✅ Service layer with all business logic + authorization
 - ✅ API-key authentication (hashed bearer tokens)
-- ✅ AWS CDK stack (DynamoDB on-demand + Lambda Function URLs), deployed via the CDK programmatic toolkit
-- ✅ One-command `turjuman deploy` (bundles Lambdas + CDK deploy, no SAM CLI, no `cdk bootstrap`) with client-side first-owner bootstrap
+- ✅ Published, composable AWS CDK construct (`@turjuman/aws-cdk`): DynamoDB (on-demand/provisioned, optional PITR + deletion protection) + Lambda Function URLs, with api/webhook toggles and per-function tuning
+- ✅ One-command `turjuman-aws-deploy deploy` (`@turjuman/aws-deploy`): deploys the construct from pre-bundled npm Lambda assets via the CDK programmatic toolkit, self-bootstrapping the standard CDK environment (no SAM CLI), with client-side first-owner bootstrap and the canonical config in SSM
 
 ### Phase 1 — MCP server (the heart) ✅
 
@@ -282,8 +282,9 @@ Deliberate non-goals — keep the product **pure MCP-first / developer-first**:
 - **Async job pattern (Phase 5 prerequisite).** The API is synchronous request/response with no
   job/status primitive. The long-running governed-AI **scoring/review** work in Phase 5 is the natural
   driver for one; designing it is deliberately deferred until that work begins.
-- **Free-tier knobs.** On-demand vs. provisioned (25 RCU/WCU) billing is a deploy-time decision worth
-  documenting/parameterizing.
+- ✅ **Free-tier knobs.** On-demand vs. provisioned (25 RCU/WCU split across the table + 3 GSIs) billing
+  is now a deploy-time knob (`--set table.billingMode=PROVISIONED`), alongside PITR and deletion
+  protection.
 
 Contributions welcome — pick an unchecked item and open a PR.
 </content>

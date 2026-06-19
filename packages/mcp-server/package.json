@@ -7,8 +7,15 @@
   "type": "module",
   "main": "./dist/handler.js",
   "types": "./dist/handler.d.ts",
+  "exports": {
+    ".": "./dist/handler.js",
+    "./lambda/handler.mjs": "./lambda/handler.mjs",
+    "./lambda/package.json": "./lambda/package.json",
+    "./package.json": "./package.json"
+  },
   "files": [
-    "dist"
+    "dist",
+    "lambda"
   ],
   "publishConfig": {
     "access": "public"
@@ -32,11 +39,12 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/build-lambda.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "dev": "node dist/local.js",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist lambda",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
@@ -44,6 +52,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@types/aws-lambda": "^8.10.146"
+    "@types/aws-lambda": "^8.10.146",
+    "esbuild": "^0.24.0"
   }
 }

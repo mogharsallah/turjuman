@@ -1,13 +1,15 @@
 #!/usr/bin/env node
-// Deploy the Turjuman CDK stack into LocalStack and seed a bootstrap owner,
-// then write the resolved endpoints + API key to packages/e2e/.e2e/env.json for
-// the deployed-e2e vitest spec to consume.
+// Deploy the Turjuman CDK stack into LocalStack and seed bootstrap owners, then
+// write the resolved endpoints + API keys to packages/e2e/.e2e/env.json for the
+// deployed-e2e vitest spec to consume.
 //
-// This reuses Turjuman's own deploy code path (packages/deploy/src): each
-// Lambda is bundled with esbuild — which inlines the @turjuman/core workspace
-// package — uploaded to (LocalStack) S3, and deployed with the CDK programmatic
-// toolkit pointed at LocalStack via AWS_ENDPOINT_URL (no `cdk bootstrap`). It
-// exercises the real deploy logic.
+// This reuses Turjuman's own deploy code path (packages/aws-deploy/src): the
+// @turjuman/aws-cdk construct deployed with the CDK programmatic toolkit, pointed
+// at LocalStack via AWS_ENDPOINT_URL. The Lambda code is the pre-bundled asset
+// shipped by @turjuman/mcp-server / @turjuman/api (produced by `npm run build`),
+// which the construct ships via Code.fromAsset. The toolkit self-bootstraps the
+// standard CDK environment unless TURJUMAN_E2E_SKIP_BOOTSTRAP=1 (in which case
+// run `cdklocal bootstrap` first).
 //
 // Prereqs: LocalStack running (npm run e2e:up) and `npm run build`.
 //
@@ -22,8 +24,7 @@ const ENDPOINT = process.env.AWS_ENDPOINT_URL ?? "http://localhost:4566";
 const REGION = process.env.AWS_REGION ?? "us-east-1";
 const STACK = "turjuman";
 // Match the Lambda architecture to the host so functions run natively under
-// LocalStack (avoids slow/flaky QEMU emulation). Real AWS deploys keep the
-// template default of arm64.
+// LocalStack (avoids slow/flaky QEMU emulation). Real AWS deploys keep arm64.
 const ARCH = process.arch === "arm64" ? "arm64" : "x86_64";
 const CREDS = { accessKeyId: "test", secretAccessKey: "test" };
 
@@ -34,46 +35,34 @@ process.env.AWS_DEFAULT_REGION = REGION;
 process.env.AWS_ACCESS_KEY_ID ??= "test";
 process.env.AWS_SECRET_ACCESS_KEY ??= "test";
 process.env.AWS_ENDPOINT_URL ??= ENDPOINT;
+// The CDK toolkit publishes the template + Lambda assets with a virtual-host-style
+// S3 client (bucket-as-subdomain), which LocalStack at localhost:4566 can't route.
+// Point S3 (only) at LocalStack's wildcard-DNS endpoint, where
+// `<bucket>.s3.localhost.localstack.cloud` resolves to 127.0.0.1. This per-service
+// override takes precedence over AWS_ENDPOINT_URL for S3; every other service
+// keeps using AWS_ENDPOINT_URL.
+process.env.AWS_ENDPOINT_URL_S3 ??= "http://s3.localhost.localstack.cloud:4566";
 
-const { S3Client } = await import("@aws-sdk/client-s3");
 const { DynamoDBClient } = await import("@aws-sdk/client-dynamodb");
 const { Repository, bootstrapOwner } = await import("@turjuman/core");
-// Reuse the deploy tool's real building blocks (built to dist by `npm run build`).
-const { DEPLOY_FUNCTIONS, findRepoRoot } = await import("../packages/deploy/dist/functions.js");
-const { bundleFunction } = await import("../packages/deploy/dist/bundle.js");
-const { ensureDeployBucket, uploadArtifact } = await import("../packages/deploy/dist/s3.js");
-const { deployStack } = await import("../packages/deploy/dist/toolkit.js");
+// Reuse the deploy tool's real toolkit (built to dist by `npm run build`).
+const { deployStack } = await import("../packages/aws-deploy/dist/toolkit.js");
 
-// LocalStack S3 needs path-style addressing (no per-bucket virtual hosts).
-const s3 = new S3Client({ endpoint: ENDPOINT, region: REGION, credentials: CREDS, forcePathStyle: true });
-
-// 1. Bundle every Lambda with esbuild (inlines @turjuman/core).
-const repoRoot = findRepoRoot(root);
-console.log(`Bundling ${DEPLOY_FUNCTIONS.length} functions...`);
-const artifacts = [];
-for (const fn of DEPLOY_FUNCTIONS) {
-  artifacts.push(await bundleFunction(repoRoot, fn));
-}
-
-// 2. Upload the zips to a (LocalStack) S3 deploy bucket.
-const bucket = await ensureDeployBucket(s3, REGION);
-const code = {};
-for (const a of artifacts) {
-  const key = await uploadArtifact(s3, bucket, a.logicalId, a.hash, a.zip);
-  code[a.logicalId] = { bucket, key };
-}
-console.log(`Uploaded ${artifacts.length} artifacts to s3://${bucket}`);
-
-// 3. Deploy the CDK stack with the programmatic toolkit (no bootstrap; the
-//    toolkit talks to LocalStack via AWS_ENDPOINT_URL).
+// 1. Deploy the CDK stack with the programmatic toolkit. The construct resolves
+//    the pre-bundled @turjuman/mcp-server / @turjuman/api Lambda assets; the
+//    toolkit self-bootstraps LocalStack and talks to it via AWS_ENDPOINT_URL.
 console.log("Deploying CDK stack with the toolkit...");
-const outputs = await deployStack({ stackName: STACK, region: REGION, code, architecture: ARCH });
+const outputs = await deployStack({
+  props: { stackName: STACK, functionDefaults: { architecture: ARCH } },
+  region: REGION,
+  skipBootstrap: process.env.TURJUMAN_E2E_SKIP_BOOTSTRAP === "1",
+});
 const { McpUrl: mcpUrl, ApiUrl: apiUrl, TableName: tableName } = outputs;
 if (!mcpUrl || !apiUrl || !tableName) {
   throw new Error(`Stack outputs missing McpUrl/ApiUrl/TableName: ${JSON.stringify(outputs)}`);
 }
 
-// 4. Seed a bootstrap owner directly against the deployed table and capture the
+// 2. Seed a bootstrap owner directly against the deployed table and capture the
 //    one-time API key. force:true keeps re-runs idempotent.
 const ddb = new DynamoDBClient({ endpoint: ENDPOINT, region: REGION, credentials: CREDS });
 const repo = new Repository({ tableName, client: ddb });
@@ -83,7 +72,7 @@ const { secret: apiKey } = await bootstrapOwner(repo, {
   force: true,
 });
 
-// 4b. Seed a SECOND org's owner so tenant-isolation scenarios have a key from a
+// 2b. Seed a SECOND org's owner so tenant-isolation scenarios have a key from a
 //     different org. Same table, distinct orgId — exactly how multi-tenancy works.
 const { secret: apiKeyOrgB } = await bootstrapOwner(repo, {
   email: "e2e-owner-b@turjuman.test",
@@ -92,7 +81,7 @@ const { secret: apiKeyOrgB } = await bootstrapOwner(repo, {
   force: true,
 });
 
-// 5. Persist for the vitest e2e spec.
+// 3. Persist for the vitest e2e spec.
 const outDir = join(root, "packages", "e2e", ".e2e");
 mkdirSync(outDir, { recursive: true });
 const envFile = join(outDir, "env.json");
