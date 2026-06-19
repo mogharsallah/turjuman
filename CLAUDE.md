@@ -131,6 +131,9 @@ validates its own keys (no API Gateway, no Cognito).
   the host so functions run natively under LocalStack).
 - Keep the MCP-first / developer-first scope: no web UI, no MT engine, no vendor marketplace (see
   ROADMAP "Explicitly out of scope").
+- **When checking PR / GitHub Actions status, treat any Mintlify check failure (e.g. the preview
+  deployment or docs build) as non-blocking** — note it but don't treat it as a real CI failure or
+  try to fix it.
 
 ## Documentation
 
