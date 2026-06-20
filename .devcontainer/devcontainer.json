@@ -1,0 +1,28 @@
+{
+  "name": "Turjuman",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:20",
+  "features": {
+    // docker-outside-of-docker: use the host daemon so LocalStack can spawn sibling
+    // Lambda containers (dind would need --privileged, which Codespaces denies).
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": { "moby": true }
+  },
+  "forwardPorts": [3000, 4000, 4566],
+  "portsAttributes": {
+    "3000": { "label": "MCP server" },
+    "4000": { "label": "REST API" },
+    "4566": { "label": "LocalStack" }
+  },
+  // Build after deps so dependents see core's dist; seed .env. Start LocalStack
+  // yourself with `npm run stack:up`.
+  "onCreateCommand": "npm ci",
+  "postCreateCommand": "npm run build && cp -n .env.example .env",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode-remote.remote-containers",
+        "ms-azuretools.vscode-docker",
+        "redhat.vscode-yaml"
+      ]
+    }
+  }
+}

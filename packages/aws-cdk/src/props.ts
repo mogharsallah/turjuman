@@ -66,6 +66,17 @@ export interface TurjumanVpcOptions {
   securityGroupIds?: string[];
 }
 
+/**
+ * Dev/LocalStack-only: absolute path to each function's bundle dir, served via
+ * LocalStack's magic `hot-reload` bucket so a watcher updates the code without a
+ * redeploy. Inert on real AWS — leave unset for production.
+ */
+export interface TurjumanHotReloadDirs {
+  mcp?: string;
+  api?: string;
+  webhook?: string;
+}
+
 /** Props for the reusable {@link Turjuman} construct. */
 export interface TurjumanProps {
   /** Override the default npm-asset Lambda code (mainly for tests). */
@@ -82,6 +93,8 @@ export interface TurjumanProps {
   /** CORS allowed origins for the Function URLs (default ["*"]). */
   corsAllowOrigins?: string[];
   vpc?: TurjumanVpcOptions;
+  /** Dev/LocalStack-only Lambda hot-reload directories (see {@link TurjumanHotReloadDirs}). */
+  hotReload?: TurjumanHotReloadDirs;
 }
 
 /** Props for the {@link TurjumanStack} wrapper. */

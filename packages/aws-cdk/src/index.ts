@@ -9,4 +9,5 @@ export type {
   TurjumanTableOptions,
   TurjumanCodeOverrides,
   TurjumanVpcOptions,
+  TurjumanHotReloadDirs,
 } from "./props.js";

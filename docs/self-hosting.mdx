@@ -129,6 +129,35 @@ balancer or uptime monitor at it to confirm liveness without a JSON-RPC round-tr
 Every other non-`POST` verb returns `405` with an `Allow` header. Clients that send an unsupported
 `MCP-Protocol-Version` header get a `400`; an absent header is treated as the `2025-03-26` baseline.
 
+## Logs
+
+Every function logs **structured JSON — one object per line** to its CloudWatch Logs group
+(`/aws/lambda/<function>`), so you can query the fields directly with CloudWatch Logs Insights. The MCP
+server and REST API each emit exactly **one request-summary line** per request, and all three functions
+share a field vocabulary, so a single query can span the whole stack.
+
+| `msg` | Emitted by | Key fields |
+|---|---|---|
+| `mcp_request` | MCP server | `requestId`, `method`, `tool`, `keyId`, `outcome`, `status`, `ms` |
+| `api_request` | REST API | `requestId`, `method`, `path`, `keyId`, `status`, `ms` |
+| `webhook_delivered` / `webhook_delivery_failed` | Webhook dispatcher | `projectId`, `event`, `webhookId`, `status` / `reason` |
+| `mcp_unhandled` / `api_unhandled` | MCP / REST | `requestId`, `error` (name, message, and **stack — server-side only**) |
+
+Every response also carries an **`x-request-id`** header set to that `requestId`; an internal error
+returns the same id in its body and logs the stack server-side (never on the wire), so a user-reported
+id maps straight to one log line. API keys appear only as their **`keyId`**, never the raw bearer token.
+
+Find recent failures across both transports, newest first:
+
+```
+fields @timestamp, msg, status, keyId, ms
+| filter (msg = "api_request" or msg = "mcp_request") and status >= 400
+| sort @timestamp desc
+```
+
+When developing locally, `npm run dev` tails these same lines to your terminal, prefixed
+`[mcp]`/`[api]`/`[webhook]` — see the [contributing guide](/contributing#local-development).
+
 ## Checking what's installed
 
 To see whether Turjuman is already installed in an AWS account/region:
@@ -208,16 +237,11 @@ For a small team this is effectively free to run.
 
 ## Local development
 
-You can run everything against [DynamoDB Local](https://hub.docker.com/r/amazon/dynamodb-local)
-without AWS — see the [Quickstart](/quickstart). The helper script creates the table (matching the
-deploy stack: PK/SK + GSI1/GSI2/GSI3, all `ALL` projection) and bootstraps an owner in one step:
-
-```bash
-node scripts/dev-setup.mjs you@example.com "You"
-```
-
-It's idempotent about the table (reuses an existing one). Alternatively, create the table yourself
-and call `bootstrapOwner` from `@turjuman/core`.
+You can run everything locally against [LocalStack](https://www.localstack.cloud/) without an AWS
+account — see the [Quickstart](/quickstart) and the
+[contributing guide](/contributing#local-development). `npm run dev` deploys the same construct into
+LocalStack with hot reload and bootstraps an owner, printing the MCP/REST URLs and a fresh API key on
+every run.
 
 ## Updating
 

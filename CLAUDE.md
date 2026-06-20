@@ -42,16 +42,26 @@ Actions: every PR runs `build + typecheck + unit`, `docs link check`, and
 `integration + deployed e2e (LocalStack)` — the last is Tier A + Tier B end-to-end. Push the branch /
 open the PR and read those check results as the source of truth for end-to-end verification.
 
-Local end-to-end against DynamoDB Local (no AWS, no LocalStack):
+Local dev loop — everything runs against the **shared LocalStack** (the same `:4566` service the test
+tiers use); there is no more `amazon/dynamodb-local` / `:8000` path:
 
 ```bash
-docker run -d --rm -p 8000:8000 amazon/dynamodb-local
-node scripts/dev-setup.mjs you@example.com "You"     # creates table + first OWNER, prints API key (shown once)
-export AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000 TURJUMAN_TABLE=Turjuman \
-       AWS_ACCESS_KEY_ID=local AWS_SECRET_ACCESS_KEY=local AWS_REGION=us-east-1
-node packages/mcp-server/dist/local.js   # MCP  on :3000
-node packages/api/dist/local.js          # REST on :4000
+npm run stack:up                              # shared LocalStack on :4566 (+ health wait)
+cp .env.example .env                          # AWS_ENDPOINT_URL=http://localhost:4566, dummy creds
+npm run dev                                   # deploy into LocalStack + hot reload; prints URLs + API key
 ```
+
+`npm run dev` (`scripts/dev.mjs`) is the single dev loop: `esbuild --watch` over the three Lambda
+bundles + the `@turjuman/aws-cdk` construct deployed into LocalStack with its dev-only `hotReload` prop,
+so each save is served on the next invoke without a redeploy. It runs the **real** Lambda runtime (so
+the DynamoDB Streams → webhook path fires), and it bootstraps an owner and prints the MCP/REST Function
+URLs + a fresh API key every run. `npm run dev:deploy` redeploys once after an infra change (grants,
+event sources, env). There is no `local.ts` and no `tsx`/localhost-server loop — the entrypoints are the
+Lambda `handler`s only. Notes for future sessions: never reintroduce `:8000`, `local.ts`, the
+`dev-serve.ts` harness, or public ports — LocalStack and the Function URLs are localhost-only (reach a
+remote box via SSH forwarding). Use the global `AWS_ENDPOINT_URL` (not per-service vars); the dev stack's
+table is separate from the integration tier's `TurjumanIntegration`. Remote/contributor setup:
+`scripts/provision-dev.sh` (SSH boxes) and `.devcontainer/` (Codespaces, docker-outside-of-docker).
 
 ## Architecture
 

@@ -1,7 +1,14 @@
 import { createHmac } from "node:crypto";
 import { unmarshall } from "@aws-sdk/util-dynamodb";
 import type { AttributeValue } from "@aws-sdk/client-dynamodb";
-import { Repository, type Webhook, type WebhookEvent, repositoryFromEnv } from "@turjuman/core";
+import {
+  Repository,
+  type Webhook,
+  type WebhookEvent,
+  logError,
+  logInfo,
+  repositoryFromEnv,
+} from "@turjuman/core";
 
 /**
  * DynamoDB Streams → webhook dispatcher.
@@ -65,6 +72,18 @@ export async function handler(event: { Records?: StreamRecord[] }): Promise<void
       }
     }
     byProject.set(projectId, list);
+  }
+
+  // One summary line per stream batch that maps to ≥1 event (most table writes map
+  // to none, so this stays quiet). Makes dispatcher activity visible in the logs.
+  const eventCount = [...byProject.values()].reduce((n, list) => n + list.length, 0);
+  if (eventCount > 0) {
+    logInfo({
+      msg: "webhook_batch",
+      records: event.Records?.length ?? 0,
+      projects: byProject.size,
+      events: eventCount,
+    });
   }
 
   await Promise.all([...byProject].map(([projectId, events]) => dispatch(projectId, events)));
@@ -154,14 +173,24 @@ export async function deliver(
     });
     // `fetch` only rejects on network/abort errors, so an endpoint returning 4xx/5xx
     // would otherwise be counted as a successful delivery — check the status too.
-    if (!res.ok) {
-      console.error(`webhook delivery to ${webhook.url} failed: HTTP ${res.status}`);
+    const fields = { projectId, event: e.event, webhookId: webhook.id, url: webhook.url };
+    if (res.ok) {
+      logInfo({ msg: "webhook_delivered", ...fields, status: res.status });
+    } else {
+      logError({ msg: "webhook_delivery_failed", ...fields, status: res.status });
     }
   } catch (err) {
     // Best-effort: an unreachable or timed-out endpoint is logged and skipped so it
     // never blocks the others. We deliberately do not re-throw (see file header).
     const reason = controller.signal.aborted ? `timeout after ${timeoutMs}ms` : (err as Error).message;
-    console.error(`webhook delivery to ${webhook.url} failed:`, reason);
+    logError({
+      msg: "webhook_delivery_failed",
+      projectId,
+      event: e.event,
+      webhookId: webhook.id,
+      url: webhook.url,
+      reason,
+    });
   } finally {
     clearTimeout(timer);
   }

@@ -54,26 +54,22 @@ JSON/YAML file, downloading translations, and syncing them in CI.
 | `packages/api` | REST API for the CLI/CI → Lambda, plus the webhook dispatcher |
 | `packages/cli` | The `turjuman` developer CLI (incl. the AWS CDK deployer in `src/deploy/`) |
 
-## Try it locally (no AWS)
+## Try it locally
 
-The fastest way to see Turjuman work — everything runs against
-[DynamoDB Local](https://hub.docker.com/r/amazon/dynamodb-local), no cloud account needed:
+The fastest way to see Turjuman work — everything runs against a local
+[LocalStack](https://www.localstack.cloud/) (needs Docker + Node 20.12+), no cloud account needed:
 
 ```bash
 npm install && npm run build
-docker run -d --rm -p 8000:8000 amazon/dynamodb-local
+npm run stack:up                 # start the shared LocalStack on :4566
+cp .env.example .env             # point the toolchain at LocalStack
 
-# create the table + first owner, and print your API key
-node scripts/dev-setup.mjs you@example.com "You"
-
-# start the servers (each in its own shell), pointed at DynamoDB Local
-export AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000 TURJUMAN_TABLE=Turjuman
-export AWS_ACCESS_KEY_ID=local AWS_SECRET_ACCESS_KEY=local AWS_REGION=us-east-1
-node packages/mcp-server/dist/local.js   # MCP  on http://localhost:3000
-node packages/api/dist/local.js          # REST on http://localhost:4000
+# deploy into LocalStack with hot reload; prints the MCP/REST URLs + a fresh API key
+npm run dev
 ```
 
-Point your MCP client at `http://localhost:3000/` with the printed API key (see below) and start
+`npm run dev` runs the real Lambda runtime in LocalStack (so DynamoDB Streams → webhooks fire too) and
+hot-reloads your edits. Point your MCP client at the printed MCP URL with the printed API key and start
 talking to it.
 
 ## Self-host on AWS

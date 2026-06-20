@@ -48,6 +48,7 @@ describe("webhook deliver", () => {
     const port = (server!.address() as { port: number }).port;
     const webhook = webhookFor(port);
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
     await deliver(webhook, "p1", event);
 
@@ -56,6 +57,7 @@ describe("webhook deliver", () => {
     const expected = "sha256=" + createHmac("sha256", webhook.secret).update(body).digest("hex");
     expect(headers["x-turjuman-signature"]).toBe(expected);
     expect(errSpy).not.toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('"msg":"webhook_delivered"'));
   });
 
   it("treats a non-2xx response as a failed delivery", async () => {
@@ -70,7 +72,13 @@ describe("webhook deliver", () => {
 
     // Must not throw, but must log the failure (regression: a 500 was previously counted as success).
     await expect(deliver(webhookFor(port), "p1", event)).resolves.toBeUndefined();
-    expect(errSpy).toHaveBeenCalledWith(expect.stringContaining("HTTP 500"));
+    const failure = JSON.parse(errSpy.mock.calls[0]![0] as string);
+    expect(failure).toMatchObject({
+      level: "error",
+      msg: "webhook_delivery_failed",
+      projectId: "p1",
+      status: 500,
+    });
   });
 
   it("times out a hanging endpoint instead of blocking forever", async () => {
@@ -81,9 +89,10 @@ describe("webhook deliver", () => {
     const start = Date.now();
     await expect(deliver(webhookFor(port), "p1", event, 150)).resolves.toBeUndefined();
     expect(Date.now() - start).toBeLessThan(5000);
-    expect(errSpy).toHaveBeenCalledWith(
-      expect.stringContaining("webhook delivery"),
-      expect.stringContaining("timeout"),
-    );
+    const failure = JSON.parse(errSpy.mock.calls[0]![0] as string);
+    expect(failure).toMatchObject({
+      msg: "webhook_delivery_failed",
+      reason: expect.stringContaining("timeout"),
+    });
   });
 });

@@ -1,0 +1,16 @@
+#cloud-config
+# EXAMPLE EC2 user-data for an ephemeral Turjuman dev box. It curls and runs
+# scripts/provision-dev.sh as the default user, which installs Node 20 + Docker,
+# clones the repo, builds, and starts LocalStack.
+#
+# This is a starting point, not a turnkey config — adjust the user, repo, and
+# region to taste. IMPORTANT: keep the security group closed. LocalStack (:4566)
+# and the printed Function URLs bind localhost only; reach them over SSH forwarding
+# (ssh -L 4566:localhost:4566 user@host), never by opening public ports.
+#
+# Ubuntu AMIs use the 'ubuntu' user; Amazon Linux uses 'ec2-user'.
+users:
+  - default
+
+runcmd:
+  - su - ubuntu -c 'curl -fsSL https://raw.githubusercontent.com/mogharsallah/turjuman/main/scripts/provision-dev.sh | bash'
