@@ -67,11 +67,9 @@ export interface TurjumanVpcOptions {
 }
 
 /**
- * Dev/LocalStack-only: point one or more functions at LocalStack's magic
- * `hot-reload` S3 bucket instead of a real asset. Each value is an absolute path
- * to a directory holding the bundled handler; LocalStack mounts it and re-reads
- * the code on every invoke, so a watching bundler gives Lambda hot reload without
- * a redeploy. Inert (and meaningless) on real AWS — leave unset for production.
+ * Dev/LocalStack-only: absolute path to each function's bundle dir, served via
+ * LocalStack's magic `hot-reload` bucket so a watcher updates the code without a
+ * redeploy. Inert on real AWS — leave unset for production.
  */
 export interface TurjumanHotReloadDirs {
   mcp?: string;

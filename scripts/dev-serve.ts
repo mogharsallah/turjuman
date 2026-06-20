@@ -1,17 +1,6 @@
-/**
- * Generic local dev server for the Turjuman transports. Runs the *real* Lambda
- * entry point (`handler.ts`) — not a parallel HTTP bridge — by synthesizing a
- * Lambda Function URL (payload format 2.0) event from each incoming Node
- * request and serializing the handler's result back. One harness drives both the
- * MCP server and the REST API, so the dev loop exercises the exact code path
- * (event parsing, header-lowercasing, base64 body decode) that production does.
- *
- * Run under tsx with tsconfig.dev.json so the handler's `@turjuman/*` imports
- * resolve to package `src` for instant cross-package hot reload:
- *
- *   PORT=3000 tsx watch --tsconfig tsconfig.dev.json \
- *     scripts/dev-serve.ts packages/mcp-server/src/handler.ts
- */
+// Local dev server: runs the real Lambda handler (one harness for both the MCP
+// and REST handlers) by synthesizing a Function URL v2 event per request. Run
+// under tsx with tsconfig.dev.json so @turjuman/* resolves to src for hot reload.
 import http from "node:http";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";

@@ -108,9 +108,8 @@ export class Turjuman extends Construct {
       return fn;
     };
 
-    // Resolve a function's Lambda code. Precedence: an explicit `code` override
-    // (mainly for tests) → a dev/LocalStack `hotReload` directory served via the
-    // magic `hot-reload` S3 bucket → the default pre-bundled npm asset.
+    // Code precedence: explicit `code` override → dev `hotReload` dir (LocalStack
+    // magic bucket) → the default pre-bundled npm asset.
     const codeFor = (
       def: FunctionDef,
       override?: lambda.Code,

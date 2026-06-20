@@ -1,17 +1,9 @@
 #!/usr/bin/env bash
-# Idempotent provisioner for a remote (SSH) Turjuman dev box — works whether the
-# machine is ephemeral or persistent, and whether run as root (cloud-init) or as a
-# normal user. It installs prerequisites only (Node 20, Docker, git) and is a thin
-# wrapper over the repo's npm scripts; it does not duplicate any app logic.
-#
-#   curl -fsSL https://raw.githubusercontent.com/mogharsallah/turjuman/main/scripts/provision-dev.sh | bash
-#   # or, on a checkout:  ./scripts/provision-dev.sh
-#
-# SECURITY: the dev servers (:3000/:4000) and LocalStack (:4566) bind localhost
-# only. Do NOT open them in a security group / firewall. Reach them from your
-# laptop over SSH forwarding:
-#   ssh -L 3000:localhost:3000 -L 4000:localhost:4000 -L 4566:localhost:4566 user@host
-# For Zed, use SSH remoting to edit on the box while the stack runs there.
+# Idempotent provisioner for a remote (SSH) dev box: installs Node 20, Docker, git,
+# clones/builds the repo, and starts LocalStack. Runs as root (cloud-init) or user.
+#   curl -fsSL .../scripts/provision-dev.sh | bash   # or: ./scripts/provision-dev.sh
+# SECURITY: :3000/:4000/:4566 bind localhost only — reach them via SSH forwarding,
+# never a public port (ssh -L 3000:localhost:3000 -L 4000:localhost:4000 user@host).
 set -euo pipefail
 
 REPO_URL="${TURJUMAN_REPO_URL:-https://github.com/mogharsallah/turjuman.git}"
@@ -77,18 +69,10 @@ fi
 
 cat <<EOF
 
-------------------------------------------------------------------------
-Provisioned. Next steps (run on the box):
-
-  cd $REPO_DIR
-  cp -n .env.example .env
+Provisioned. Next: cd $REPO_DIR && cp -n .env.example .env
   npm run dev:setup you@example.com "You"   # prints your API key ONCE
-  npm run dev                               # fast loop (MCP :3000, REST :4000)
-  # or: npm run dev:lambda                  # high-fidelity LocalStack Lambda loop
-
-Reach the servers from your laptop via SSH forwarding (they bind localhost only):
-  ssh -L 3000:localhost:3000 -L 4000:localhost:4000 -L 4566:localhost:4566 USER@THIS_HOST
-------------------------------------------------------------------------
+  npm run dev                               # fast loop (MCP :3000, REST :4000); or: npm run dev:lambda
+  ssh -L 3000:localhost:3000 -L 4000:localhost:4000 USER@THIS_HOST   # forward (ports are localhost-only)
 EOF
 
 if [ "${NEEDS_RELOGIN:-0}" = "1" ]; then

@@ -1,12 +1,8 @@
 #!/usr/bin/env node
-// Local-first setup: create the single-table store (if missing) and bootstrap
-// the first OWNER, printing their API key. Requires `npm run build` first and a
-// running LocalStack (`npm run stack:up`).
-//
+// Create the single-table store (if missing) and bootstrap the first OWNER, printing
+// their API key. Needs `npm run build` + a running LocalStack (`npm run stack:up`).
 //   node scripts/dev-setup.mjs you@example.com "Your Name"
-//
-// Honors TURJUMAN_TABLE (default "Turjuman") and AWS_ENDPOINT_URL
-// (default http://localhost:4566; AWS_ENDPOINT_URL_DYNAMODB still works too).
+// Honors TURJUMAN_TABLE (default "Turjuman") and AWS_ENDPOINT_URL (default :4566).
 
 import {
   CreateTableCommand,
