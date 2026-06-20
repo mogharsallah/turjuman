@@ -21,39 +21,32 @@ need [Docker](https://docs.docker.com/get-docker/) and Node 20.12+; no cloud acc
     This starts the shared LocalStack container on `:4566` and waits for it to be healthy.
   </Step>
   <Step title="Configure your environment">
-    Copy the example env file — it points the dev servers at LocalStack with dummy AWS credentials:
+    Copy the example env file — it points the toolchain at LocalStack with dummy AWS credentials:
 
     ```bash
     cp .env.example .env
     ```
   </Step>
-  <Step title="Create the table and your first owner">
-    This creates the table and the first `OWNER`, and prints your API key **once**:
+  <Step title="Run Turjuman">
+    One command deploys the stack into LocalStack, hot-reloads your edits, and **prints the MCP and
+    REST URLs plus a fresh API key**:
 
     ```bash
-    npm run dev:setup you@example.com "You"
+    npm run dev
     ```
 
-    Copy the printed key — it is shown only this once.
-  </Step>
-  <Step title="Start both transports">
-    One command runs the MCP server and REST API with hot reload from source:
-
-    ```bash
-    npm run dev   # MCP on http://localhost:3000, REST on http://localhost:4000
-    ```
-
-    Edit anything under `packages/` and both servers reload automatically.
+    Copy the printed `apiKey` and `MCP` URL. Leave it running — edits under `packages/` are served on
+    the next request without a redeploy.
   </Step>
   <Step title="Connect your MCP client">
-    Point your MCP client (e.g. Claude Code) at `http://localhost:3000/` with the printed API key:
+    Point your MCP client (e.g. Claude Code) at the printed **MCP URL** with the printed API key:
 
     ```json
     {
       "mcpServers": {
         "turjuman": {
           "type": "http",
-          "url": "http://localhost:3000/",
+          "url": "<MCP URL from npm run dev>",
           "headers": { "Authorization": "Bearer <your-api-key>" }
         }
       }

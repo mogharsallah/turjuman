@@ -58,18 +58,15 @@ The fastest way to see Turjuman work — everything runs against a local
 ```bash
 npm install && npm run build
 npm run stack:up                 # start the shared LocalStack on :4566
-cp .env.example .env             # point the dev servers at LocalStack
+cp .env.example .env             # point the toolchain at LocalStack
 
-# create the table + first owner, and print your API key
-npm run dev:setup you@example.com "You"
-
-# start both servers with hot reload (MCP :3000, REST :4000)
+# deploy into LocalStack with hot reload; prints the MCP/REST URLs + a fresh API key
 npm run dev
 ```
 
-Point your MCP client at `http://localhost:3000/` with the printed API key (see below) and start
-talking to it. For the high-fidelity loop that runs the real Lambda runtime (and fires webhooks), use
-`npm run dev:lambda` — see [contributing](docs/contributing.mdx).
+`npm run dev` runs the real Lambda runtime in LocalStack (so DynamoDB Streams → webhooks fire too) and
+hot-reloads your edits. Point your MCP client at the printed MCP URL with the printed API key and start
+talking to it.
 
 ## Self-host on AWS
 

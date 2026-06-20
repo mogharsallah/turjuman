@@ -24,7 +24,7 @@ export async function devDeploy() {
   process.env.AWS_ENDPOINT_URL_S3 ??= "http://s3.localhost.localstack.cloud:4566";
 
   const { DynamoDBClient } = await import("@aws-sdk/client-dynamodb");
-  const { Repository, bootstrapOwner } = await import("@turjuman/core");
+  const { Repository, TurjumanService, bootstrapOwner } = await import("@turjuman/core");
   const { deployStack } = await import("../packages/aws-deploy/dist/toolkit.js");
 
   console.log(`Deploying "${STACK}" into LocalStack (arch ${ARCH}, hot-reload)...`);
@@ -49,18 +49,25 @@ export async function devDeploy() {
     throw new Error(`Stack outputs missing McpUrl/ApiUrl/TableName: ${JSON.stringify(outputs)}`);
   }
 
-  // Bootstrap an owner (force:true = idempotent re-runs) and print the one-time key.
+  // Ensure an owner exists and always mint a fresh key (the stack table is retained
+  // across re-deploys, so on re-runs the owner already exists — bootstrap would
+  // refuse the duplicate email, so we mint a new key for the existing owner instead).
   const ddb = new DynamoDBClient({
     endpoint: ENDPOINT,
     region: REGION,
     credentials: { accessKeyId: "test", secretAccessKey: "test" },
   });
   const repo = new Repository({ tableName, client: ddb });
-  const { user, secret } = await bootstrapOwner(repo, {
-    email: process.env.TURJUMAN_DEV_OWNER_EMAIL ?? "dev-owner@turjuman.test",
-    name: "Dev Owner",
-    force: true,
-  });
+  const email = process.env.TURJUMAN_DEV_OWNER_EMAIL ?? "dev-owner@turjuman.test";
+  const existing = await repo.getUserByEmail(email);
+  let user, secret;
+  if (existing) {
+    user = existing;
+    const actor = { userId: user.id, orgId: user.orgId, globalRole: user.globalRole, readOnly: false };
+    ({ secret } = await new TurjumanService(repo).apiKeys.create(actor, { name: "dev" }));
+  } else {
+    ({ user, secret } = await bootstrapOwner(repo, { email, name: "Dev Owner", force: true }));
+  }
 
   console.log(`\nDeployed "${STACK}".`);
   console.log(`  MCP:     ${mcpUrl}`);

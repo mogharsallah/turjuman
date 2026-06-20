@@ -1,6 +1,6 @@
 # LocalStack — the single AWS emulator behind ALL local work: the dev loop
-# (`npm run dev` / `npm run dev:lambda`), integration (Tier A) and full deployed
-# end-to-end (Tier B) tests. Community edition; no auth token required.
+# (`npm run dev`), integration (Tier A) and full deployed end-to-end (Tier B)
+# tests. Community edition; no auth token required.
 #
 #   npm run stack:up     # start (docker compose up -d localstack + health wait)
 #   npm run stack:down   # stop and wipe (docker compose down -v)

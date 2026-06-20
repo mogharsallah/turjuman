@@ -4,10 +4,9 @@
 # clones the repo, builds, and starts LocalStack.
 #
 # This is a starting point, not a turnkey config — adjust the user, repo, and
-# region to taste. IMPORTANT: keep the security group closed. The dev servers
-# (:3000/:4000) and LocalStack (:4566) bind localhost only; reach them over SSH
-# forwarding (ssh -L 3000:localhost:3000 -L 4000:localhost:4000 user@host), never
-# by opening public ports.
+# region to taste. IMPORTANT: keep the security group closed. LocalStack (:4566)
+# and the printed Function URLs bind localhost only; reach them over SSH forwarding
+# (ssh -L 4566:localhost:4566 user@host), never by opening public ports.
 #
 # Ubuntu AMIs use the 'ubuntu' user; Amazon Linux uses 'ec2-user'.
 users:

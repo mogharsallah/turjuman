@@ -210,15 +210,9 @@ For a small team this is effectively free to run.
 
 You can run everything locally against [LocalStack](https://www.localstack.cloud/) without an AWS
 account — see the [Quickstart](/quickstart) and the
-[contributing guide](/contributing#local-development). The helper script creates the table (matching
-the deploy stack: PK/SK + GSI1/GSI2/GSI3, all `ALL` projection) and bootstraps an owner in one step:
-
-```bash
-npm run dev:setup you@example.com "You"
-```
-
-It's idempotent about the table (reuses an existing one). Alternatively, create the table yourself
-and call `bootstrapOwner` from `@turjuman/core`.
+[contributing guide](/contributing#local-development). `npm run dev` deploys the same construct into
+LocalStack with hot reload and bootstraps an owner, printing the MCP/REST URLs and a fresh API key on
+every run.
 
 ## Updating
 

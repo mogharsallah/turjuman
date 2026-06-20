@@ -2,8 +2,8 @@
 # Idempotent provisioner for a remote (SSH) dev box: installs Node 20, Docker, git,
 # clones/builds the repo, and starts LocalStack. Runs as root (cloud-init) or user.
 #   curl -fsSL .../scripts/provision-dev.sh | bash   # or: ./scripts/provision-dev.sh
-# SECURITY: :3000/:4000/:4566 bind localhost only — reach them via SSH forwarding,
-# never a public port (ssh -L 3000:localhost:3000 -L 4000:localhost:4000 user@host).
+# SECURITY: LocalStack (:4566) binds localhost only — reach it via SSH forwarding,
+# never a public port (ssh -L 4566:localhost:4566 user@host).
 set -euo pipefail
 
 REPO_URL="${TURJUMAN_REPO_URL:-https://github.com/mogharsallah/turjuman.git}"
@@ -70,9 +70,8 @@ fi
 cat <<EOF
 
 Provisioned. Next: cd $REPO_DIR && cp -n .env.example .env
-  npm run dev:setup you@example.com "You"   # prints your API key ONCE
-  npm run dev                               # fast loop (MCP :3000, REST :4000); or: npm run dev:lambda
-  ssh -L 3000:localhost:3000 -L 4000:localhost:4000 USER@THIS_HOST   # forward (ports are localhost-only)
+  npm run dev                                  # deploy into LocalStack; prints MCP/REST URLs + API key
+  ssh -L 4566:localhost:4566 USER@THIS_HOST    # forward LocalStack (it's localhost-only)
 EOF
 
 if [ "${NEEDS_RELOGIN:-0}" = "1" ]; then
