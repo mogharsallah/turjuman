@@ -16,12 +16,15 @@ import {
   bulkSetResultSchema,
   bundleEntrySchema,
   errorEnvelopeSchema,
+  errorInfo,
   errorStatus,
   importKeysBodySchema,
   importKeysResultSchema,
   importTranslationsBodySchema,
   keyPageSchema,
   localeSchema,
+  logError,
+  logInfo,
   parseBearer,
   projectSchema,
   qaConfigBodySchema,
@@ -49,8 +52,11 @@ export interface RouterDeps {
   service: TurjumanService;
 }
 
-/** Hono environment: middleware stashes the resolved actor and a per-request id here. */
-type Env = { Variables: { actor: Actor; requestId: string } };
+/** Hono environment: middleware stashes the resolved actor, the per-request id,
+ * the authenticated key id (for the access log), and the request start time. */
+type Env = {
+  Variables: { actor: Actor; requestId: string; keyId?: string; startedAt?: number };
+};
 
 import pkg from "../package.json" with { type: "json" };
 
@@ -130,28 +136,50 @@ export function createApp(deps: RouterDeps): Hono<Env> {
   const app = new Hono<Env>();
   const svc = deps.service;
 
+  // One structured access-log line per request — the REST mirror of the MCP
+  // server's `mcp_request` line, so a single CloudWatch Insights query spans both
+  // transports. The happy path logs here after `next()`; thrown requests (AppError
+  // 4xx and unexpected 500s) are logged once in `onError`, where their final HTTP
+  // status is decided. `next()` rejects on a thrown handler, so the line below is
+  // skipped on that path — exactly one line per request, never two.
+  const accessLog = (c: Context<Env>, status: number): void => {
+    logInfo({
+      msg: "api_request",
+      requestId: c.get("requestId"),
+      method: c.req.method,
+      path: c.req.path,
+      status,
+      keyId: c.get("keyId"),
+      ms: Date.now() - (c.get("startedAt") ?? Date.now()),
+    });
+  };
+
   // Tag every request with an id, echoed in the X-Request-Id response header and
   // in error envelopes, so a client report can be tied to a server-side log line.
   app.use("*", async (c, next) => {
     const requestId = c.req.header("x-request-id") ?? randomUUID();
     c.set("requestId", requestId);
+    c.set("startedAt", Date.now());
     c.header("x-request-id", requestId);
     await next();
+    accessLog(c, c.res.status);
   });
 
   // Map typed AppErrors to the { error, code } envelope + HTTP status; anything
-  // else is an unexpected 500. This is the single place HTTP status is decided.
+  // else is an unexpected 500. This is the single place HTTP status is decided —
+  // and where thrown requests get their one access-log line.
   app.onError((err, c) => {
     const requestId = c.get("requestId");
     if (err instanceof AppError) {
-      return c.json(
-        { error: err.message, code: err.code, requestId },
-        errorStatus(err.code) as ContentfulStatusCode,
-      );
+      const status = errorStatus(err.code);
+      accessLog(c, status);
+      return c.json({ error: err.message, code: err.code, requestId }, status as ContentfulStatusCode);
     }
     // Never leak an internal error's message to the client; log it (with the
-    // request id) so it's traceable in CloudWatch, and return a generic body.
-    console.error(`[${requestId}] unhandled error:`, err);
+    // request id + stack, server-side only) so it's traceable in CloudWatch, and
+    // return a generic body.
+    logError({ msg: "api_unhandled", requestId, error: errorInfo(err) });
+    accessLog(c, 500);
     return c.json({ error: "Internal error", code: "INTERNAL", requestId }, 500);
   });
 
@@ -193,6 +221,7 @@ export function createApp(deps: RouterDeps): Hono<Env> {
       );
     }
     c.set("actor", auth.actor);
+    c.set("keyId", auth.keyId);
     await next();
   };
   projects.use("*", requireAuth);

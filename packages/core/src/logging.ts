@@ -1,9 +1,12 @@
 /**
- * Minimal structured logging for the Lambda path.
+ * Minimal structured logging shared by every Lambda transport (MCP, REST API,
+ * webhook dispatcher).
  *
  * One JSON object per line via plain `console` — no logging dependency. This is
  * the Lambda-idiomatic shape: CloudWatch ingests each line and CloudWatch Logs
- * Insights can query the fields directly (`filter outcome = "error"`, etc.).
+ * Insights can query the fields directly (`filter outcome = "error"`, etc.). All
+ * three functions emit the same field vocabulary (`msg`, `requestId`, `keyId`,
+ * `status`, `ms`, …) so a single Insights query spans the whole stack.
  */
 
 /** Emit one structured info line (per-request summaries). */

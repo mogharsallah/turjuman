@@ -44,6 +44,7 @@
     "node": ">=20.12"
   },
   "devDependencies": {
+    "@aws-sdk/client-cloudwatch-logs": "^3.700.0",
     "@changesets/cli": "^2.31.0",
     "@types/node": "^22.10.0",
     "typescript": "^5.7.2",

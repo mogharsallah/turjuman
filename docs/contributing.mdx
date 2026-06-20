@@ -54,8 +54,10 @@ npm run stack:down       # stop and wipe LocalStack
 `@turjuman/aws-cdk` construct into LocalStack with its dev-only `hotReload` prop, so each save is served
 on the next invoke without a redeploy. Because it runs the **real Lambda runtime**, it exercises the
 actual bundle, the Function URLs, and the DynamoDB Streams → **webhook** path — and it bootstraps an
-owner, printing the URLs and a fresh API key on every run. Use `npm run dev:deploy` to redeploy once
-after an *infra* change (new IAM grant, event source, or env var) that hot reload alone can't pick up.
+owner, printing the URLs and a fresh API key on every run. It then **streams the deployed functions'
+CloudWatch logs back to the terminal**, prefixed `[mcp]`/`[api]`/`[webhook]`, so each request's
+structured log line shows up live (set `DEV_LOGS=0` to disable). Use `npm run dev:deploy` to redeploy
+once after an *infra* change (new IAM grant, event source, or env var) that hot reload alone can't pick up.
 
 <Note>
   `npm run build` + `npm run typecheck` remain the gate (CI runs them). The dev stack's table is
