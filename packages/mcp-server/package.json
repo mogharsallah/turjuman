@@ -42,7 +42,6 @@
     "build": "tsc -p tsconfig.json && node scripts/build-lambda.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "dev": "node dist/local.js",
     "clean": "rm -rf dist lambda",
     "prepublishOnly": "npm run build"
   },

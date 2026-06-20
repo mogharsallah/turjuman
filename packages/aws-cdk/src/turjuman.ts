@@ -6,6 +6,7 @@ import {
   aws_dynamodb as dynamodb,
   aws_lambda as lambda,
   aws_lambda_event_sources as eventsources,
+  aws_s3 as s3,
 } from "aws-cdk-lib";
 import { Construct } from "constructs";
 import type { TurjumanFunctionTuning, TurjumanProps } from "./props.js";
@@ -107,8 +108,21 @@ export class Turjuman extends Construct {
       return fn;
     };
 
-    const codeFor = (def: FunctionDef, override?: lambda.Code): lambda.Code =>
-      override ?? lambda.Code.fromAsset(assetDir(def.assetSpec));
+    // Resolve a function's Lambda code. Precedence: an explicit `code` override
+    // (mainly for tests) → a dev/LocalStack `hotReload` directory served via the
+    // magic `hot-reload` S3 bucket → the default pre-bundled npm asset.
+    const codeFor = (
+      def: FunctionDef,
+      override?: lambda.Code,
+      hotReloadDir?: string,
+    ): lambda.Code => {
+      if (override) return override;
+      if (hotReloadDir) {
+        const bucket = s3.Bucket.fromBucketName(this, `${def.id}HotReload`, "hot-reload");
+        return lambda.Code.fromBucket(bucket, hotReloadDir);
+      }
+      return lambda.Code.fromAsset(assetDir(def.assetSpec));
+    };
 
     const addUrl = (fn: lambda.Function, allowedHeaders: string[]): lambda.FunctionUrl =>
       fn.addFunctionUrl({
@@ -121,7 +135,7 @@ export class Turjuman extends Construct {
       });
 
     // MCP server — always deployed (the core surface).
-    const mcp = makeFunction(MCP, codeFor(MCP, props.code?.mcp), tuning(props.mcp));
+    const mcp = makeFunction(MCP, codeFor(MCP, props.code?.mcp, props.hotReload?.mcp), tuning(props.mcp));
     table.grantReadWriteData(mcp);
     this.mcpFunction = mcp;
     this.mcpUrl = addUrl(mcp, [
@@ -133,7 +147,7 @@ export class Turjuman extends Construct {
 
     // REST API for the developer CLI and CI — deployed unless explicitly disabled.
     if (props.api?.enabled !== false) {
-      const api = makeFunction(API, codeFor(API, props.code?.api), tuning(props.api));
+      const api = makeFunction(API, codeFor(API, props.code?.api, props.hotReload?.api), tuning(props.api));
       table.grantReadWriteData(api);
       this.apiFunction = api;
       this.apiUrl = addUrl(api, ["authorization", "content-type"]);
@@ -144,7 +158,7 @@ export class Turjuman extends Construct {
     if (props.webhook?.enabled !== false) {
       const webhook = makeFunction(
         WEBHOOK,
-        codeFor(WEBHOOK, props.code?.webhook),
+        codeFor(WEBHOOK, props.code?.webhook, props.hotReload?.webhook),
         tuning(props.webhook),
       );
       table.grantReadData(webhook);

@@ -66,6 +66,19 @@ export interface TurjumanVpcOptions {
   securityGroupIds?: string[];
 }
 
+/**
+ * Dev/LocalStack-only: point one or more functions at LocalStack's magic
+ * `hot-reload` S3 bucket instead of a real asset. Each value is an absolute path
+ * to a directory holding the bundled handler; LocalStack mounts it and re-reads
+ * the code on every invoke, so a watching bundler gives Lambda hot reload without
+ * a redeploy. Inert (and meaningless) on real AWS — leave unset for production.
+ */
+export interface TurjumanHotReloadDirs {
+  mcp?: string;
+  api?: string;
+  webhook?: string;
+}
+
 /** Props for the reusable {@link Turjuman} construct. */
 export interface TurjumanProps {
   /** Override the default npm-asset Lambda code (mainly for tests). */
@@ -82,6 +95,8 @@ export interface TurjumanProps {
   /** CORS allowed origins for the Function URLs (default ["*"]). */
   corsAllowOrigins?: string[];
   vpc?: TurjumanVpcOptions;
+  /** Dev/LocalStack-only Lambda hot-reload directories (see {@link TurjumanHotReloadDirs}). */
+  hotReload?: TurjumanHotReloadDirs;
 }
 
 /** Props for the {@link TurjumanStack} wrapper. */

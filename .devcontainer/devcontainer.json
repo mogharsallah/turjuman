@@ -1,0 +1,31 @@
+{
+  "name": "Turjuman",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:20",
+  "features": {
+    // docker-outside-of-docker: wire the docker CLI + compose to the HOST daemon
+    // so LocalStack keeps spawning its sibling Lambda containers (Tier B / the
+    // dev:lambda hot-reload loop) and host.docker.internal routing works. dind
+    // would need --privileged, which Codespaces denies.
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": { "moby": true }
+  },
+  "forwardPorts": [3000, 4000, 4566],
+  "portsAttributes": {
+    "3000": { "label": "MCP server" },
+    "4000": { "label": "REST API" },
+    "4566": { "label": "LocalStack" }
+  },
+  // Install deps on create (prebuild-cacheable), then build so dependents see
+  // core's dist and seed .env. LocalStack is NOT started here — run
+  // `npm run stack:up` explicitly (one LocalStack model on laptop, VM, container).
+  "onCreateCommand": "npm ci",
+  "postCreateCommand": "npm run build && cp -n .env.example .env",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode-remote.remote-containers",
+        "ms-azuretools.vscode-docker",
+        "redhat.vscode-yaml"
+      ]
+    }
+  }
+}

@@ -1,10 +1,11 @@
 ---
 title: Quickstart
-description: "Run the entire Turjuman stack locally against DynamoDB Local — no AWS account, no LocalStack — and connect an MCP client in minutes."
+description: "Run the entire Turjuman stack locally against LocalStack with one hot-reloading command, and connect an MCP client in minutes."
 ---
 
-The fastest way to see Turjuman work is to run everything against
-[DynamoDB Local](https://hub.docker.com/r/amazon/dynamodb-local). No cloud account is needed.
+The fastest way to see Turjuman work is to run everything against a local
+[LocalStack](https://www.localstack.cloud/) (it backs the dev loop and the test tiers alike). You
+need [Docker](https://docs.docker.com/get-docker/) and Node 20.12+; no cloud account is needed.
 
 <Steps>
   <Step title="Install and build">
@@ -12,30 +13,37 @@ The fastest way to see Turjuman work is to run everything against
     npm install && npm run build
     ```
   </Step>
-  <Step title="Start DynamoDB Local">
+  <Step title="Start LocalStack">
     ```bash
-    docker run -d --rm -p 8000:8000 amazon/dynamodb-local
+    npm run stack:up
+    ```
+
+    This starts the shared LocalStack container on `:4566` and waits for it to be healthy.
+  </Step>
+  <Step title="Configure your environment">
+    Copy the example env file — it points the dev servers at LocalStack with dummy AWS credentials:
+
+    ```bash
+    cp .env.example .env
     ```
   </Step>
   <Step title="Create the table and your first owner">
     This creates the table and the first `OWNER`, and prints your API key **once**:
 
     ```bash
-    node scripts/dev-setup.mjs you@example.com "You"
+    npm run dev:setup you@example.com "You"
     ```
 
     Copy the printed key — it is shown only this once.
   </Step>
-  <Step title="Start the transports">
-    Point both servers at DynamoDB Local, then start each in its own shell:
+  <Step title="Start both transports">
+    One command runs the MCP server and REST API with hot reload from source:
 
     ```bash
-    export AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000 TURJUMAN_TABLE=Turjuman
-    export AWS_ACCESS_KEY_ID=local AWS_SECRET_ACCESS_KEY=local AWS_REGION=us-east-1
-
-    node packages/mcp-server/dist/local.js   # MCP  on http://localhost:3000
-    node packages/api/dist/local.js          # REST on http://localhost:4000
+    npm run dev   # MCP on http://localhost:3000, REST on http://localhost:4000
     ```
+
+    Edit anything under `packages/` and both servers reload automatically.
   </Step>
   <Step title="Connect your MCP client">
     Point your MCP client (e.g. Claude Code) at `http://localhost:3000/` with the printed API key:

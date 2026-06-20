@@ -35,7 +35,53 @@ npm run test -w @turjuman/core -- -t "rejects a viewer"  # one test by name
 
 - **ESM + NodeNext.** `"type": "module"` everywhere; relative imports use explicit `.js` extensions.
   TypeScript is strict, with `noUncheckedIndexedAccess` and `noImplicitOverride`.
-- **Node ≥ 20**, Lambda runtime `nodejs20.x`, default arch `arm64`.
+- **Node ≥ 20.12**, Lambda runtime `nodejs20.x`, default arch `arm64`.
+
+## Local development
+
+All local work — the dev loop and both test tiers — runs against one shared
+[LocalStack](https://localstack.cloud) on `:4566`. You need Docker and Node 20.12+.
+
+```bash
+npm run stack:up                          # shared LocalStack on :4566 (+ health wait)
+cp .env.example .env                      # AWS_ENDPOINT_URL=:4566, dummy creds, TURJUMAN_TABLE=Turjuman
+npm run dev:setup you@example.com "You"   # create the table + first OWNER; prints your API key ONCE
+npm run dev                               # MCP :3000 + REST :4000, hot reload from src
+# ...
+npm run stack:down                        # stop and wipe LocalStack
+```
+
+Turjuman has **two** dev loops:
+
+| Command | What runs | Use it for |
+|---|---|---|
+| `npm run dev` | `tsx watch` runs the real Lambda `handler` via `scripts/dev-serve.ts` as a plain HTTP server | The fast inner loop — save-is-live reload, direct stack traces |
+| `npm run dev:lambda` | The stack deployed into LocalStack's **real Lambda runtime**, with `esbuild --watch` hot-reloading the bundles | High-fidelity checks: the actual bundle, Function URLs, and the DynamoDB Streams → **webhook** path (which only fires here) |
+
+<Note>
+  **`npm run dev` runs from `src`; tests and production run from the built `dist` + the esbuild Lambda
+  bundle.** A bundle-only bug won't surface in the fast loop — `npm run build` + `npm run typecheck`
+  remain the gate (CI runs them), and `npm run dev:lambda` reproduces the real packaged path. The dev
+  table is `Turjuman`; the integration tier uses `TurjumanIntegration`, so they never collide.
+</Note>
+
+<Warning>
+  The dev servers (`:3000`/`:4000`) and LocalStack (`:4566`) bind **localhost only**. On a remote box,
+  never open them in a security group/firewall — reach them over SSH forwarding
+  (`ssh -L 3000:localhost:3000 -L 4000:localhost:4000 user@host`).
+</Warning>
+
+## Remote & containerized development
+
+- **Devcontainer / Codespaces.** `.devcontainer/devcontainer.json` builds on the Node 20 image and
+  uses the **docker-outside-of-docker** feature so LocalStack keeps using the host Docker daemon to
+  spawn its sibling Lambda containers (dind would need `--privileged`, which Codespaces denies). It
+  runs `npm ci` then `npm run build` and seeds `.env`; start LocalStack yourself with
+  `npm run stack:up` (one LocalStack model everywhere).
+- **Remote SSH box.** `scripts/provision-dev.sh` is an idempotent provisioner (ephemeral or
+  persistent, root or normal user) that installs Node 20, Docker, and git, clones/updates the repo,
+  builds, and starts LocalStack — then prints the `dev:setup`/`dev` steps. `scripts/cloud-init.example.yaml`
+  shows how to run it from EC2 user-data. Both keep ports private; reach them via SSH forwarding.
 
 ## Testing tiers
 

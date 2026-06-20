@@ -11,10 +11,11 @@ import { Repository } from "./repository/index.js";
 import { TurjumanService } from "./services/index.js";
 
 /**
- * Full end-to-end test against a real DynamoDB (DynamoDB Local). Skipped unless
+ * Full end-to-end test against a real DynamoDB (LocalStack). Skipped unless
  * AWS_ENDPOINT_URL_DYNAMODB is set, so the default unit run stays hermetic.
  *
- *   AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000 AWS_ACCESS_KEY_ID=local \
+ *   npm run stack:up
+ *   AWS_ENDPOINT_URL_DYNAMODB=http://localhost:4566 AWS_ACCESS_KEY_ID=local \
  *   AWS_SECRET_ACCESS_KEY=local AWS_REGION=us-east-1 TURJUMAN_TABLE=TurjumanTest \
  *   npx vitest run integration
  */

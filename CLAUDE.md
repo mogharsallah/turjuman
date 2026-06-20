@@ -42,16 +42,25 @@ Actions: every PR runs `build + typecheck + unit`, `docs link check`, and
 `integration + deployed e2e (LocalStack)` — the last is Tier A + Tier B end-to-end. Push the branch /
 open the PR and read those check results as the source of truth for end-to-end verification.
 
-Local end-to-end against DynamoDB Local (no AWS, no LocalStack):
+Local dev loop — everything runs against the **shared LocalStack** (the same `:4566` service the test
+tiers use); there is no more `amazon/dynamodb-local` / `:8000` path:
 
 ```bash
-docker run -d --rm -p 8000:8000 amazon/dynamodb-local
-node scripts/dev-setup.mjs you@example.com "You"     # creates table + first OWNER, prints API key (shown once)
-export AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000 TURJUMAN_TABLE=Turjuman \
-       AWS_ACCESS_KEY_ID=local AWS_SECRET_ACCESS_KEY=local AWS_REGION=us-east-1
-node packages/mcp-server/dist/local.js   # MCP  on :3000
-node packages/api/dist/local.js          # REST on :4000
+npm run stack:up                              # shared LocalStack on :4566 (+ health wait)
+cp .env.example .env                          # AWS_ENDPOINT_URL=http://localhost:4566, dummy creds
+npm run dev:setup you@example.com "You"       # creates table + first OWNER, prints API key (shown once)
+npm run dev                                   # MCP :3000 + REST :4000, hot-reload from src
 ```
+
+`npm run dev` is the fast loop: `tsx watch` runs `scripts/dev-serve.ts`, which drives the **real**
+Lambda `handler` (the `local.ts` entrypoints were removed — one harness, full fidelity to the prod
+entrypoint). For the high-fidelity loop that runs in LocalStack's actual Lambda runtime and fires the
+DynamoDB Streams → webhook path, use `npm run dev:lambda` (esbuild `--watch` + a stack deployed with
+the construct's dev-only `hotReload` prop). Notes for future sessions: the dev table is `Turjuman`
+(tests use `TurjumanIntegration`); never reintroduce `:8000`, `local.ts`, or public ports — the dev
+servers and LocalStack bind localhost only (reach a remote box via SSH forwarding). Use the global
+`AWS_ENDPOINT_URL` (not per-service vars). Remote/contributor setup: `scripts/provision-dev.sh` (SSH
+boxes) and `.devcontainer/` (Codespaces, docker-outside-of-docker).
 
 ## Architecture
 

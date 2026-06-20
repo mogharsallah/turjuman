@@ -1,8 +1,9 @@
-# LocalStack — AWS emulator used for Turjuman's integration (Tier A) and full
-# deployed end-to-end (Tier B) tests. Community edition; no auth token required.
+# LocalStack — the single AWS emulator behind ALL local work: the dev loop
+# (`npm run dev` / `npm run dev:lambda`), integration (Tier A) and full deployed
+# end-to-end (Tier B) tests. Community edition; no auth token required.
 #
-#   docker compose up -d localstack   # start
-#   docker compose down -v            # stop and wipe
+#   npm run stack:up     # start (docker compose up -d localstack + health wait)
+#   npm run stack:down   # stop and wipe (docker compose down -v)
 #
 # The Docker socket is mounted so LocalStack can run Lambda functions as sibling
 # containers. LAMBDA_DOCKER_FLAGS adds a host.docker.internal route into each

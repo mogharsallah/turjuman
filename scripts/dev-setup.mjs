@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// Local-first setup: create the DynamoDB-Local table (if missing) and bootstrap
+// Local-first setup: create the single-table store (if missing) and bootstrap
 // the first OWNER, printing their API key. Requires `npm run build` first and a
-// running DynamoDB Local (docker run -p 8000:8000 amazon/dynamodb-local).
+// running LocalStack (`npm run stack:up`).
 //
 //   node scripts/dev-setup.mjs you@example.com "Your Name"
 //
-// Honors TURJUMAN_TABLE (default "Turjuman") and AWS_ENDPOINT_URL_DYNAMODB
-// (default http://localhost:8000).
+// Honors TURJUMAN_TABLE (default "Turjuman") and AWS_ENDPOINT_URL
+// (default http://localhost:4566; AWS_ENDPOINT_URL_DYNAMODB still works too).
 
 import {
   CreateTableCommand,
@@ -22,11 +22,15 @@ if (!email || !name) {
 }
 
 const TABLE = process.env.TURJUMAN_TABLE ?? "Turjuman";
-const endpoint = process.env.AWS_ENDPOINT_URL_DYNAMODB ?? "http://localhost:8000";
+const endpoint =
+  process.env.AWS_ENDPOINT_URL ?? process.env.AWS_ENDPOINT_URL_DYNAMODB ?? "http://localhost:4566";
 const client = new DynamoDBClient({
   endpoint,
   region: process.env.AWS_REGION ?? "us-east-1",
-  credentials: { accessKeyId: "local", secretAccessKey: "local" },
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? "local",
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? "local",
+  },
 });
 
 const gsi = (n) => ({

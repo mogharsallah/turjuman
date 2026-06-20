@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@turjuman/schema": ["packages/schema/src/index.ts"],
+      "@turjuman/schema/qa": ["packages/schema/src/qa/index.ts"],
+      "@turjuman/formats": ["packages/formats/src/index.ts"],
+      "@turjuman/core": ["packages/core/src/index.ts"]
+    }
+  }
+}
