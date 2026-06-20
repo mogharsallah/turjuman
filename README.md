@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/turjuman-mark.svg" alt="Turjuman" width="96" height="96" />
+</p>
+
 # Turjuman
 
 **Open-source, self-hosted translation management — managed by your AI agent.**
