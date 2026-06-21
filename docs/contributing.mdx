@@ -35,12 +35,12 @@ npm run test -w @turjuman/core -- -t "rejects a viewer"  # one test by name
 
 - **ESM + NodeNext.** `"type": "module"` everywhere; relative imports use explicit `.js` extensions.
   TypeScript is strict, with `noUncheckedIndexedAccess` and `noImplicitOverride`.
-- **Node ≥ 20.12**, Lambda runtime `nodejs20.x`, default arch `arm64`.
+- **Node ≥ 24**, Lambda runtime `nodejs24.x`, default arch `arm64`.
 
 ## Local development
 
 All local work — the dev loop and both test tiers — runs against one shared
-[LocalStack](https://localstack.cloud) on `:4566`. You need Docker and Node 20.12+.
+[LocalStack](https://localstack.cloud) on `:4566`. You need Docker and Node 24+.
 
 ```bash
 npm run stack:up        # shared LocalStack on :4566 (+ health wait)
@@ -72,13 +72,13 @@ once after an *infra* change (new IAM grant, event source, or env var) that hot 
 
 ## Remote & containerized development
 
-- **Devcontainer / Codespaces.** `.devcontainer/devcontainer.json` builds on the Node 20 image and
+- **Devcontainer / Codespaces.** `.devcontainer/devcontainer.json` builds on the Node 24 image and
   uses the **docker-outside-of-docker** feature so LocalStack keeps using the host Docker daemon to
   spawn its sibling Lambda containers (dind would need `--privileged`, which Codespaces denies). It
   runs `npm ci` then `npm run build` and seeds `.env`; start LocalStack yourself with
   `npm run stack:up` (one LocalStack model everywhere).
 - **Remote SSH box.** `scripts/provision-dev.sh` is an idempotent provisioner (ephemeral or
-  persistent, root or normal user) that installs Node 20, Docker, and git, clones/updates the repo,
+  persistent, root or normal user) that installs Node 24, Docker, and git, clones/updates the repo,
   builds, and starts LocalStack — then prints the `npm run dev` step. `scripts/cloud-init.example.yaml`
   shows how to run it from EC2 user-data. Both keep ports private; reach them via SSH forwarding.
 

@@ -36,7 +36,7 @@
     "aws-lambda"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/build-lambda.mjs",

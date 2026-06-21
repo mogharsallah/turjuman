@@ -89,7 +89,7 @@ export class Turjuman extends Construct {
       t: TurjumanFunctionTuning,
     ): lambda.Function => {
       const fn = new lambda.Function(this, def.id, {
-        runtime: lambda.Runtime.NODEJS_20_X,
+        runtime: lambda.Runtime.NODEJS_24_X,
         architecture:
           t.architecture === "x86_64" ? lambda.Architecture.X86_64 : lambda.Architecture.ARM_64,
         handler: def.handler,

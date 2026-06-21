@@ -1,6 +1,6 @@
 {
   "name": "Turjuman",
-  "image": "mcr.microsoft.com/devcontainers/typescript-node:20",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:24",
   "features": {
     // docker-outside-of-docker: use the host daemon so LocalStack can spawn sibling
     // Lambda containers (dind would need --privileged, which Codespaces denies).

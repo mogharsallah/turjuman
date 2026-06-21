@@ -41,7 +41,7 @@ export async function bundle({ watch = false } = {}) {
       bundle: true,
       platform: "node",
       format: "esm",
-      target: "node20",
+      target: "node24",
       banner: { js: banner },
       ...(watch ? { alias: srcAlias } : {}),
     };

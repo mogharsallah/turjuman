@@ -1,6 +1,6 @@
 #cloud-config
 # EXAMPLE EC2 user-data for an ephemeral Turjuman dev box. It curls and runs
-# scripts/provision-dev.sh as the default user, which installs Node 20 + Docker,
+# scripts/provision-dev.sh as the default user, which installs Node 24 + Docker,
 # clones the repo, builds, and starts LocalStack.
 #
 # This is a starting point, not a turnkey config — adjust the user, repo, and
