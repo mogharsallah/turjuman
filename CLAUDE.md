@@ -34,13 +34,11 @@ npm run e2e:up && npm run test:integration && npm run e2e:down   # Tier A: repo+
 npm run test:e2e                                                 # Tier B: deploy SAM stack + black-box HTTP e2e
 ```
 
-These tiers (and the DynamoDB-Local flow below) need a working Docker daemon. In a Claude Code
-web/remote session, treat Docker as unavailable — the `docker` CLI may be on PATH, but the daemon
-and the image pulls (LocalStack / DynamoDB-Local) are not reliable here, and the suites self-skip
-when their endpoint env vars are unset. Do not try to stand them up locally. Instead, rely on GitHub
-Actions: every PR runs `build + typecheck + unit`, `docs link check`, and
-`integration + deployed e2e (LocalStack)` — the last is Tier A + Tier B end-to-end. Push the branch /
-open the PR and read those check results as the source of truth for end-to-end verification.
+These tiers (and the DynamoDB-Local flow below) need a working Docker daemon, and the suites
+self-skip when their endpoint env vars are unset. You can also rely on GitHub Actions: every PR runs
+`build + typecheck + unit`, `docs link check`, and `integration + deployed e2e (LocalStack)` — the
+last is Tier A + Tier B end-to-end. Push the branch / open the PR and read those check results as the
+source of truth for end-to-end verification.
 
 Local dev loop — everything runs against the **shared LocalStack** (the same `:4566` service the test
 tiers use); there is no more `amazon/dynamodb-local` / `:8000` path:
@@ -133,10 +131,9 @@ validates its own keys (no API Gateway, no Cognito).
   `mcp-server`/`api`/`cli`/`e2e` will see the change. Core's own vitest tests run against source and
   don't need a build.
 - **Integration/e2e suites self-skip** when their endpoint env vars are unset, which keeps the
-  default `npm test` hermetic. Don't make them run unconditionally. Don't rely on Docker in a
-  web/remote session either — even when the `docker` CLI is present, the daemon and registry access
-  are not dependable, so the LocalStack/DynamoDB-Local tiers can't be run here; verify end-to-end work
-  through the GitHub Actions checks on the PR, not locally.
+  default `npm test` hermetic. Don't make them run unconditionally. When Docker is available you can
+  run the LocalStack tiers locally; otherwise verify end-to-end work through the GitHub Actions
+  checks on the PR.
 - **Node ≥ 20**, Lambda runtime `nodejs20.x`, default arch `arm64` (the e2e deploy overrides to match
   the host so functions run natively under LocalStack).
 - Keep the MCP-first / developer-first scope: no web UI, no MT engine, no vendor marketplace (see
