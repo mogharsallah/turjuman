@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Idempotent provisioner for a remote (SSH) dev box: installs Node 20, Docker, git,
+# Idempotent provisioner for a remote (SSH) dev box: installs Node 24, Docker, git,
 # clones/builds the repo, and starts LocalStack. Runs as root (cloud-init) or user.
 #   curl -fsSL .../scripts/provision-dev.sh | bash   # or: ./scripts/provision-dev.sh
 # SECURITY: LocalStack (:4566) binds localhost only — reach it via SSH forwarding,
@@ -20,14 +20,14 @@ if command -v apt-get >/dev/null 2>&1; then
   $SUDO apt-get update -y
   $SUDO DEBIAN_FRONTEND=noninteractive apt-get install -y git curl ca-certificates
 else
-  echo "This script targets Debian/Ubuntu (apt). Install git/curl/Docker/Node 20 manually." >&2
+  echo "This script targets Debian/Ubuntu (apt). Install git/curl/Docker/Node 24 manually." >&2
 fi
 
-if command -v node >/dev/null 2>&1 && node -e 'process.exit(parseInt(process.versions.node)>=20?0:1)'; then
-  log "Node $(node -v) already present (>=20) — skipping"
+if command -v node >/dev/null 2>&1 && node -e 'process.exit(parseInt(process.versions.node)>=24?0:1)'; then
+  log "Node $(node -v) already present (>=24) — skipping"
 else
-  log "Installing Node 20 (NodeSource, system-wide)"
-  curl -fsSL https://deb.nodesource.com/setup_20.x | $SUDO -E bash -
+  log "Installing Node 24 (NodeSource, system-wide)"
+  curl -fsSL https://deb.nodesource.com/setup_24.x | $SUDO -E bash -
   $SUDO DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs
 fi
 

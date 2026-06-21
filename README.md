@@ -57,7 +57,7 @@ JSON/YAML file, downloading translations, and syncing them in CI.
 ## Try it locally
 
 The fastest way to see Turjuman work — everything runs against a local
-[LocalStack](https://www.localstack.cloud/) (needs Docker + Node 20.12+), no cloud account needed:
+[LocalStack](https://www.localstack.cloud/) (needs Docker + Node 24+), no cloud account needed:
 
 ```bash
 npm install && npm run build

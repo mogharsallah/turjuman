@@ -115,7 +115,7 @@ describe("CDK synth", () => {
       const fn = fnByDescription(synth, description);
       expect(fn, description).toBeDefined();
       expect(fn!.Properties.Handler).toBe(handler);
-      expect(fn!.Properties.Runtime).toBe("nodejs20.x");
+      expect(fn!.Properties.Runtime).toBe("nodejs24.x");
       expect(fn!.Properties.Environment.Variables.TURJUMAN_TABLE).toEqual({ Ref: tableId });
     }
   });

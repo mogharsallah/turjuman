@@ -40,10 +40,10 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           registry-url: https://registry.npmjs.org
-      # Trusted Publishing requires npm CLI >= 11.5.1; Node 20 ships an older npm.
+      # Trusted Publishing requires npm CLI >= 11.5.1; pin npm@11 to guarantee it.
       - run: npm install -g npm@11
       - run: npm ci
       - run: npm run build

@@ -15,7 +15,7 @@ const COLORS = { mcp: "\x1b[34m", api: "\x1b[32m", webhook: "\x1b[35m", lambda: 
 const RESET = "\x1b[0m";
 
 // Noise next to our structured JSON: the Lambda runtime's framing lines and the
-// AWS SDK's one-time "node >=22" support warning (LocalStack runs node 20).
+// AWS SDK Node-version support warning (NodeVersionSupportWarning), if any.
 const RUNTIME_NOISE =
   /^(START|END|REPORT|INIT_START|INIT_REPORT|EXTENSION)\b|NodeVersionSupportWarning/;
 

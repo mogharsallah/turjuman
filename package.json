@@ -41,12 +41,12 @@
     "test:e2e": "npm run e2e:up && npm run e2e:deploy && npm run e2e:test; code=$?; npm run e2e:down; exit $code"
   },
   "engines": {
-    "node": ">=20.12"
+    "node": ">=24"
   },
   "devDependencies": {
     "@aws-sdk/client-cloudwatch-logs": "^3.700.0",
     "@changesets/cli": "^2.31.0",
-    "@types/node": "^22.10.0",
+    "@types/node": "^24",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }

@@ -134,7 +134,7 @@ validates its own keys (no API Gateway, no Cognito).
   default `npm test` hermetic. Don't make them run unconditionally. When Docker is available you can
   run the LocalStack tiers locally; otherwise verify end-to-end work through the GitHub Actions
   checks on the PR.
-- **Node ≥ 20**, Lambda runtime `nodejs20.x`, default arch `arm64` (the e2e deploy overrides to match
+- **Node ≥ 24**, Lambda runtime `nodejs24.x`, default arch `arm64` (the e2e deploy overrides to match
   the host so functions run natively under LocalStack).
 - Keep the MCP-first / developer-first scope: no web UI, no MT engine, no vendor marketplace (see
   ROADMAP "Explicitly out of scope").
