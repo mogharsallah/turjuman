@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // LocalStack Lambda hot-reload dev loop: start the esbuild watchers, wait for the
 // first build, deploy pointed at the live bundle dirs, then stay alive. Prereq:
-// npm run localstack:up. Infra changes (grants/event sources/env) still need a redeploy.
+// pnpm run localstack:up. Infra changes (grants/event sources/env) still need a redeploy.
 import { bundle as bundleMcp } from "../packages/mcp-server/scripts/build-lambda.mjs";
 import { bundle as bundleApi } from "../packages/api/scripts/build-lambda.mjs";
 import { devDeploy } from "./dev-deploy.mjs";

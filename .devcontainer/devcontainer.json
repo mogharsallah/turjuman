@@ -12,10 +12,11 @@
     "4000": { "label": "REST API" },
     "4566": { "label": "LocalStack" }
   },
-  // Build after deps so dependents see core's dist; seed .env. Start LocalStack
-  // yourself with `npm run localstack:up`.
-  "onCreateCommand": "npm ci",
-  "postCreateCommand": "npm run build && cp -n .env.example .env",
+  // Enable Corepack so the pnpm version pinned in package.json is used. Build
+  // after deps so dependents see core's dist; seed .env. Start LocalStack
+  // yourself with `pnpm run localstack:up`.
+  "onCreateCommand": "corepack enable && pnpm install --frozen-lockfile",
+  "postCreateCommand": "pnpm run build && cp -n .env.example .env",
   "customizations": {
     "vscode": {
       "extensions": [

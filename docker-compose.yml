@@ -1,9 +1,9 @@
 # LocalStack — the single AWS emulator behind ALL local work: the dev loop
-# (`npm run dev`), integration (Tier A) and full deployed end-to-end (Tier B)
+# (`pnpm run dev`), integration (Tier A) and full deployed end-to-end (Tier B)
 # tests. Community edition; no auth token required.
 #
-#   npm run localstack:up     # start (docker compose up -d localstack + health wait)
-#   npm run localstack:down   # stop and wipe (docker compose down -v)
+#   pnpm run localstack:up     # start (docker compose up -d localstack + health wait)
+#   pnpm run localstack:down   # stop and wipe (docker compose down -v)
 #
 # The Docker socket is mounted so LocalStack can run Lambda functions as sibling
 # containers. LAMBDA_DOCKER_FLAGS adds a host.docker.internal route into each

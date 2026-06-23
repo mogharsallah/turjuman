@@ -5,7 +5,7 @@
 // then assert it's gone. Exercises the real deploy/teardown building blocks
 // (packages/aws-deploy/src) end-to-end.
 //
-// Prereqs: LocalStack running (npm run localstack:up) and `npm run build`.
+// Prereqs: LocalStack running (pnpm run localstack:up) and `pnpm run build`.
 //
 //   node scripts/e2e-teardown.mjs
 

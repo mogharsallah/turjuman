@@ -3,30 +3,33 @@ title: Contributing
 description: "Develop on Turjuman: the build and test commands, the three testing tiers (unit, LocalStack integration, deployed e2e), and where to make each kind of change."
 ---
 
-Turjuman is an npm-workspaces monorepo. Pick an unchecked item from the
+Turjuman is a pnpm-workspaces monorepo. Pick an unchecked item from the
 [roadmap](https://github.com/mogharsallah/turjuman/blob/main/ROADMAP.md) and open a PR —
 contributions are welcome.
 
 ## Develop
 
+Turjuman uses [pnpm](https://pnpm.io) (pinned via the `packageManager` field in `package.json`).
+Enable it once with `corepack enable`, then:
+
 ```bash
-npm install
-npm run build          # builds every workspace in dependency order (core first)
-npm run typecheck      # tsc --noEmit across workspaces
-npm run test           # == test:unit — hermetic unit tests (integration/e2e self-skip)
-npm run clean
+pnpm install
+pnpm run build          # builds every workspace in dependency order (core first)
+pnpm run typecheck      # tsc --noEmit across workspaces
+pnpm run test           # == test:unit — hermetic unit tests (integration/e2e self-skip)
+pnpm run clean
 ```
 
 Run one package's tests, or one file/case:
 
 ```bash
-npm run test -w @turjuman/core                       # one package
-npm run test -w @turjuman/core -- services.test.ts   # one file (path substring)
-npm run test -w @turjuman/core -- -t "rejects a viewer"  # one test by name
+pnpm --filter @turjuman/core run test                       # one package
+pnpm --filter @turjuman/core run test -- services.test.ts   # one file (path substring)
+pnpm --filter @turjuman/core run test -- -t "rejects a viewer"  # one test by name
 ```
 
 <Note>
-  **Dependents import core's built `dist`, not its source.** After editing `core`, run `npm run build`
+  **Dependents import core's built `dist`, not its source.** After editing `core`, run `pnpm run build`
   (or at least build core) before the typecheck or tests of `mcp-server`/`api`/`cli` will see the
   change. Core's own tests run against source and don't need a build.
 </Note>
@@ -43,24 +46,24 @@ All local work — the dev loop and both test tiers — runs against one shared
 [LocalStack](https://localstack.cloud) on `:4566`. You need Docker and Node 24+.
 
 ```bash
-npm run localstack:up    # shared LocalStack on :4566 (+ health wait)
+pnpm run localstack:up    # shared LocalStack on :4566 (+ health wait)
 cp .env.example .env     # AWS_ENDPOINT_URL=:4566, dummy creds
-npm run dev              # deploy into LocalStack + hot reload; prints MCP/REST URLs + API key
+pnpm run dev              # deploy into LocalStack + hot reload; prints MCP/REST URLs + API key
 # ...
-npm run localstack:down  # stop and wipe LocalStack
+pnpm run localstack:down  # stop and wipe LocalStack
 ```
 
-`npm run dev` (`scripts/dev.mjs`) runs `esbuild --watch` over the three Lambda bundles and deploys the
+`pnpm run dev` (`scripts/dev.mjs`) runs `esbuild --watch` over the three Lambda bundles and deploys the
 `@turjuman/aws-cdk` construct into LocalStack with its dev-only `hotReload` prop, so each save is served
 on the next invoke without a redeploy. Because it runs the **real Lambda runtime**, it exercises the
 actual bundle, the Function URLs, and the DynamoDB Streams → **webhook** path — and it bootstraps an
 owner, printing the URLs and a fresh API key on every run. It then **streams the deployed functions'
 CloudWatch logs back to the terminal**, prefixed `[mcp]`/`[api]`/`[webhook]`, so each request's
-structured log line shows up live (set `DEV_LOGS=0` to disable). Use `npm run dev:deploy` to redeploy
+structured log line shows up live (set `DEV_LOGS=0` to disable). Use `pnpm run dev:deploy` to redeploy
 once after an *infra* change (new IAM grant, event source, or env var) that hot reload alone can't pick up.
 
 <Note>
-  `npm run build` + `npm run typecheck` remain the gate (CI runs them). The dev stack's table is
+  `pnpm run build` + `pnpm run typecheck` remain the gate (CI runs them). The dev stack's table is
   separate from the integration tier's `TurjumanIntegration`, so they never collide.
 </Note>
 
@@ -69,7 +72,7 @@ once after an *infra* change (new IAM grant, event source, or env var) that hot 
 You can run several dev sessions at once — each in its own git worktree or separate clone — all
 against the single shared LocalStack. Each working copy deploys its **own** CloudFormation stack,
 named from a persisted, gitignored `.turjuman-dev` marker (`turjuman-dev-<hex>`, generated on the
-first `npm run dev`). Because every dev resource name — the DynamoDB table, the three Lambdas and
+first `pnpm run dev`). Because every dev resource name — the DynamoDB table, the three Lambdas and
 their Function URLs, the SSM config path, the log groups — derives from that stack name, distinct
 markers keep the sessions fully isolated. Set `TURJUMAN_DEV_STACK` to override the generated name, or
 `rm .turjuman-dev` to get a fresh one.
@@ -78,7 +81,7 @@ The script names keep the two layers distinct:
 
 - `localstack:up` / `localstack:down` manage the **shared emulator container** (Docker). `down` wipes
   the whole emulator and every session's stack.
-- `dev` / `dev:deploy` / `dev:teardown` act on **your working copy's stack** only. `npm run dev:teardown`
+- `dev` / `dev:deploy` / `dev:teardown` act on **your working copy's stack** only. `pnpm run dev:teardown`
   deletes just that stack, leaving LocalStack and other sessions untouched.
 
 <Note>
@@ -98,11 +101,11 @@ The script names keep the two layers distinct:
 - **Devcontainer / Codespaces.** `.devcontainer/devcontainer.json` builds on the Node 24 image and
   uses the **docker-outside-of-docker** feature so LocalStack keeps using the host Docker daemon to
   spawn its sibling Lambda containers (dind would need `--privileged`, which Codespaces denies). It
-  runs `npm ci` then `npm run build` and seeds `.env`; start LocalStack yourself with
-  `npm run localstack:up` (one LocalStack model everywhere).
+  runs `pnpm install --frozen-lockfile` then `pnpm run build` and seeds `.env`; start LocalStack yourself with
+  `pnpm run localstack:up` (one LocalStack model everywhere).
 - **Remote SSH box.** `scripts/provision-dev.sh` is an idempotent provisioner (ephemeral or
   persistent, root or normal user) that installs Node 24, Docker, and git, clones/updates the repo,
-  builds, and starts LocalStack — then prints the `npm run dev` step. `scripts/cloud-init.example.yaml`
+  builds, and starts LocalStack — then prints the `pnpm run dev` step. `scripts/cloud-init.example.yaml`
   shows how to run it from EC2 user-data. Both keep ports private; reach them via SSH forwarding.
 
 ## Testing tiers
@@ -114,16 +117,16 @@ CI.
 
 | Layer | What it covers | Command |
 |---|---|---|
-| Unit | Pure domain/RBAC/format logic, hermetic | `npm run test:unit` |
-| Tier A — integration | Repository + services + webhook handler against a real DynamoDB engine | `npm run test:integration` |
-| Tier B — deployed e2e | The deployed stack: MCP + REST Function URLs and the real DynamoDB Streams → webhook Lambda | `npm run test:e2e` |
+| Unit | Pure domain/RBAC/format logic, hermetic | `pnpm run test:unit` |
+| Tier A — integration | Repository + services + webhook handler against a real DynamoDB engine | `pnpm run test:integration` |
+| Tier B — deployed e2e | The deployed stack: MCP + REST Function URLs and the real DynamoDB Streams → webhook Lambda | `pnpm run test:e2e` |
 
 ### Tier A — integration
 
 ```bash
-npm run localstack:up     # docker compose up + health wait
-npm run test:integration  # points AWS_ENDPOINT_URL_DYNAMODB at LocalStack
-npm run localstack:down
+pnpm run localstack:up     # docker compose up + health wait
+pnpm run test:integration  # points AWS_ENDPOINT_URL_DYNAMODB at LocalStack
+pnpm run localstack:down
 ```
 
 ### Tier B — deployed e2e
@@ -138,11 +141,11 @@ Function URLs and the webhook receiver. (If LocalStack bootstrap is flaky, set
 `TURJUMAN_E2E_SKIP_BOOTSTRAP=1` and run `cdklocal bootstrap` first.)
 
 ```bash
-npm run test:e2e          # one-shot: start → deploy → test → teardown
+pnpm run test:e2e          # one-shot: start → deploy → test → teardown
 ```
 
 The integration and e2e suites **self-skip** when their endpoint env vars are unset, which keeps the
-default `npm test` hermetic. Don't make them run unconditionally.
+default `pnpm test` hermetic. Don't make them run unconditionally.
 
 <Note>
   No Docker? The e2e tiers self-skip locally — open a PR and let GitHub Actions run them.
@@ -184,7 +187,7 @@ workflow (`.github/workflows/release.yml`). The `@turjuman/*` packages are versi
 
 The flow, per PR and on merge to `main`:
 
-1. **Add a changeset in your PR.** Run `npm run changeset`, pick the bump (patch/minor/major), and
+1. **Add a changeset in your PR.** Run `pnpm run changeset`, pick the bump (patch/minor/major), and
    commit the generated `.changeset/*.md` file. A PR that changes published package source should
    include one; docs-only or CI-only changes don't need one.
 2. **On merge to `main`,** the `release` workflow runs. If changesets are pending, it opens (or
@@ -207,8 +210,8 @@ published version carries a verifiable "built from this commit, in this workflow
   package → **Settings → Trusted Publisher → GitHub Actions**, and set org/repo to
   `mogharsallah/turjuman` and the workflow to `release.yml`. Until this is configured for a package,
   the publish step has no credentials and that package is skipped — the Version Packages PR flow still
-  works. Trusted Publishing requires the npm CLI ≥ 11.5.1 (the workflow upgrades it) and a cloud-hosted
-  runner.
+  works. Trusted Publishing is performed by `pnpm publish` (pnpm ≥ 11, pinned via the root
+  `packageManager` field) and requires a cloud-hosted runner.
 </Note>
 
 Third-party GitHub Actions in both workflows are **pinned to a commit SHA** (with the human-readable
@@ -225,10 +228,10 @@ code.** When documenting a new format adapter, QA check, service, or MCP tool, u
 
 The **API reference** is auto-generated from the REST API's OpenAPI spec (served at
 `GET /v1/openapi.json`). After changing any route in `packages/api/src/router.ts`, annotate it with
-`describeRoute(...)`. A pre-commit hook (`.githooks/pre-commit`, installed by `npm install`)
+`describeRoute(...)`. A pre-commit hook (`.githooks/pre-commit`, installed by `pnpm install`)
 rebuilds, regenerates `docs/api-reference/openapi.json`, and stages it for you whenever API/core
 source is staged — so you normally don't run anything by hand. You can refresh it manually with
-`npm run gen:openapi`, and CI fails if the snapshot is stale. Don't hand-write endpoint pages.
+`pnpm run gen:openapi`, and CI fails if the snapshot is stale. Don't hand-write endpoint pages.
 
 Keep the MCP-first / developer-first scope: no web UI, no built-in MT engine, no vendor marketplace
 (see the roadmap's "Explicitly out of scope").

@@ -14,7 +14,7 @@ your first owner — in one step.
 <Note>
   Self-hosting lives in a **separate package, `@turjuman/aws-deploy`** (binary `turjuman-aws-deploy`),
   so the day-to-day [`turjuman` developer CLI](/reference/cli-commands) stays a lean install with
-  no AWS SDK. Run the deploy tool with `npx @turjuman/aws-deploy <command>` — the Lambda code ships
+  no AWS SDK. Run the deploy tool with `pnpm dlx @turjuman/aws-deploy <command>` — the Lambda code ships
   pre-bundled inside the published `@turjuman/mcp-server` / `@turjuman/api` packages, so you no longer
   need a clone of the repo to deploy.
 </Note>
@@ -41,7 +41,7 @@ your first owner — in one step.
 ## Deploy
 
 ```bash
-npx @turjuman/aws-deploy deploy   # interactive: stack name, region, options, first owner
+pnpm dlx @turjuman/aws-deploy deploy   # interactive: stack name, region, options, first owner
 ```
 
 `deploy` will:
@@ -55,9 +55,9 @@ npx @turjuman/aws-deploy deploy   # interactive: stack name, region, options, fi
 
 The resolved configuration is stored as the **canonical copy in AWS SSM**
 (`/turjuman/<stack>/deploy-config`) and cached locally in `turjuman.deploy.json`. Because the
-canonical copy lives in AWS, re-running `npx @turjuman/aws-deploy deploy` updates the stack
+canonical copy lives in AWS, re-running `pnpm dlx @turjuman/aws-deploy deploy` updates the stack
 non-interactively **from any machine or CI** — it reads SSM first, falling back to the local cache,
-then prompts. Use `npx @turjuman/aws-deploy deploy --reconfigure` to re-prompt. (Owner email/name are
+then prompts. Use `pnpm dlx @turjuman/aws-deploy deploy --reconfigure` to re-prompt. (Owner email/name are
 PII and are kept in the local cache only, never written to SSM.)
 
 Outputs printed at the end:
@@ -88,10 +88,10 @@ CI), skip the prompts with flags — each reads the canonical config, applies th
 redeploys:
 
 ```bash
-npx @turjuman/aws-deploy deploy --disable webhook        # remove a surface (api|webhook)
-npx @turjuman/aws-deploy deploy --enable webhook         # add it back
-npx @turjuman/aws-deploy deploy --set mcp.memorySize=512 # tune one function
-npx @turjuman/aws-deploy deploy --set table.billingMode=PROVISIONED
+pnpm dlx @turjuman/aws-deploy deploy --disable webhook        # remove a surface (api|webhook)
+pnpm dlx @turjuman/aws-deploy deploy --enable webhook         # add it back
+pnpm dlx @turjuman/aws-deploy deploy --set mcp.memorySize=512 # tune one function
+pnpm dlx @turjuman/aws-deploy deploy --set table.billingMode=PROVISIONED
 ```
 
 <Note>
@@ -155,7 +155,7 @@ fields @timestamp, msg, status, keyId, ms
 | sort @timestamp desc
 ```
 
-When developing locally, `npm run dev` tails these same lines to your terminal, prefixed
+When developing locally, `pnpm run dev` tails these same lines to your terminal, prefixed
 `[mcp]`/`[api]`/`[webhook]` — see the [contributing guide](/contributing#local-development).
 
 ## Checking what's installed
@@ -163,8 +163,8 @@ When developing locally, `npm run dev` tails these same lines to your terminal, 
 To see whether Turjuman is already installed in an AWS account/region:
 
 ```bash
-npx @turjuman/aws-deploy status                 # uses turjuman.deploy.json / AWS_REGION
-npx @turjuman/aws-deploy status --region eu-west-1
+pnpm dlx @turjuman/aws-deploy status                 # uses turjuman.deploy.json / AWS_REGION
+pnpm dlx @turjuman/aws-deploy status --region eu-west-1
 ```
 
 `status` reports the stack named in `turjuman.deploy.json` (if present) **and** scans the region
@@ -179,8 +179,8 @@ once per region you want to check.
 To remove an installation entirely:
 
 ```bash
-npx @turjuman/aws-deploy teardown               # uses turjuman.deploy.json
-npx @turjuman/aws-deploy teardown --stack-name turjuman --region us-east-1
+pnpm dlx @turjuman/aws-deploy teardown               # uses turjuman.deploy.json
+pnpm dlx @turjuman/aws-deploy teardown --stack-name turjuman --region us-east-1
 ```
 
 `teardown` deletes the CloudFormation stack (Lambdas, IAM roles, Function URLs, **and the DynamoDB
@@ -200,7 +200,7 @@ won't error.
 To remove the install but **preserve the DynamoDB table and its data**:
 
 ```bash
-npx @turjuman/aws-deploy teardown --keep-table
+pnpm dlx @turjuman/aws-deploy teardown --keep-table
 ```
 
 The table is declared with `RemovalPolicy.RETAIN`, so deleting the stack always leaves it in place;
@@ -219,10 +219,10 @@ If you provisioned the table some other way (or want a second org's owner), crea
 the deployed table directly:
 
 ```bash
-npx @turjuman/aws-deploy bootstrap --table <TableName> --region <region> --email you@example.com --name "You"
+pnpm dlx @turjuman/aws-deploy bootstrap --table <TableName> --region <region> --email you@example.com --name "You"
 ```
 
-This is the same client-side bootstrap `npx @turjuman/aws-deploy deploy` runs; it prints the API key
+This is the same client-side bootstrap `pnpm dlx @turjuman/aws-deploy deploy` runs; it prints the API key
 once and refuses to create a second owner once the org has users.
 
 ## Cost
@@ -239,17 +239,17 @@ For a small team this is effectively free to run.
 
 You can run everything locally against [LocalStack](https://www.localstack.cloud/) without an AWS
 account — see the [Quickstart](/quickstart) and the
-[contributing guide](/contributing#local-development). `npm run dev` deploys the same construct into
+[contributing guide](/contributing#local-development). `pnpm run dev` deploys the same construct into
 LocalStack with hot reload and bootstraps an owner, printing the MCP/REST URLs and a fresh API key on
 every run.
 
 ## Updating
 
 ```bash
-npx @turjuman/aws-deploy deploy   # re-runs non-interactively using the canonical SSM config
+pnpm dlx @turjuman/aws-deploy deploy   # re-runs non-interactively using the canonical SSM config
 ```
 
-Pinning the deploy CLI version (`npx @turjuman/aws-deploy@<version> deploy`) ships a coherent
+Pinning the deploy CLI version (`pnpm dlx @turjuman/aws-deploy@<version> deploy`) ships a coherent
 construct + MCP + API triple, so the code updates in place (URLs stay stable, the table is
 untouched). DynamoDB schema changes are additive (new item types reuse the existing keys/GSIs), so
 updates are normally just a redeploy.

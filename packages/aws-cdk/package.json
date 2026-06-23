@@ -48,8 +48,8 @@
     "constructs": "^10.6.0"
   },
   "dependencies": {
-    "@turjuman/api": "0.2.0",
-    "@turjuman/mcp-server": "0.2.0"
+    "@turjuman/api": "workspace:*",
+    "@turjuman/mcp-server": "workspace:*"
   },
   "devDependencies": {
     "aws-cdk-lib": "^2.259.0",

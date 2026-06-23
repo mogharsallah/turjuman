@@ -43,11 +43,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "clean": "rm -rf dist lambda",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@turjuman/core": "0.2.0",
+    "@turjuman/core": "workspace:*",
     "zod": "^3.24.1"
   },
   "devDependencies": {

@@ -2,7 +2,7 @@
 // Deploy the stack into LocalStack with each function's code served from its live
 // bundle dir via the construct's `hotReload` prop, so a watcher updates the running
 // Lambda without a redeploy. The only local loop running the real Lambda runtime +
-// the Streams->webhook path. Prereqs: npm run localstack:up and built lambda bundles.
+// the Streams->webhook path. Prereqs: pnpm run localstack:up and built lambda bundles.
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { devStackName } from "./dev-stack.mjs";

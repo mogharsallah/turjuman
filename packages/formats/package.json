@@ -46,7 +46,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@turjuman/schema": "0.2.0",
+    "@turjuman/schema": "workspace:*",
     "csv-parse": "^5.6.0",
     "csv-stringify": "^6.5.2",
     "fast-xml-parser": "^4.5.1",

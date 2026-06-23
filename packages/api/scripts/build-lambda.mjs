@@ -2,7 +2,7 @@
 // esbuild the REST + webhook handlers into self-contained ESM asset dirs (one each,
 // so Code.fromAsset hashes minimal bundles). Run after `tsc`. bundle({ watch }) powers
 // the dev hot-reload loop: watch mode aliases @turjuman/* to `src` (no prior tsc); the
-// default build resolves `dist` as `npm run build`/CI expect.
+// default build resolves `dist` as `pnpm run build`/CI expect.
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

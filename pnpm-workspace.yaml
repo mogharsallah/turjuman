@@ -1,0 +1,16 @@
+packages:
+  - "packages/*"
+
+# Dependency cooldown (supply-chain defense): refuse any version published less
+# than 7 days (10080 minutes) ago. Compromised/malicious npm releases are almost
+# always detected and yanked within hours to days (e.g. the 2025 "qix"
+# chalk/debug and "Shai-Hulud" worm incidents), so a one-week soak dodges nearly
+# all of them at zero ongoing cost. (npm's own equivalent is the `.npmrc`
+# `min-release-age` key, expressed in days.)
+minimumReleaseAge: 10080
+
+# pnpm blocks dependency lifecycle (postinstall) scripts by default as a
+# supply-chain defense. esbuild's install step provisions its platform binary,
+# so it must be explicitly allowed to run.
+allowBuilds:
+  esbuild: true
