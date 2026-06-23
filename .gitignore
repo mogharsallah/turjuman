@@ -20,6 +20,8 @@ packaged.yaml
 !.env.example
 .turjuman/
 turjuman.auth.json
+# Per-working-copy dev stack name (see scripts/dev-stack.mjs)
+.turjuman-dev
 
 # Logs
 *.log

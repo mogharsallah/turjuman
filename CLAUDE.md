@@ -30,8 +30,8 @@ npm run test -w @turjuman/core -- -t "rejects a viewer"     # one test by name
 LocalStack-backed tests (need Docker; see `docs/contributing.mdx`):
 
 ```bash
-npm run e2e:up && npm run test:integration && npm run e2e:down   # Tier A: repo+services vs real DynamoDB
-npm run test:e2e                                                 # Tier B: deploy SAM stack + black-box HTTP e2e
+npm run localstack:up && npm run test:integration && npm run localstack:down   # Tier A: repo+services vs real DynamoDB
+npm run test:e2e                                                               # Tier B: deploy SAM stack + black-box HTTP e2e
 ```
 
 These tiers (and the DynamoDB-Local flow below) need a working Docker daemon, and the suites
@@ -44,7 +44,7 @@ Local dev loop — everything runs against the **shared LocalStack** (the same `
 tiers use); there is no more `amazon/dynamodb-local` / `:8000` path:
 
 ```bash
-npm run stack:up                              # shared LocalStack on :4566 (+ health wait)
+npm run localstack:up                         # shared LocalStack on :4566 (+ health wait)
 cp .env.example .env                          # AWS_ENDPOINT_URL=http://localhost:4566, dummy creds
 npm run dev                                   # deploy into LocalStack + hot reload; prints URLs + API key
 ```
@@ -55,7 +55,22 @@ so each save is served on the next invoke without a redeploy. It runs the **real
 the DynamoDB Streams → webhook path fires), and it bootstraps an owner and prints the MCP/REST Function
 URLs + a fresh API key every run. `npm run dev:deploy` redeploys once after an infra change (grants,
 event sources, env). There is no `local.ts` and no `tsx`/localhost-server loop — the entrypoints are the
-Lambda `handler`s only. Notes for future sessions: never reintroduce `:8000`, `local.ts`, the
+Lambda `handler`s only.
+
+**Script naming (no aliases):** `localstack:up`/`localstack:down` manage the **shared emulator
+container** (Docker); `dev`/`dev:deploy`/`dev:teardown` act on **this working copy's CloudFormation
+stack** only. A `*:teardown` always deletes a CFN stack; `localstack:down` (= `docker compose down -v`)
+wipes the whole emulator and every session's stack — never use it to clean up one session.
+
+**Parallel sessions on one LocalStack:** each working copy (git worktree or separate clone) deploys its
+**own** dev stack, named from a persisted, gitignored `.turjuman-dev` marker (`turjuman-dev-<hex>`,
+generated on first `npm run dev` by `scripts/dev-stack.mjs`). Because every dev AWS resource name derives
+from that stack name (table, the three Lambdas + Function URLs, SSM config path, log groups), distinct
+markers isolate sessions automatically — many can share the one `:4566` LocalStack without colliding.
+`TURJUMAN_DEV_STACK` overrides the marker; `npm run dev:teardown` deletes just this working copy's stack
+(`rm .turjuman-dev` to get a fresh identity).
+
+Notes for future sessions: never reintroduce `:8000`, `local.ts`, the
 `dev-serve.ts` harness, or public ports — LocalStack and the Function URLs are localhost-only (reach a
 remote box via SSH forwarding). Use the global `AWS_ENDPOINT_URL` (not per-service vars); the dev stack's
 table is separate from the integration tier's `TurjumanIntegration`. Remote/contributor setup:

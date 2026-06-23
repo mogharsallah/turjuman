@@ -13,7 +13,7 @@ import { type CapturedRequest, startReceiver } from "./helpers/receiver.js";
  * webhook. Skipped (not failed) when the env file is absent, so it stays out of
  * the default `npm test` run.
  *
- *   npm run e2e:up && npm run e2e:deploy && npm run e2e:test
+ *   npm run localstack:up && npm run e2e:deploy && npm run e2e:test
  */
 const env = loadEnv();
 
