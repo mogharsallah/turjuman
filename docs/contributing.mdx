@@ -43,11 +43,11 @@ All local work — the dev loop and both test tiers — runs against one shared
 [LocalStack](https://localstack.cloud) on `:4566`. You need Docker and Node 20.12+.
 
 ```bash
-npm run stack:up        # shared LocalStack on :4566 (+ health wait)
+npm run localstack:up    # shared LocalStack on :4566 (+ health wait)
 cp .env.example .env     # AWS_ENDPOINT_URL=:4566, dummy creds
 npm run dev              # deploy into LocalStack + hot reload; prints MCP/REST URLs + API key
 # ...
-npm run stack:down       # stop and wipe LocalStack
+npm run localstack:down  # stop and wipe LocalStack
 ```
 
 `npm run dev` (`scripts/dev.mjs`) runs `esbuild --watch` over the three Lambda bundles and deploys the
@@ -64,6 +64,29 @@ once after an *infra* change (new IAM grant, event source, or env var) that hot 
   separate from the integration tier's `TurjumanIntegration`, so they never collide.
 </Note>
 
+### Parallel sessions on one LocalStack
+
+You can run several dev sessions at once — each in its own git worktree or separate clone — all
+against the single shared LocalStack. Each working copy deploys its **own** CloudFormation stack,
+named from a persisted, gitignored `.turjuman-dev` marker (`turjuman-dev-<hex>`, generated on the
+first `npm run dev`). Because every dev resource name — the DynamoDB table, the three Lambdas and
+their Function URLs, the SSM config path, the log groups — derives from that stack name, distinct
+markers keep the sessions fully isolated. Set `TURJUMAN_DEV_STACK` to override the generated name, or
+`rm .turjuman-dev` to get a fresh one.
+
+The script names keep the two layers distinct:
+
+- `localstack:up` / `localstack:down` manage the **shared emulator container** (Docker). `down` wipes
+  the whole emulator and every session's stack.
+- `dev` / `dev:deploy` / `dev:teardown` act on **your working copy's stack** only. `npm run dev:teardown`
+  deletes just that stack, leaving LocalStack and other sessions untouched.
+
+<Note>
+  The `turjuman` CLI reads one shared credentials file (`~/.turjuman/auth.json`), so to drive it
+  against a specific session's stack, export that session's printed values:
+  `TURJUMAN_API_URL=… TURJUMAN_API_KEY=… turjuman …` (env wins over the file).
+</Note>
+
 <Warning>
   LocalStack (`:4566`) and the printed Function URLs are **localhost only**. On a remote box, never open
   them in a security group/firewall — reach them over SSH forwarding
@@ -76,7 +99,7 @@ once after an *infra* change (new IAM grant, event source, or env var) that hot 
   uses the **docker-outside-of-docker** feature so LocalStack keeps using the host Docker daemon to
   spawn its sibling Lambda containers (dind would need `--privileged`, which Codespaces denies). It
   runs `npm ci` then `npm run build` and seeds `.env`; start LocalStack yourself with
-  `npm run stack:up` (one LocalStack model everywhere).
+  `npm run localstack:up` (one LocalStack model everywhere).
 - **Remote SSH box.** `scripts/provision-dev.sh` is an idempotent provisioner (ephemeral or
   persistent, root or normal user) that installs Node 20, Docker, and git, clones/updates the repo,
   builds, and starts LocalStack — then prints the `npm run dev` step. `scripts/cloud-init.example.yaml`
@@ -98,9 +121,9 @@ CI.
 ### Tier A — integration
 
 ```bash
-npm run e2e:up            # docker compose up + health wait
+npm run localstack:up     # docker compose up + health wait
 npm run test:integration  # points AWS_ENDPOINT_URL_DYNAMODB at LocalStack
-npm run e2e:down
+npm run localstack:down
 ```
 
 ### Tier B — deployed e2e

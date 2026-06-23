@@ -13,7 +13,7 @@
     "4566": { "label": "LocalStack" }
   },
   // Build after deps so dependents see core's dist; seed .env. Start LocalStack
-  // yourself with `npm run stack:up`.
+  // yourself with `npm run localstack:up`.
   "onCreateCommand": "npm ci",
   "postCreateCommand": "npm run build && cp -n .env.example .env",
   "customizations": {

@@ -2,14 +2,15 @@
 // Deploy the stack into LocalStack with each function's code served from its live
 // bundle dir via the construct's `hotReload` prop, so a watcher updates the running
 // Lambda without a redeploy. The only local loop running the real Lambda runtime +
-// the Streams->webhook path. Prereqs: npm run stack:up and built lambda bundles.
+// the Streams->webhook path. Prereqs: npm run localstack:up and built lambda bundles.
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { devStackName } from "./dev-stack.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ENDPOINT = process.env.AWS_ENDPOINT_URL ?? "http://localhost:4566";
 const REGION = process.env.AWS_REGION ?? "us-east-1";
-const STACK = process.env.TURJUMAN_DEV_STACK ?? "turjuman-dev";
+const STACK = devStackName({ create: true });
 // Match the host arch so functions run natively under LocalStack (no QEMU).
 const ARCH = process.arch === "arm64" ? "arm64" : "x86_64";
 

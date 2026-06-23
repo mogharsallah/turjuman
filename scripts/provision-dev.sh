@@ -59,12 +59,12 @@ npm ci
 log "Building all workspaces"
 npm run build
 
-log "Starting the shared LocalStack (npm run stack:up)"
+log "Starting the shared LocalStack (npm run localstack:up)"
 if docker info >/dev/null 2>&1; then
-  npm run stack:up
+  npm run localstack:up
 else
   echo "Docker daemon not reachable yet (group change needs a new shell)." >&2
-  echo "After re-login, run: cd $REPO_DIR && npm run stack:up" >&2
+  echo "After re-login, run: cd $REPO_DIR && npm run localstack:up" >&2
 fi
 
 cat <<EOF

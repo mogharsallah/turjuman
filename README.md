@@ -61,7 +61,7 @@ The fastest way to see Turjuman work — everything runs against a local
 
 ```bash
 npm install && npm run build
-npm run stack:up                 # start the shared LocalStack on :4566
+npm run localstack:up            # start the shared LocalStack on :4566
 cp .env.example .env             # point the toolchain at LocalStack
 
 # deploy into LocalStack with hot reload; prints the MCP/REST URLs + a fresh API key
@@ -150,7 +150,7 @@ npm run build
 npm test            # unit tests (hermetic)
 
 # integration tests against an emulated AWS (LocalStack DynamoDB):
-npm run e2e:up && npm run test:integration && npm run e2e:down
+npm run localstack:up && npm run test:integration && npm run localstack:down
 
 # full deployed end-to-end (SAM stack on LocalStack: Lambda Function URLs +
 # the real DynamoDB Streams -> webhook flow). Just needs Docker:

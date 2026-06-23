@@ -11,7 +11,7 @@
 // standard CDK environment unless TURJUMAN_E2E_SKIP_BOOTSTRAP=1 (in which case
 // run `cdklocal bootstrap` first).
 //
-// Prereqs: LocalStack running (npm run e2e:up) and `npm run build`.
+// Prereqs: LocalStack running (npm run localstack:up) and `npm run build`.
 //
 //   node scripts/e2e-deploy.mjs
 
