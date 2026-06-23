@@ -49,6 +49,7 @@
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.700.0",
     "@aws-sdk/util-dynamodb": "^3.700.0",
     "@hono/standard-validator": "^0.2.2",
     "@turjuman/core": "workspace:*",

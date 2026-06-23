@@ -38,6 +38,9 @@ importers:
 
   packages/api:
     dependencies:
+      '@aws-sdk/client-dynamodb':
+        specifier: ^3.700.0
+        version: 3.1069.0
       '@aws-sdk/util-dynamodb':
         specifier: ^3.700.0
         version: 3.996.5(@aws-sdk/client-dynamodb@3.1069.0)
@@ -88,6 +91,9 @@ importers:
 
   packages/aws-deploy:
     dependencies:
+      '@aws-cdk/cloud-assembly-schema':
+        specifier: '>=54.3.0'
+        version: 54.3.0
       '@aws-cdk/toolkit-lib':
         specifier: ^1.29.0
         version: 1.29.0(@aws-cdk/cli-plugin-contract@2.182.2)
