@@ -6,16 +6,18 @@ description: "Run the entire Turjuman stack locally against LocalStack with one 
 The fastest way to see Turjuman work is to run everything against a local
 [LocalStack](https://www.localstack.cloud/) (it backs the dev loop and the test tiers alike). You
 need [Docker](https://docs.docker.com/get-docker/) and Node 24+; no cloud account is needed.
+Turjuman uses [pnpm](https://pnpm.io) (pinned via `package.json`'s `packageManager` field) — run
+`corepack enable` once to activate it.
 
 <Steps>
   <Step title="Install and build">
     ```bash
-    npm install && npm run build
+    pnpm install && pnpm run build
     ```
   </Step>
   <Step title="Start LocalStack">
     ```bash
-    npm run localstack:up
+    pnpm run localstack:up
     ```
 
     This starts the shared LocalStack container on `:4566` and waits for it to be healthy.
@@ -32,7 +34,7 @@ need [Docker](https://docs.docker.com/get-docker/) and Node 24+; no cloud accoun
     REST URLs plus a fresh API key**:
 
     ```bash
-    npm run dev
+    pnpm run dev
     ```
 
     Copy the printed `apiKey` and `MCP` URL. Leave it running — edits under `packages/` are served on
@@ -46,7 +48,7 @@ need [Docker](https://docs.docker.com/get-docker/) and Node 24+; no cloud accoun
       "mcpServers": {
         "turjuman": {
           "type": "http",
-          "url": "<MCP URL from npm run dev>",
+          "url": "<MCP URL from pnpm run dev>",
           "headers": { "Authorization": "Bearer <your-api-key>" }
         }
       }

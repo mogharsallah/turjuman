@@ -6,7 +6,7 @@
 // writes the document to docs/api-reference/openapi.json — no AWS needed, since
 // the OpenAPI handler only introspects route definitions (it never runs them).
 //
-// Run `npm run gen:openapi` after changing any REST route; CI fails if the
+// Run `pnpm run gen:openapi` after changing any REST route; CI fails if the
 // committed snapshot drifts from the code.
 import { writeFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";

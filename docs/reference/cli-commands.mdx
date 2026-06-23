@@ -14,17 +14,17 @@ The `turjuman` CLI handles the deterministic locale-file work. For a task-orient
 ## Install
 
 ```bash
-npm install -g @turjuman/cli   # installs the `turjuman` command
+pnpm install -g @turjuman/cli   # installs the `turjuman` command
 ```
 
-Or run it without installing: `npx @turjuman/cli <command>`. It's a lean install —
+Or run it without installing: `pnpm dlx @turjuman/cli <command>`. It's a lean install —
 `commander` + `@turjuman/formats` + `@turjuman/schema` only, no AWS SDK. (Working from a
 checkout instead? Build the repo and run `node packages/cli/dist/index.js`.)
 
 <Note>
   Self-hosting (`deploy`, `status`, `teardown`, `bootstrap`) lives in a separate package,
   [`@turjuman/aws-deploy`](/self-hosting) (binary `turjuman-aws-deploy`), so it can carry the heavy
-  AWS/CDK dependencies without bloating this CLI. Run those with `npx @turjuman/aws-deploy <command>`.
+  AWS/CDK dependencies without bloating this CLI. Run those with `pnpm dlx @turjuman/aws-deploy <command>`.
 </Note>
 
 ## Configuration

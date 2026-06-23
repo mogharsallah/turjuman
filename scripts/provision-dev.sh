@@ -31,6 +31,11 @@ else
   $SUDO DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs
 fi
 
+# Enable Corepack so the pnpm version pinned in package.json's packageManager
+# field is provisioned on first use (no separate global pnpm install needed).
+log "Enabling Corepack (pnpm)"
+$SUDO corepack enable
+
 if command -v docker >/dev/null 2>&1; then
   log "Docker $(docker --version) already present — skipping"
 else
@@ -54,23 +59,23 @@ else
 fi
 
 cd "$REPO_DIR"
-log "Installing npm dependencies (npm ci)"
-npm ci
+log "Installing dependencies (pnpm install)"
+corepack pnpm install --frozen-lockfile
 log "Building all workspaces"
-npm run build
+corepack pnpm run build
 
-log "Starting the shared LocalStack (npm run localstack:up)"
+log "Starting the shared LocalStack (pnpm run localstack:up)"
 if docker info >/dev/null 2>&1; then
-  npm run localstack:up
+  corepack pnpm run localstack:up
 else
   echo "Docker daemon not reachable yet (group change needs a new shell)." >&2
-  echo "After re-login, run: cd $REPO_DIR && npm run localstack:up" >&2
+  echo "After re-login, run: cd $REPO_DIR && pnpm run localstack:up" >&2
 fi
 
 cat <<EOF
 
 Provisioned. Next: cd $REPO_DIR && cp -n .env.example .env
-  npm run dev                                  # deploy into LocalStack; prints MCP/REST URLs + API key
+  pnpm run dev                                 # deploy into LocalStack; prints MCP/REST URLs + API key
   ssh -L 4566:localhost:4566 USER@THIS_HOST    # forward LocalStack (it's localhost-only)
 EOF
 

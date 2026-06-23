@@ -15,7 +15,7 @@ Status legend: ✅ done · 🚧 in progress · ⬜ not started
 
 ### Phase 0 — Foundation ✅
 
-- ✅ Monorepo (npm workspaces) + TypeScript tooling
+- ✅ Monorepo (pnpm workspaces) + TypeScript tooling
 - ✅ `core`: domain model, single-table DynamoDB repository (GSI1/2/3), transactional email uniqueness
 - ✅ First-class RBAC: global roles (OWNER/ADMIN/MEMBER) + project roles (MANAGER/EDITOR/DEVELOPER/VIEWER)
 - ✅ Service layer with all business logic + authorization
@@ -266,7 +266,7 @@ Deliberate non-goals — keep the product **pure MCP-first / developer-first**:
 ## Known gaps & follow-ups
 
 - **Live-cloud deploy still unverified.** A deployed end-to-end path now runs on **LocalStack**
-  (`npm run test:e2e` — the CDK stack, Lambda Function URLs, and the real DynamoDB Streams → webhook
+  (`pnpm run test:e2e` — the CDK stack, Lambda Function URLs, and the real DynamoDB Streams → webhook
   flow, in CI), but the stack has not yet been deployed via the CDK toolkit against a **live
   AWS account**.
 - **Pagination.** `list_keys`, `search_keys`, `list_untranslated`, `list_stale`,

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Stream the deployed Lambdas' CloudWatch logs back to the terminal so `npm run dev`
+// Stream the deployed Lambdas' CloudWatch logs back to the terminal so `pnpm run dev`
 // shows request lines as they happen. The old host-process loop printed them inline;
 // the LocalStack Lambda loop sends them to CloudWatch instead, so we poll them back
 // and prefix each line with its function ([mcp]/[api]/[webhook]). Set DEV_LOGS=0 to

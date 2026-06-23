@@ -57,18 +57,20 @@ JSON/YAML file, downloading translations, and syncing them in CI.
 ## Try it locally
 
 The fastest way to see Turjuman work — everything runs against a local
-[LocalStack](https://www.localstack.cloud/) (needs Docker + Node 24+), no cloud account needed:
+[LocalStack](https://www.localstack.cloud/) (needs Docker + Node 24+), no cloud account needed.
+Turjuman uses [pnpm](https://pnpm.io) (pinned via `package.json`'s `packageManager` field); run
+`corepack enable` once to activate it.
 
 ```bash
-npm install && npm run build
-npm run localstack:up            # start the shared LocalStack on :4566
+pnpm install && pnpm run build
+pnpm run localstack:up            # start the shared LocalStack on :4566
 cp .env.example .env             # point the toolchain at LocalStack
 
 # deploy into LocalStack with hot reload; prints the MCP/REST URLs + a fresh API key
-npm run dev
+pnpm run dev
 ```
 
-`npm run dev` runs the real Lambda runtime in LocalStack (so DynamoDB Streams → webhooks fire too) and
+`pnpm run dev` runs the real Lambda runtime in LocalStack (so DynamoDB Streams → webhooks fire too) and
 hot-reloads your edits. Point your MCP client at the printed MCP URL with the printed API key and start
 talking to it.
 
@@ -85,7 +87,7 @@ Lambda assets, and creates your first owner — no SAM CLI, no clone needed (see
 [Self-hosting](docs/self-hosting.mdx) for options):
 
 ```bash
-npx @turjuman/aws-deploy deploy   # interactive; prints McpUrl/ApiUrl and your API key
+pnpm dlx @turjuman/aws-deploy deploy   # interactive; prints McpUrl/ApiUrl and your API key
 ```
 
 Self-hosting ships as a separate `@turjuman/aws-deploy` package (binary `turjuman-aws-deploy`) so the
@@ -123,10 +125,10 @@ translate everything into French."*
 ### 4. Sync files in your repo (CLI)
 
 ```bash
-npx turjuman login --url <ApiUrl> --key <your-api-key>
-npx turjuman init --project <proj_id> --format json-nested --path "locales/{locale}.json"
-npx turjuman pull     # write locale files from Turjuman
-npx turjuman push     # upload source keys / translations
+pnpm dlx turjuman login --url <ApiUrl> --key <your-api-key>
+pnpm dlx turjuman init --project <proj_id> --format json-nested --path "locales/{locale}.json"
+pnpm dlx turjuman pull     # write locale files from Turjuman
+pnpm dlx turjuman push     # upload source keys / translations
 ```
 
 ## Documentation
@@ -145,16 +147,16 @@ agents working in this repo. Start here:
 ## Development
 
 ```bash
-npm install
-npm run build
-npm test            # unit tests (hermetic)
+pnpm install
+pnpm run build
+pnpm test            # unit tests (hermetic)
 
 # integration tests against an emulated AWS (LocalStack DynamoDB):
-npm run localstack:up && npm run test:integration && npm run localstack:down
+pnpm run localstack:up && pnpm run test:integration && pnpm run localstack:down
 
 # full deployed end-to-end (SAM stack on LocalStack: Lambda Function URLs +
 # the real DynamoDB Streams -> webhook flow). Just needs Docker:
-npm run test:e2e
+pnpm run test:e2e
 ```
 
 See [Contributing](docs/contributing.mdx) for the full testing guide (unit,

@@ -2,7 +2,7 @@
 // esbuild the Lambda handler into a self-contained ESM asset dir (lambda/) that the
 // construct ships via Code.fromAsset. Run after `tsc`. bundle({ watch }) powers the
 // dev hot-reload loop: watch mode aliases @turjuman/* to `src` (no prior tsc); the
-// default build resolves `dist` as `npm run build`/CI expect.
+// default build resolves `dist` as `pnpm run build`/CI expect.
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

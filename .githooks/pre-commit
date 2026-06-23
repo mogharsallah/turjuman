@@ -8,8 +8,10 @@ set -e
 if git diff --cached --name-only \
   | grep -qE '^(packages/api/src/|packages/core/src/|packages/schema/src/|scripts/gen-openapi\.mjs$)'; then
   echo "[pre-commit] API/core/schema changed — refreshing OpenAPI snapshot..."
-  # Build the OpenAPI dependency chain in order: schema → formats → core → api.
-  npm run --silent build -w @turjuman/schema -w @turjuman/formats -w @turjuman/core -w @turjuman/api >/dev/null
-  npm run --silent gen:openapi >/dev/null
+  # Build the OpenAPI dependency chain in order. "@turjuman/api..." selects api
+  # plus its workspace dependencies (schema → formats → core → api), and pnpm
+  # runs them in topological order.
+  pnpm --filter "@turjuman/api..." run --silent build >/dev/null
+  pnpm run --silent gen:openapi >/dev/null
   git add docs/api-reference/openapi.json
 fi

@@ -19,30 +19,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npm run build
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
       - name: OpenAPI snapshot is current (regenerate + check for drift)
         run: |
-          npm run gen:openapi
+          pnpm run gen:openapi
           git diff --exit-code -- docs/api-reference/openapi.json \
-            || (echo "::error::docs/api-reference/openapi.json is stale — run 'npm run gen:openapi' and commit." && exit 1)
-      - run: npm run typecheck
-      - run: npm run test:unit # hermetic — integration/e2e suites self-skip
+            || (echo "::error::docs/api-reference/openapi.json is stale — run 'pnpm run gen:openapi' and commit." && exit 1)
+      - run: pnpm run typecheck
+      - run: pnpm run test:unit # hermetic — integration/e2e suites self-skip
 
   docs:
     name: docs link check (Mintlify)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: 24
       - name: Check internal doc links
-        run: npx --yes mint broken-links
+        run: pnpm dlx mint broken-links
         working-directory: docs
 
   e2e:
@@ -51,12 +53,13 @@ jobs:
     needs: build-and-unit
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npm run build
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
 
       - name: Start LocalStack
         run: docker compose up -d localstack
@@ -64,10 +67,10 @@ jobs:
         run: node scripts/wait-for-localstack.mjs
 
       - name: Tier A — integration vs LocalStack DynamoDB
-        run: npm run test:integration
+        run: pnpm run test:integration
 
       - name: Tier B — deploy CDK stack + deployed e2e
-        run: npm run e2e:deploy && npm run e2e:test
+        run: pnpm run e2e:deploy && pnpm run e2e:test
 
       - name: LocalStack logs (on failure)
         if: failure()

@@ -44,8 +44,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@turjuman/formats": "0.2.0",
-    "@turjuman/schema": "0.2.0",
+    "@turjuman/formats": "workspace:*",
+    "@turjuman/schema": "workspace:*",
     "commander": "^12.1.0",
     "zod": "^3.24.1"
   }
