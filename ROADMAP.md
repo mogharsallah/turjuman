@@ -99,11 +99,12 @@ highest-credibility wins come first. Each item is written to stand on its own: *
 decoded), **why it matters** (the buyer-decision value), and a short **build** note on where it slots
 into the existing code.
 
-### Phase 5 — Governed-AI quality layer (the wedge) 🚧
+### Phase 5 — Governed-AI quality layer (the wedge) ✅
 
 The highest impact-per-effort work and the heart of the strategic bet; each item maps cleanly onto
-existing `core` plumbing. Suggested order (by impact÷effort):
-**QA checks → AI scoring/review → PO/XLIFF.**
+existing `core` plumbing. **All three shipped**, in the planned impact÷effort order:
+**QA checks → AI scoring/review → PO/XLIFF.** This is the strategic bet delivered:
+**free QA checks + free MQM AI scoring/review + BYO-LLM translation + self-host.**
 
 #### ✅ Automated QA checks — *shipped*
 
@@ -289,9 +290,11 @@ Deliberate non-goals — keep the product **pure MCP-first / developer-first**:
 - **Webhook delivery is at-most-once.** The dispatcher checks HTTP status and times out a hanging
   endpoint, but does not retry or dead-letter a failed delivery (it logs and moves on). Add an SQS DLQ
   + replay if guaranteed delivery becomes a requirement.
-- **Async job pattern (Phase 5 prerequisite).** The API is synchronous request/response with no
-  job/status primitive. The long-running governed-AI **scoring/review** work in Phase 5 is the natural
-  driver for one; designing it is deliberately deferred until that work begins.
+- **Async job pattern.** The API is synchronous request/response with no job/status primitive. Phase 5
+  shipped without needing one — scoring/review is **agent-driven** (the connected LLM fetches the MQM
+  prompt, grades, and submits via `score_translation` / `review_translations`), so the server only does
+  fast persistence + routing, never a long-running job. A job/status primitive is unblocked work for the
+  first future capability that genuinely needs server-side long-running execution.
 - ✅ **Free-tier knobs.** On-demand vs. provisioned (25 RCU/WCU split across the table + 3 GSIs) billing
   is now a deploy-time knob (`--set table.billingMode=PROVISIONED`), alongside PITR and deletion
   protection.
