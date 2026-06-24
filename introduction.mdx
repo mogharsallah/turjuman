@@ -1,0 +1,70 @@
+---
+title: "Kalem: AI-driven self-hosted translation management"
+sidebarTitle: "Introduction"
+description: "Kalem is open-source translation management driven by your AI agent over MCP. Self-hosted, serverless, no web UI — BYO-LLM."
+---
+
+Kalem is an open-source, self-hosted translation management system built for teams that want to manage their localization work through an AI agent — not a web dashboard. You connect Kalem's MCP server to Claude Code (or any MCP-compatible client), and your agent handles projects, locales, keys, translations, and team access in natural language. A thin developer CLI handles the deterministic work — pulling and pushing locale files in your repo and CI. The whole system runs serverless on AWS Lambda and DynamoDB: no always-on servers, no Cognito, and effectively free for small teams.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Run Kalem locally against DynamoDB Local in under 5 minutes — no AWS account needed.
+  </Card>
+  <Card title="Self-host on AWS" icon="cloud" href="/self-hosting">
+    Deploy to your own AWS account with one command using `@kalem/deploy`.
+  </Card>
+  <Card title="Translate with MCP" icon="robot" href="/guides/translate-with-mcp">
+    Use your AI agent to create projects, add locales, and translate keys in natural language.
+  </Card>
+  <Card title="CLI Reference" icon="terminal" href="/reference/cli-commands">
+    Explore every `kalem` command and flag for syncing locale files in your repo and CI.
+  </Card>
+</CardGroup>
+
+## What's in Kalem
+
+<CardGroup cols={2}>
+  <Card title="MCP Server" icon="robot">
+    Over 40 tools covering projects, locales, keys, translations, glossary, QA, webhooks, and full
+    user and API-key administration — all accessible through natural language prompts.
+  </Card>
+  <Card title="Developer CLI" icon="terminal">
+    The `kalem` CLI gives you `pull`, `push`, `check`, `login`, and `init` commands for
+    deterministic locale-file sync in your repo and CI pipelines.
+  </Card>
+  <Card title="File Formats" icon="file">
+    Adapters for JSON (nested and flat), YAML, Flutter ARB, Java `.properties`, CSV, Android
+    `strings.xml`, and iOS `.strings`/`.stringsdict` with ICU-canonical plural conversion.
+  </Card>
+  <Card title="Quality Assurance" icon="shield-check">
+    Deterministic QA checks catch missing placeholders, length violations, untranslated keys, and
+    more — before translations are approved and synced.
+  </Card>
+</CardGroup>
+
+## How it fits together
+
+```
+  Claude Code / MCP client
+        │  Streamable HTTP + API key
+        ▼
+  MCP Lambda Function URL  ──► DynamoDB (single table)
+                                    ▲
+  REST API Lambda Function URL ─────┘
+        ▲  REST + API key
+        │
+  kalem CLI / CI pipeline
+```
+
+Your MCP client and your developer CLI both authenticate with a bearer API key. The MCP server exposes the full management surface — create projects, add locales, fill translations, run QA — while the REST API backs the CLI's file-sync commands. Both Lambda functions are stateless; DynamoDB is the single source of truth. Because the connected LLM does the translating itself, there is no machine-translation engine to configure or pay for.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Concepts: Architecture" icon="building" href="/concepts/architecture">
+    Understand the domain model, single-table design, and how the MCP and REST surfaces relate.
+  </Card>
+  <Card title="Roles & Permissions" icon="lock" href="/concepts/roles-and-permissions">
+    Learn the global (OWNER/ADMIN/MEMBER) and per-project (MANAGER/EDITOR/DEVELOPER/VIEWER) RBAC model.
+  </Card>
+</CardGroup>

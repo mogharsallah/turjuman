@@ -1,86 +1,84 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Turjuman",
-  "description": "Open-source, self-hosted translation management driven by your AI agent over MCP, with a thin developer CLI for locale files.",
+  "theme": "luma",
+  "name": "Kalem",
+  "description": "Open-source, self-hosted translation management driven by AI agents over MCP, with a developer CLI for deterministic locale-file sync.",
   "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
+    "light": "https://media.brand.dev/1ec7fa9c-3b46-4da7-92c7-b9caf7baf99b.svg",
+    "dark": "https://media.brand.dev/1ec7fa9c-3b46-4da7-92c7-b9caf7baf99b.svg"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "https://media.brand.dev/086d5cb0-9929-48e2-8259-7d23cd55d1b9.png",
   "colors": {
-    "primary": "#0E8181",
-    "light": "#53DFDF",
-    "dark": "#16A2A2"
+    "primary": "#040404",
+    "light": "#244455"
   },
-  "background": {
-    "decoration": "gradient"
-  },
-  "fonts": {
-    "family": "Inter"
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/mogharsallah/kalem"
+    }
   },
   "navigation": {
-    "groups": [
+    "tabs": [
       {
-        "group": "Get started",
-        "pages": ["index", "quickstart", "self-hosting"]
-      },
-      {
-        "group": "Concepts",
-        "pages": [
-          "concepts/architecture",
-          "concepts/roles-and-permissions",
-          "concepts/lifecycle"
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "self-hosting"
+            ]
+          },
+          {
+            "group": "Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/lifecycle",
+              "concepts/roles-and-permissions"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/translate-with-mcp",
+              "guides/sync-with-cli",
+              "guides/quality-checks",
+              "guides/webhooks"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/mcp-tools",
+              "reference/cli-commands",
+              "reference/file-formats",
+              "reference/qa-checks"
+            ]
+          }
         ]
       },
       {
-        "group": "Guides",
-        "pages": [
-          "guides/translate-with-mcp",
-          "guides/sync-with-cli",
-          "guides/quality-checks",
-          "guides/score-and-review",
-          "guides/webhooks"
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "REST API",
+            "pages": [
+              "api-reference/overview"
+            ]
+          },
+          {
+            "group": "Endpoints",
+            "openapi": "api-reference/openapi.json"
+          }
         ]
-      },
-      {
-        "group": "Reference",
-        "pages": [
-          "reference/mcp-tools",
-          "reference/cli-commands",
-          "reference/file-formats",
-          "reference/qa-checks"
-        ]
-      },
-      {
-        "group": "API reference",
-        "openapi": "api-reference/openapi.json"
-      },
-      {
-        "group": "Contributing",
-        "pages": ["contributing"]
       }
     ]
   },
-  "contextual": {
-    "options": ["copy", "view", "chatgpt", "claude"]
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "GitHub",
-        "href": "https://github.com/mogharsallah/turjuman"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Get started",
-      "href": "/quickstart"
-    }
-  },
   "footer": {
     "socials": {
-      "github": "https://github.com/mogharsallah/turjuman"
+      "github": "https://github.com/mogharsallah/kalem"
     }
   }
 }
