@@ -20,6 +20,9 @@ for the live list.
 | `android` | `strings.xml` | incl. `<plurals>` |
 | `ios-strings` | `.strings` | iOS singular strings; carries descriptions |
 | `ios-stringsdict` | `.stringsdict` | iOS plurals |
+| `po` | `.po` | GNU gettext; native `msgid_plural` plurals; descriptions as `#.` comments |
+| `xliff-1.2` | `.xlf` / `.xliff` | XLIFF 1.2 interchange (LSP/vendor exchange); descriptions as `<note>` |
+| `xliff-2.0` | `.xlf` / `.xliff` | XLIFF 2.0 interchange; descriptions as `<note>` |
 
 <Note>
   iOS singular strings live in `.strings` and plurals in `.stringsdict`; configure both as separate
@@ -27,8 +30,12 @@ for the live list.
   [config](/reference/cli-commands#configuration).
 </Note>
 
-gettext PO and XLIFF (1.2/2.0) adapters are planned — see the
-[roadmap](https://github.com/mogharsallah/turjuman/blob/main/ROADMAP.md).
+<Note>
+  **PO and XLIFF are key-based and monolingual.** The `msgid` / XLIFF `id` is the translation key
+  (not the source-language text), and each file holds one locale's values — like every Turjuman
+  adapter. So gettext `msgid_plural` and XLIFF `<source>` mirror the key as a reference, and the
+  value is read from `msgstr` / `<target>`.
+</Note>
 
 ## Plurals
 
@@ -39,9 +46,19 @@ native plural form on export/import:
 - **Android** — converts to/from `<plurals>` with `<item quantity="one|other|…">`.
 - **iOS** — converts to/from `.stringsdict` `NSStringPluralRuleType` entries.
 - **Flutter ARB** — uses ICU directly (ARB is ICU-native).
+- **gettext PO** — converts to/from native `msgid_plural` + indexed `msgstr[N]`. gettext indexes
+  plurals by number under the file's `Plural-Forms` rule, so this mapping is **locale-aware**: the
+  CLI passes the target's locale, and the adapter emits the standard `Plural-Forms` header and maps
+  each index to its CLDR category. Languages whose gettext form count differs from their full CLDR
+  set (the Slavic family, Arabic, …) are curated for an exact header; any other locale resolves its
+  form count from the runtime's CLDR data (`Intl.PluralRules`), so the correct number of forms is
+  always written and none is dropped on round-trip — though for an uncurated locale the emitted
+  `Plural-Forms` *expression* is a best-effort approximation external tooling may need to refine.
+- **XLIFF (1.2/2.0)** — XLIFF has no native plural element, so the ICU plural string is carried
+  **verbatim** in `<target>` (and re-flagged as a plural on read).
 
 Per-entry **descriptions** are carried through formats that support them (ARB, CSV, `.properties`,
-iOS `.strings`) so the key's translator context survives a round-trip.
+iOS `.strings`, PO, XLIFF) so the key's translator context survives a round-trip.
 
 ## Adding a format
 

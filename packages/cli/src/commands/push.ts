@@ -49,7 +49,7 @@ export async function runPush(
       const file = filePath(target.path, locale.code);
       const content = readFile(file);
       if (content === undefined) continue;
-      const entries = adapter.parse(content);
+      const entries = adapter.parse(content, { locale: locale.code });
 
       if (locale.code === project.baseLocale) {
         if (opts.dryRun) {

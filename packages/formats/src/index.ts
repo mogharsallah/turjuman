@@ -5,14 +5,16 @@ import { csvAdapter } from "./csv.js";
 import { iosStringsAdapter } from "./ios-strings.js";
 import { iosStringsdictAdapter } from "./ios-stringsdict.js";
 import { flatJsonAdapter, nestedJsonAdapter } from "./json.js";
+import { poAdapter } from "./po.js";
 import { propertiesAdapter } from "./properties.js";
 import type { FormatAdapter } from "./types.js";
+import { xliff12Adapter, xliff20Adapter } from "./xliff.js";
 import { yamlAdapter } from "./yaml.js";
 
 export * from "./types.js";
 export { flatten, unflatten } from "./nesting.js";
 
-/** All supported formats. PO/XLIFF remain on the roadmap. */
+/** All supported formats. */
 export const ADAPTERS: FormatAdapter[] = [
   nestedJsonAdapter,
   flatJsonAdapter,
@@ -23,6 +25,9 @@ export const ADAPTERS: FormatAdapter[] = [
   androidAdapter,
   iosStringsAdapter,
   iosStringsdictAdapter,
+  poAdapter,
+  xliff12Adapter,
+  xliff20Adapter,
 ];
 
 const BY_ID = new Map(ADAPTERS.map((a) => [a.id, a]));

@@ -41,7 +41,7 @@ export async function runPull(
         .filter((e) => e.namespace === ns)
         .map((e) => ({ key: e.key, value: e.value, description: e.description, plural: e.plural }));
       const out_path = filePath(target.path, locale.code);
-      writeFile(out_path, adapter.serialize(items));
+      writeFile(out_path, adapter.serialize(items, { locale: locale.code }));
       out.line(`Wrote ${items.length} entries -> ${out_path}`);
       files.push({ path: out_path, locale: locale.code, namespace: ns, format: target.format, entries: items.length });
     }

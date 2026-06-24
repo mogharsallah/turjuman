@@ -2,6 +2,7 @@ import { XMLParser } from "fast-xml-parser";
 import type { FormatAdapter, TranslationEntry } from "./types.js";
 import { type PluralCategory, buildIcuPlural, isIcuPlural, parseIcuPlural } from "@turjuman/schema";
 import { sortByKey } from "./nesting.js";
+import { asArray, textOf } from "./xml.js";
 
 /**
  * Android `res/values/strings.xml`. `<string>` for singulars and `<plurals>`
@@ -46,7 +47,7 @@ export const androidAdapter: FormatAdapter = {
     for (const node of asArray(resources.string)) {
       if (typeof node !== "object") continue;
       const rec = node as Record<string, unknown>;
-      entries.push({ key: String(rec["@_name"]), value: unescapeText(text(rec)), plural: false });
+      entries.push({ key: String(rec["@_name"]), value: unescapeText(textOf(rec)), plural: false });
     }
     for (const node of asArray(resources.plurals)) {
       if (typeof node !== "object") continue;
@@ -54,7 +55,7 @@ export const androidAdapter: FormatAdapter = {
       const forms: Partial<Record<PluralCategory, string>> = {};
       for (const item of asArray(rec.item)) {
         const ir = item as Record<string, unknown>;
-        forms[String(ir["@_quantity"]) as PluralCategory] = unescapeText(text(ir));
+        forms[String(ir["@_quantity"]) as PluralCategory] = unescapeText(textOf(ir));
       }
       entries.push({
         key: String(rec["@_name"]),
@@ -65,16 +66,6 @@ export const androidAdapter: FormatAdapter = {
     return entries;
   },
 };
-
-function asArray(v: unknown): unknown[] {
-  if (v === undefined || v === null) return [];
-  return Array.isArray(v) ? v : [v];
-}
-
-function text(rec: Record<string, unknown>): string {
-  const t = rec["#text"];
-  return t === undefined ? "" : String(t);
-}
 
 function escapeText(s: string): string {
   return s
