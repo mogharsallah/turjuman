@@ -61,6 +61,32 @@ that both authenticates the caller and determines permissions
 
 See the [QA checks reference](/reference/qa-checks).
 
+## Scoring & review (AI quality)
+
+The grading model runs in your connected agent — fetch a scoring **prompt** (below), grade against the
+MQM rubric, then submit the number with these tools. The server records provenance and auto-routes.
+
+| Tool | Purpose |
+|---|---|
+| `score_translation` | Submit an MQM score (0–100) + comment for one translation; routes it (`needs_review` / `translated` / `approved`) (`{ projectId, locale, name, namespace?, score, comment?, model? }`) |
+| `review_translations` | Submit scores for many translations in one locale (up to 500 `entries`); returns `{ written, skipped[], approved, flagged }` |
+| `list_for_review` | Keys flagged `needs_review` for a locale (paged: `limit` default 100/max 200 + `nextCursor`/`cursor`) |
+| `get_score_config` | Read per-project scoring config (`threshold`, `autoApprove`, `guidance`) |
+| `set_score_config` | Write per-project scoring config (`{ threshold?, autoApprove?, guidance? }`); requires a project-management role |
+
+See the [Score & review guide](/guides/score-and-review).
+
+## Prompts
+
+Turjuman also advertises the MCP **`prompts`** capability — server-assembled grading prompts so every
+client scores consistently against the same MQM rubric, project guidance, and glossary. Fetch one with
+`prompts/get`, grade, then submit with the scoring tools above.
+
+| Prompt | Purpose |
+|---|---|
+| `score_translation` | Assemble the MQM scoring prompt for **one** translation (args `projectId`, `locale`, `name`, `namespace?`) |
+| `review_locale` | Assemble the scoring prompt for a **page** of a locale's translations (args `projectId`, `locale`, `limit?`, `cursor?`) |
+
 ## Webhooks & lifecycle
 
 | Tool | Purpose |
@@ -116,6 +142,10 @@ output is exactly the shape the REST API documents and returns for the same data
 | `create_api_key` | `{ id, name, prefix, readOnly, expiresAt?, secret }` (secret shown once) |
 | `get_qa_config`, `set_qa_config` | the QA config |
 | `run_qa_checks` | the QA report `{ counts, findings[], byLocale, … }` |
+| `score_translation` | the translation (with its new `status` and `score`) |
+| `review_translations` | `{ written, skipped[], approved, flagged }` |
+| `list_for_review` | `{ locale, count, keys[], nextCursor? }` |
+| `get_score_config`, `set_score_config` | the scoring config |
 
 ## Behaviour hints
 
@@ -158,7 +188,7 @@ the surface (e.g. a CI/pull integration that only reads):
 | `groups` | comma-separated groups | `?groups=keys,translations` |
 
 Valid groups are the domains `projects`, `keys`, `translations`, `glossary`, `webhooks`, `qa`,
-`admin`, plus a synthetic **`read`** group (every read-only tool — `list_*`/`get_*`/`search_*`/
+`scoring`, `admin`, plus a synthetic **`read`** group (every read-only tool — `list_*`/`get_*`/`search_*`/
 `lookup_*`/`run_qa_checks`). `tools` and `groups` combine (union). With neither param the full set is
 advertised. An unknown tool or group name is rejected with `400` (so a typo can't silently hide
 tools).

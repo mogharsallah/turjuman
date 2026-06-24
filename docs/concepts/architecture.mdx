@@ -93,7 +93,7 @@ purely about *what each surface exposes* — never about behaviour or permission
 ## Deployment & packaging
 
 The deploy topology is a published, composable CDK construct,
-[`@turjuman/aws-cdk`](https://github.com/mogharsallah/turjuman/tree/main/packages/aws-cdk) — the
+`@turjuman/aws-cdk` — the
 retained single-table store and up to three Lambda Function URLs, props-driven (billing mode, PITR,
 deletion protection, per-function tuning, CORS, VPC, and api/webhook toggles). Drop it into your own
 CDK app, or let the thin [`@turjuman/aws-deploy`](/self-hosting) CLI deploy it.

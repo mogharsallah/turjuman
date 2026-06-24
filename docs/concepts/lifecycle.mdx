@@ -6,7 +6,7 @@ description: "The end-to-end continuous-localization lifecycle Turjuman supports
 This page defines the **end-to-end lifecycle** Turjuman supports — what happens to a localization
 project and its elements, in what order, who drives each step, and what triggers the next. It is the
 *narrative* layer above the capability surface: [Architecture](/concepts/architecture) says what the
-system *is*, the [roadmap](https://github.com/mogharsallah/turjuman/blob/main/ROADMAP.md) says
+system *is*, `ROADMAP.md` says
 what's *built/next*, and this page says how it's *used over time*.
 
 Turjuman's model is **continuous localization** — a DevOps-aligned workflow where translation is
@@ -44,8 +44,9 @@ model of "what is approved" vs "what is still being worked on" (see the dual-slo
   │     (agent)    │      list_glossary + lookup_translation_memory →     │
   │                │      translate → writes working `value` (translated) │
   ├────────────────┼──────────────────────────────────────────────────────┤
-  │  5. APPROVE    │      run_qa_checks (advisory) · actor w/ review role │
-  │     (role gate)│      approves → promotes value → approvedValue       │
+  │  5. REVIEW &   │      run_qa_checks (advisory) · score_translation     │
+  │     APPROVE     │      (MQM 0–100) auto-routes: high→approved /         │
+  │     (role gate)│      low→needs_review · actor w/ review role approves │
   ├────────────────┼──────────────────────────────────────────────────────┤
   │  6. DELIVER    │      turjuman pull → writes approvedValue per      │
   │                │      locale → commit alongside code (git = release)  │
@@ -90,13 +91,21 @@ advances to the next.
   via `set_translation` / `bulk_set_translations`, stamped with `origin` and the `sourceRef` it was
   written against. Status becomes `translated`. Writing `value` never touches `approvedValue`.
 
-### 5 — Approve *(role gate, optionally automated)*
+### 5 — Review & approve *(role gate, optionally automated)*
 - **Actor:** any actor holding `translation.review` (EDITOR/MANAGER) — a human reviewer **or** an
   agent whose key carries the role.
-- **How:** `run_qa_checks` runs deterministic checks (placeholder/ICU integrity, length, glossary
-  consistency) as **advisory** input — it never auto-approves on its own. Approval **promotes**
-  `value → approvedValue` and sets status `approved`. The `origin` field tells a reviewer what to
-  scrutinize. DEVELOPER deliberately lacks `translation.review`, enforcing separation of duties.
+- **How (deterministic QA):** `run_qa_checks` runs deterministic checks (placeholder/ICU integrity,
+  length, glossary consistency) as **advisory** input — it never auto-approves on its own.
+- **How (AI scoring):** a reviewer agent fetches the server-provided **`score_translation`** MCP prompt
+  (the MQM rubric + project guidance + glossary + the strings), grades the translation **0–100**, and
+  submits the number with `score_translation`. The server **auto-routes** on the per-project threshold:
+  a score below it flags **`needs_review`**; a score at/above it auto-promotes to `approved` **only**
+  when the project opted into auto-approve, the submitting key holds `translation.review`, and the value
+  is machine-origin (`origin !== "human"`). Otherwise the score is recorded and the value stays
+  `translated`. See [Score & review](/guides/score-and-review).
+- **How (manual):** approval **promotes** `value → approvedValue` and sets status `approved`. The
+  `origin` and `score` fields tell a reviewer what to scrutinize. DEVELOPER deliberately lacks
+  `translation.review`, enforcing separation of duties.
 
 ### 6 — Deliver
 - **Actor:** developer / CI.
@@ -120,7 +129,7 @@ not by a state.
 | Level | Primary lifecycle (one ladder) | Orthogonal attributes (not states) |
 |---|---|---|
 | **Key** (the source element) | `active → deprecated` (+ explicit hard delete) | `lastSeenAt`, namespace |
-| **Translation** (per key, per locale) | `untranslated → translated → approved` | freshness `current`/`stale` · `origin` (human/llm/tm/mt/import) · value slots (`value` + `approvedValue`) |
+| **Translation** (per key, per locale) | `untranslated → translated → needs_review → approved` | freshness `current`/`stale` · `origin` (human/llm/tm/mt/import) · AI `score` (0–100) + provenance · value slots (`value` + `approvedValue`) |
 
 <Note>
   Key states are deliberately *existence* terms (`active`/`deprecated`) and translation states are
@@ -157,24 +166,28 @@ never destroy the last good shipped value.
   Translation (projectId, localeCode, namespace, keyName)
     value          : working/draft text        (agent + editor write here)
     approvedValue  : last approved snapshot     (set only by promotion at stage 5)
-    status         : untranslated | translated | approved
+    status         : untranslated | translated | needs_review | approved
     stale          : derived (sourceRef ≠ current base value)
     origin         : human | llm | tm | mt | import
+    score          : last AI score 0–100 (+ scoreComment/scoreModel/promptVersion)
     sourceRef      : the base value this `value` was written against
 
-   untranslated ──write value──► translated ──approve (promote)──► approved
-        ▲                            ▲      value → approvedValue      │
-        │                            │                                 │
-        │                            └──────── edit value ─────────────┘
-        │                                  (approvedValue retained;
-        │                                   status drops to translated)
+   untranslated ──write value──► translated ──score ≥ threshold (auto-approve)──► approved
+        ▲                          ▲   │   ▲     value → approvedValue            │
+        │                          │   │   │                                      │
+        │             score < threshold│   └──────────── approve / re-score ──────┘
+        │                          │   ▼                                          │
+        │                          │ needs_review ──edit value / approve──────────┘
+        │              edit value ─┘
         │
-        └─ base value changes ─► stale = true on translated AND approved
+        └─ base value changes ─► stale = true on any status with a value
                                   (re-enter stage 4; nothing destroyed)
 ```
 
-- **status `untranslated → translated → approved`** — `untranslated` stays *derived* (no working
-  value). The agent can reach `translated`; reaching `approved` requires `translation.review`.
+- **status `untranslated → translated → needs_review → approved`** — `untranslated` stays *derived* (no
+  working value). The agent can reach `translated`; `needs_review` is the AI-scoring landing state for a
+  low-scored (or manually flagged) value — it carries a value but is held back from approval for a human;
+  reaching `approved` requires `translation.review`.
 - **Two slots:**
   - `value` is the live working draft. Agents and editors always write here.
   - `approvedValue` is written **only** by the stage-5 promotion. Editing `value` after approval
@@ -190,6 +203,11 @@ never destroy the last good shipped value.
 - **origin (provenance):** how the current `value` was produced. Set by the writer (MCP tools default
   to `llm`/`tm`; CLI import to `import`; a human edit to `human`). The primary signal a reviewer uses
   at stage 5; orthogonal to status.
+- **score (AI quality, derived from a review pass):** the last MQM **0–100** score for the working
+  `value`, plus `scoreComment`, `scoreModel`, and `promptVersion` provenance. A re-score overwrites it
+  (no history). The score drives the stage-5 auto-route against the project's `threshold`; auto-approval
+  is opt-in (off by default) and never fires on `origin: "human"` work. See
+  [Score & review](/guides/score-and-review).
 
 ## Roles across the lifecycle
 
@@ -215,6 +233,10 @@ whether the agent can self-approve is purely a function of what role you assign 
    approval gate — the signal most native to an agent-driven tool.
 6. **Git is the release layer.** No OTA/release/distribution objects; tags and branches provide frozen
    releases and prod/staging.
+7. **AI scoring is BYO-LLM and server-routed.** Turjuman never runs a model; it *serves the MQM grading
+   prompt* (so every client scores consistently) and routes the number the agent returns. Auto-approve
+   is opt-in and never auto-promotes human-origin work — the score augments the role gate, it doesn't
+   replace it.
 
 ## Why these choices
 
@@ -235,6 +257,5 @@ The model reflects the trustworthy defaults a continuous-localization workflow n
   Turjuman gets from git for free, with no separate distribution objects.
 
 <Note>
-  The build status of each lifecycle capability is tracked on the
-  [roadmap](https://github.com/mogharsallah/turjuman/blob/main/ROADMAP.md).
+  The build status of each lifecycle capability is tracked in `ROADMAP.md`.
 </Note>

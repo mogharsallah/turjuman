@@ -6,7 +6,7 @@ description: "Deploy Turjuman to your own AWS account with one command — a sin
 Turjuman deploys to your own AWS account. The whole stack is **one DynamoDB table and up to three
 Lambda functions** exposed as Function URLs (the MCP server is always deployed; the REST API and the
 webhook dispatcher are optional). The infrastructure is the
-[`@turjuman/aws-cdk`](https://github.com/mogharsallah/turjuman/tree/main/packages/aws-cdk) construct,
+`@turjuman/aws-cdk` construct,
 built on the [AWS CDK](https://docs.aws.amazon.com/cdk/). The `turjuman-aws-deploy deploy` command
 self-bootstraps the CDK environment, deploys the stack from pre-bundled Lambda assets, and creates
 your first owner — in one step.
@@ -27,7 +27,7 @@ your first owner — in one step.
 
 <Warning>
   The CDK stack is conventional but has **not yet been verified end-to-end against a live AWS
-  account** (see the [roadmap](https://github.com/mogharsallah/turjuman/blob/main/ROADMAP.md)).
+  account** (see `ROADMAP.md`).
   Use the [Quickstart](/quickstart) to evaluate, and treat the cloud deploy as beta.
 </Warning>
 

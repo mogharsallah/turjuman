@@ -2,36 +2,17 @@ import {
   type ToolDef,
   bulkSetResultSchema,
   localeCode,
+  localeKeyList,
   namespace,
+  pageCursor,
+  pageLimit,
   projectId,
   settableStatusSchema,
   tool,
-  translationKeySchema,
   translationSchema,
   translationStatusSchema,
   z,
 } from "./base.js";
-
-/** Shared shape for the locale-scoped key lists (untranslated/stale): the
- * keys plus the locale and a count, so a client gets context without a
- * second call. The lists are paged, so `count` is this page's size and
- * `nextCursor` (when present) fetches the next page. */
-const localeKeyList = z.object({
-  locale: z.string(),
-  count: z.number().int(),
-  keys: z.array(translationKeySchema),
-  nextCursor: z.string().optional(),
-});
-
-/** Page-size + cursor inputs shared by the paged growth tools (matches `list_keys`). */
-const pageLimit = z
-  .number()
-  .int()
-  .positive()
-  .max(200)
-  .optional()
-  .describe("Page size (default 100, max 200)");
-const pageCursor = z.string().optional().describe("nextCursor from a previous page");
 
 /** Reading and writing translation values. */
 export const translationTools: ToolDef[] = [

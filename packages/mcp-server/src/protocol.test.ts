@@ -67,6 +67,49 @@ describe("MCP protocol handler", () => {
     expect(by.get("list_untranslated")?.outputSchema?.type).toBe("object");
   });
 
+  it("advertises the prompts capability and lists the scoring prompts", async () => {
+    const init = (await handleMessage(
+      { jsonrpc: "2.0", id: 40, method: "initialize", params: initParams("2025-11-25") },
+      ctx,
+    )) as { result: { capabilities: Record<string, unknown> } };
+    expect(init.result.capabilities.prompts).toBeDefined();
+
+    const res = (await handleMessage({ jsonrpc: "2.0", id: 41, method: "prompts/list" }, ctx)) as {
+      result: { prompts: { name: string; arguments?: { name: string }[] }[] };
+    };
+    const names = res.result.prompts.map((p) => p.name);
+    expect(names).toContain("score_translation");
+    expect(names).toContain("review_locale");
+  });
+
+  it("renders a prompt via the scoring service on prompts/get", async () => {
+    const buildScorePrompt = vi.fn(async () => ({
+      messages: [{ role: "user" as const, text: "GRADE THIS" }],
+      promptVersion: "mqm-core-1",
+    }));
+    const promptCtx = {
+      actor: { userId: "u", orgId: "o", globalRole: "OWNER" },
+      service: { scoring: { buildScorePrompt } },
+      requestId: "req_test",
+    } as unknown as ToolContext;
+
+    const res = (await handleMessage(
+      {
+        jsonrpc: "2.0",
+        id: 42,
+        method: "prompts/get",
+        params: { name: "score_translation", arguments: { projectId: "proj_1", locale: "fr", name: "greeting" } },
+      },
+      promptCtx,
+    )) as { result: { messages: { role: string; content: { type: string; text: string } }[] } };
+
+    expect(buildScorePrompt).toHaveBeenCalledWith(promptCtx.actor, "proj_1", "fr", {
+      name: "greeting",
+      namespace: undefined,
+    });
+    expect(res.result.messages[0]?.content.text).toBe("GRADE THIS");
+  });
+
   it("reports the package version in serverInfo", async () => {
     const res = (await handleMessage(
       { jsonrpc: "2.0", id: 31, method: "initialize", params: initParams("2025-11-25") },

@@ -16,3 +16,4 @@ export * from "./validation.js";
 export * from "./wire.js";
 export * from "./plural.js";
 export * as qa from "./qa/index.js";
+export * as scoring from "./scoring/index.js";

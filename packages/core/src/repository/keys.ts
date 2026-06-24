@@ -19,3 +19,5 @@ export const glossarySK = (termId: string) => `GLOSSARY#${termId}`;
 export const webhookSK = (id: string) => `WEBHOOK#${id}`;
 /** Per-project QA config is a singleton under the project partition. */
 export const qaConfigSK = () => "QACONFIG";
+/** Per-project AI-scoring config is a singleton under the project partition. */
+export const scoreConfigSK = () => "SCORECONFIG";

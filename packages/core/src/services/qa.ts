@@ -184,7 +184,8 @@ export class QaService extends BaseService {
           baseValue: base,
           targetValue: valueOf(t),
           targetStatus: t?.status,
-          expectsValue: t?.status === "translated" || t?.status === "approved",
+          expectsValue:
+            t?.status === "translated" || t?.status === "needs_review" || t?.status === "approved",
           stale: t?.sourceRef !== undefined && t.sourceRef !== base,
           origin: t?.origin,
           glossary,

@@ -211,7 +211,7 @@ describe("MCP handler — processRequest", () => {
       service: deps({ touched: false }),
     });
     const tools = JSON.parse(res.body ?? "{}").result.tools as unknown[];
-    expect(tools.length).toBe(40);
+    expect(tools.length).toBe(45);
   });
 
   it("advertises only read tools to a read-only key (per-key filtering)", async () => {

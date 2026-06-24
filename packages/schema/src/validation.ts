@@ -89,6 +89,44 @@ export const runChecksBodySchema = z.object({
   slot: z.enum(["working", "approved"]).optional(),
 }).openapi({ ref: "RunChecksBody" });
 
+/** An MQM quality score: an integer 0–100. */
+export const scoreValueSchema = z.number().int().min(0).max(100);
+
+/** Body of `POST /v1/projects/:id/translations/score` (submit one AI score). */
+export const scoreTranslationBodySchema = z.object({
+  locale: localeCodeSchema,
+  name: z.string(),
+  namespace: namespaceSchema.optional(),
+  score: scoreValueSchema,
+  comment: z.string().optional(),
+  /** Identifier of the model that produced the score (provenance). */
+  model: z.string().optional(),
+}).openapi({ ref: "ScoreTranslationBody" });
+
+/** Body of `POST /v1/projects/:id/translations/review` (submit many AI scores). */
+export const reviewTranslationsBodySchema = z.object({
+  locale: localeCodeSchema,
+  entries: z
+    .array(
+      z.object({
+        name: z.string(),
+        namespace: namespaceSchema.optional(),
+        score: scoreValueSchema,
+        comment: z.string().optional(),
+        model: z.string().optional(),
+      }),
+    )
+    .min(1)
+    .max(500),
+}).openapi({ ref: "ReviewTranslationsBody" });
+
+/** Body of `PUT /v1/projects/:id/score-config` (per-project AI-scoring configuration). */
+export const scoreConfigBodySchema = z.object({
+  threshold: scoreValueSchema.optional(),
+  autoApprove: z.boolean().optional(),
+  guidance: z.string().optional(),
+}).openapi({ ref: "ScoreConfigBody" });
+
 /** Body of `PUT /v1/projects/:id/qa-config` (per-project QA configuration). */
 export const qaConfigBodySchema = z.object({
   checks: z

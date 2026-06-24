@@ -25,6 +25,7 @@ import {
   localeCodeSchema,
   namespaceSchema,
   qaSeveritySchema,
+  scoreValueSchema,
 } from "./validation.js";
 
 /**
@@ -45,8 +46,17 @@ export type GlobalRole = z.infer<typeof globalRoleSchema>;
 export const projectRoleSchema = z.enum(["MANAGER", "EDITOR", "DEVELOPER", "VIEWER"]);
 export type ProjectRole = z.infer<typeof projectRoleSchema>;
 
-/** Lifecycle of a single translation value. */
-export const translationStatusSchema = z.enum(["untranslated", "translated", "approved"]);
+/**
+ * Lifecycle of a single translation value. `needs_review` is the AI-scoring
+ * landing state: a value graded below the project's threshold (or manually
+ * flagged) that carries a value but is held back from approval for a human.
+ */
+export const translationStatusSchema = z.enum([
+  "untranslated",
+  "translated",
+  "needs_review",
+  "approved",
+]);
 export type TranslationStatus = z.infer<typeof translationStatusSchema>;
 
 /** How a translation value was produced (provenance). */
@@ -160,6 +170,18 @@ export const translationSchema = z.object({
   sourceRef: z.string().optional().describe("The base value this working `value` was written against; used to derive staleness."),
   /** How the current `value` was produced. Absent when unknown. */
   origin: translationOriginSchema.optional().describe("How the current `value` was produced. Absent when unknown."),
+  /** Latest AI quality score (0–100) for the working `value`; absent until scored. A re-score overwrites it. */
+  score: scoreValueSchema.optional().describe("Latest AI quality score (0–100) for the working value; absent until scored."),
+  /** The reviewer model's one- or two-sentence rationale for the latest `score`. */
+  scoreComment: z.string().optional().describe("The reviewer model's rationale for the latest score."),
+  /** userId of the key that submitted the latest score. */
+  scoredBy: z.string().optional().describe("userId of the key that submitted the latest score."),
+  /** ISO timestamp of the latest score. */
+  scoredAt: z.string().optional().describe("ISO timestamp of the latest score."),
+  /** Identifier of the model that produced the latest score (provenance). */
+  scoreModel: z.string().optional().describe("Identifier of the model that produced the latest score (provenance)."),
+  /** Version of the scoring methodology/prompt the latest score was produced under. */
+  promptVersion: z.string().optional().describe("Version of the scoring methodology/prompt the latest score was produced under."),
   /** userId of the last editor. */
   updatedBy: z.string().describe("userId of the last editor."),
   updatedAt: z.string(),
@@ -229,6 +251,25 @@ export const qaConfigSchema = z.object({
   updatedAt: z.string(),
 }).openapi({ ref: "QaConfig" });
 export type QaConfig = z.infer<typeof qaConfigSchema>;
+
+/**
+ * Per-project AI-scoring configuration: a singleton record holding the
+ * auto-approve `threshold`, the `autoApprove` opt-in (off by default), and
+ * optional evaluation `guidance` merged into the scoring prompt. Absence of the
+ * whole record means "defaults" (threshold 90, auto-approve off).
+ */
+export const scoreConfigSchema = z.object({
+  projectId: z.string(),
+  /** Minimum score (0–100) a translation must reach to be eligible for auto-approve. */
+  threshold: scoreValueSchema.describe("Minimum score (0–100) to be eligible for auto-approve."),
+  /** When true, a high score on machine-origin work auto-promotes it to `approved`. */
+  autoApprove: z.boolean().describe("When true, a high score on machine-origin work auto-promotes it to approved."),
+  /** Optional per-project evaluation guidance, merged into the scoring prompt. */
+  guidance: z.string().optional().describe("Per-project evaluation guidance, merged into the scoring prompt."),
+  updatedBy: z.string(),
+  updatedAt: z.string(),
+}).openapi({ ref: "ScoreConfig" });
+export type ScoreConfig = z.infer<typeof scoreConfigSchema>;
 
 /** Default namespace applied when a key does not specify one. */
 export const DEFAULT_NAMESPACE = "default";
