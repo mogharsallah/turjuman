@@ -146,7 +146,7 @@ stale/coverage detection.
   tagline: **governed AI, for free** — the AI does the work *and* a first-pass review, while the human
   role-gate stays in control.
 
-#### ⬜ gettext PO + XLIFF (1.2/2.0) adapters
+#### ✅ gettext PO + XLIFF (1.2/2.0) adapters — *shipped*
 
 - *What it is.* Two file formats for moving translations between tools. **gettext PO** (`.po` files) is
   the decades-old standard of the **open-source world** (GNU gettext — Linux, GNOME, WordPress, countless
@@ -158,9 +158,11 @@ stale/coverage detection.
   OSS ecosystem (PO) and anyone who works with translation vendors (XLIFF). Without XLIFF you can't
   interoperate with the professional supply chain at all. Buyer-decision weight: *medium (industry
   interchange)* — not a headline, but a portability checkbox most translation tools already tick.
-- *Build.* Slots straight into the existing `packages/core/src/formats/` adapter architecture — the same
-  pattern behind the 9 shipped formats with ICU-plural canonicalization. Low effort. *(Promoted from the
-  Phase 3 deferred list.)*
+- *Build.* Shipped as three adapters (`po`, `xliff-1.2`, `xliff-2.0`) in the existing
+  `packages/formats/` architecture. PO uses native gettext plurals (`msgid_plural` + indexed
+  `msgstr[N]`), which required a small locale-aware extension to the adapter interface (`FormatContext`)
+  so the CLDR-category ⇄ gettext-index mapping is correct per locale; XLIFF carries the canonical ICU
+  string verbatim in `<target>`. *(Promoted from the Phase 3 deferred list.)*
 
 ### Phase 6 — Reach (broaden inputs & integrations) ⬜
 

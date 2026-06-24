@@ -84,3 +84,30 @@ describe("iOS .stringsdict adapter", () => {
     );
   });
 });
+
+describe("PO adapter", () => {
+  it("round-trips key, value, description and plural", () => {
+    const out = roundTrip("po", [singular, plural]);
+    expect(pick(out, ["key", "value", "description", "plural"])).toEqual(
+      pick([singular, plural], ["key", "value", "description", "plural"]),
+    );
+  });
+});
+
+describe("XLIFF 1.2 adapter", () => {
+  it("round-trips key, value, description and plural", () => {
+    const out = roundTrip("xliff-1.2", [singular, plural]);
+    expect(pick(out, ["key", "value", "description", "plural"])).toEqual(
+      pick([singular, plural], ["key", "value", "description", "plural"]),
+    );
+  });
+});
+
+describe("XLIFF 2.0 adapter", () => {
+  it("round-trips key, value, description and plural", () => {
+    const out = roundTrip("xliff-2.0", [singular, plural]);
+    expect(pick(out, ["key", "value", "description", "plural"])).toEqual(
+      pick([singular, plural], ["key", "value", "description", "plural"]),
+    );
+  });
+});
