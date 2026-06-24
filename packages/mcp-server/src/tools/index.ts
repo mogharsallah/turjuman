@@ -5,6 +5,7 @@ import { keyTools } from "./keys.js";
 import { lifecycleTools } from "./lifecycle.js";
 import { projectTools } from "./projects.js";
 import { qaTools } from "./qa.js";
+import { scoringTools } from "./scoring.js";
 import { translationTools } from "./translations.js";
 
 export type { ToolContext, ToolDef } from "./base.js";
@@ -17,6 +18,7 @@ export const TOOLS: ToolDef[] = [
   ...glossaryTools,
   ...lifecycleTools,
   ...qaTools,
+  ...scoringTools,
   ...adminTools,
 ];
 
@@ -39,5 +41,6 @@ export const TOOL_GROUPS: Record<string, ToolDef[]> = {
   glossary: glossaryTools,
   webhooks: webhookTools,
   qa: qaTools,
+  scoring: scoringTools,
   admin: adminTools,
 };

@@ -58,6 +58,13 @@ lifecycle's separation-of-duties baked into the permission model.
   `DEVELOPER` key. Scope agent autonomy by scoping the role on its key.
 </Tip>
 
+**AI scoring reuses these same permissions.** Submitting a score (`score_translation` /
+`review_translations`) needs `translation.write`; the score's **auto-approval** only fires when the key
+*also* holds `translation.review` (and the project opted in, on machine-origin work) — so a
+`translation.write`-only key can score and route to `needs_review` but can never auto-promote. Changing
+the per-project scoring config (`set_score_config`) needs a project-management role (`project.update`).
+See [Score & review](/guides/score-and-review).
+
 ## API key scope and expiry
 
 A key normally inherits its user's full authority, but `create_api_key` accepts two narrowing options

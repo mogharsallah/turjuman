@@ -39,6 +39,7 @@
           "guides/translate-with-mcp",
           "guides/sync-with-cli",
           "guides/quality-checks",
+          "guides/score-and-review",
           "guides/webhooks"
         ]
       },

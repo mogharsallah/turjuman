@@ -20,6 +20,9 @@ import {
   qaConfigSchema,
   qaReportSchema,
   qaSeveritySchema,
+  reviewResultSchema,
+  scoreConfigSchema,
+  scoreValueSchema,
   settableStatusSchema,
   translationKeySchema,
   translationSchema,
@@ -50,6 +53,9 @@ export {
   qaConfigSchema,
   qaReportSchema,
   qaSeveritySchema,
+  reviewResultSchema,
+  scoreConfigSchema,
+  scoreValueSchema,
   settableStatusSchema,
   translationKeySchema,
   translationSchema,
@@ -121,6 +127,27 @@ export const namespace = namespaceSchema
   .optional()
   .describe('Key namespace (logical group). Defaults to "default".');
 export const localeCode = localeCodeSchema.describe('Locale code, e.g. "fr" or "es-MX"');
+
+// Shared pagination inputs and the locale-scoped key-list output, used by the
+// paged growth/queue tools across groups (translations + scoring). Defined once
+// here so the page wording and list shape can't drift between tool files.
+export const pageLimit = z
+  .number()
+  .int()
+  .positive()
+  .max(200)
+  .optional()
+  .describe("Page size (default 100, max 200)");
+export const pageCursor = z.string().optional().describe("nextCursor from a previous page");
+
+/** The keys plus the locale and a page count, so a client gets context without a
+ * second call. `count` is this page's size; `nextCursor` (when present) fetches the next page. */
+export const localeKeyList = z.object({
+  locale: z.string(),
+  count: z.number().int(),
+  keys: z.array(translationKeySchema),
+  nextCursor: z.string().optional(),
+});
 
 // Output schemas for `structuredContent` are the canonical core schemas
 // (`translationKeySchema`, `translationSchema`, `keyWithTranslationsSchema`,

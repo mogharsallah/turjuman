@@ -123,9 +123,17 @@ stale/coverage detection.
   (`turjuman check` / `push --check`). Advisory only — it flags, it never auto-approves. See
   [docs/reference/qa-checks.mdx](docs/reference/qa-checks.mdx).
 
-#### ⬜ AI quality scoring + AI review (MQM 0–100) — *the signature feature*
+#### ✅ AI quality scoring + AI review (MQM 0–100) — *the signature feature*
 
-- *What it is.* After the LLM translates a string, it's asked to **grade its own output** and return a
+- *Status.* **Shipped.** A reviewer agent fetches the server-provided MQM grading prompt (MCP
+  `score_translation` / `review_locale` prompts, or `GET …/translations/score-prompt`), grades **0–100**,
+  and submits via `score_translation` / `review_translations`. The server auto-routes on a per-project
+  `threshold`: low → `needs_review`, high → `approved` when auto-approve is on (opt-in, off by default)
+  and the value is machine-origin and the key holds `translation.review`. Scores carry
+  `scoreComment`/`scoreModel`/`promptVersion` provenance. See
+  [docs/guides/score-and-review.mdx](docs/guides/score-and-review.mdx). A per-category MQM scorecard
+  remains a future upgrade.
+- *What it is.* After the LLM translates a string, a review pass **grades the output** and returns a
   single **0–100** quality score; the system then **auto-routes** on that score — a high score
   auto-promotes the translation to `approved` (shipping it through the Phase-4 dual-slot model), a low
   score flags it for a human reviewer. The score is computed against **MQM** (*Multidimensional Quality
@@ -289,5 +297,3 @@ Deliberate non-goals — keep the product **pure MCP-first / developer-first**:
   protection.
 
 Contributions welcome — pick an unchecked item and open a PR.
-</content>
-</invoke>

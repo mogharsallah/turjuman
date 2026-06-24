@@ -2,11 +2,13 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type {
   CallToolResult,
+  GetPromptResult,
   JSONRPCMessage,
   ToolAnnotations,
 } from "@modelcontextprotocol/sdk/types.js";
 import { AppError, errorInfo, logError } from "@turjuman/core";
 import pkg from "../package.json" with { type: "json" };
+import { PROMPTS, type PromptDef } from "./prompts/index.js";
 import { TOOLS, type ToolContext, type ToolDef } from "./tools/index.js";
 
 /**
@@ -95,6 +97,30 @@ function toolCallback(def: ToolDef, ctx: ToolContext) {
   };
 }
 
+/** Adapt one of our {@link PromptDef}s to an SDK prompt callback. The service
+ * renders the messages; here we map them to MCP prompt-message blocks. Errors
+ * surface as thrown (JSON-RPC) errors — an AppError keeps its code/message; an
+ * unexpected fault is logged server-side and masked behind the request id, so
+ * nothing internal leaks into the model context. */
+function promptCallback(def: PromptDef, ctx: ToolContext) {
+  return async (args: Record<string, string | undefined>): Promise<GetPromptResult> => {
+    try {
+      const prompt = await def.handler(args, ctx);
+      return {
+        description: `Turjuman scoring prompt (${prompt.promptVersion})`,
+        messages: prompt.messages.map((m) => ({
+          role: m.role,
+          content: { type: "text" as const, text: m.text },
+        })),
+      };
+    } catch (e) {
+      if (e instanceof AppError) throw new Error(`${e.code}: ${e.message}`);
+      logError({ msg: "prompt_handler_error", requestId: ctx.requestId, prompt: def.name, error: errorInfo(e) });
+      throw new Error(`Internal error (ref: ${ctx.requestId})`);
+    }
+  };
+}
+
 /** Behaviour hints for a tool. An explicit `def.annotations` wins; otherwise we
  * derive them from the verb in the tool name — read tools are read-only, the
  * delete/revoke/remove family is destructive, and the rest are non-destructive
@@ -138,6 +164,12 @@ function buildServer(ctx: ToolContext, allowed?: ReadonlySet<string>): McpServer
   for (const { def, config } of REGISTRATIONS) {
     if (allowed && !allowed.has(def.name)) continue;
     server.registerTool(def.name, config, toolCallback(def, ctx));
+  }
+  // Prompts are a separate capability from tools (the `?tools=`/`?groups=` filter
+  // scopes tools only), so they register unconditionally — registering any one
+  // makes the server advertise `prompts`.
+  for (const def of PROMPTS) {
+    server.registerPrompt(def.name, { description: def.description, argsSchema: def.argsSchema }, promptCallback(def, ctx));
   }
   return server;
 }

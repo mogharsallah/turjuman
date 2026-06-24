@@ -74,14 +74,14 @@ describe("resolveToolScope", () => {
 
 describe("allowedToolsForActor", () => {
   it("shows an OWNER the full toolset", () => {
-    expect(allowedToolsForActor(actor({ globalRole: "OWNER" })).size).toBe(40);
+    expect(allowedToolsForActor(actor({ globalRole: "OWNER" })).size).toBe(45);
   });
 
   it("shows an ADMIN the full toolset (has project.create + user.manage)", () => {
     const allowed = allowedToolsForActor(actor({ globalRole: "ADMIN" }));
     expect(allowed.has("create_project")).toBe(true);
     expect(allowed.has("set_user_role")).toBe(true);
-    expect(allowed.size).toBe(40);
+    expect(allowed.size).toBe(45);
   });
 
   it("hides only the org-gated tools a MEMBER can never reach", () => {
@@ -95,7 +95,7 @@ describe("allowedToolsForActor", () => {
     expect(allowed.has("add_member")).toBe(true); // project-gated (could be MANAGER)
     expect(allowed.has("create_api_key")).toBe(true); // self-service
     expect(allowed.has("set_translation")).toBe(true); // project-gated write
-    expect(allowed.size).toBe(37);
+    expect(allowed.size).toBe(42);
   });
 
   it("restricts a read-only key to read tools regardless of role", () => {

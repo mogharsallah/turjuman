@@ -15,6 +15,7 @@ import type {
   ProjectRole,
   QaConfig,
   QaIgnoreRule,
+  ScoreConfig,
   Translation,
   TranslationKey,
   TranslationOrigin,
@@ -146,6 +147,12 @@ export function toTranslation(i: Item): Translation {
     approvedValue: i.approvedValue as string | undefined,
     sourceRef: i.sourceRef as string | undefined,
     origin: i.origin as TranslationOrigin | undefined,
+    score: i.score as number | undefined,
+    scoreComment: i.scoreComment as string | undefined,
+    scoredBy: i.scoredBy as string | undefined,
+    scoredAt: i.scoredAt as string | undefined,
+    scoreModel: i.scoreModel as string | undefined,
+    promptVersion: i.promptVersion as string | undefined,
     updatedBy: i.updatedBy as string,
     updatedAt: i.updatedAt as string,
   };
@@ -156,6 +163,17 @@ export function toQaConfig(i: Item): QaConfig {
     projectId: i.projectId as string,
     checks: (i.checks as QaConfig["checks"] | undefined) ?? {},
     ignore: (i.ignore as QaIgnoreRule[] | undefined) ?? [],
+    updatedBy: i.updatedBy as string,
+    updatedAt: i.updatedAt as string,
+  };
+}
+
+export function toScoreConfig(i: Item): ScoreConfig {
+  return {
+    projectId: i.projectId as string,
+    threshold: (i.threshold as number | undefined) ?? 90,
+    autoApprove: Boolean(i.autoApprove),
+    guidance: i.guidance as string | undefined,
     updatedBy: i.updatedBy as string,
     updatedAt: i.updatedAt as string,
   };

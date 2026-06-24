@@ -108,6 +108,36 @@ export const apiKeyCreatedSchema = z.object({
 }).openapi({ ref: "ApiKeyCreated" });
 export type ApiKeyCreated = z.infer<typeof apiKeyCreatedSchema>;
 
+/** Summary returned by a batch AI review: how many scores were written, which
+ * keys were skipped (no such translation), and how the writes routed (how many
+ * landed `approved` vs were flagged `needs_review`). */
+export const reviewResultSchema = z.object({
+  written: z.number().int(),
+  skipped: z.array(z.string()),
+  approved: z.number().int().describe("How many writes auto-promoted to approved."),
+  flagged: z.number().int().describe("How many writes were flagged needs_review."),
+}).openapi({ ref: "ReviewResult" });
+export type ReviewResult = z.infer<typeof reviewResultSchema>;
+
+/** One message of an assembled scoring prompt (MCP prompt-message parity). */
+export const scorePromptMessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  text: z.string(),
+}).openapi({ ref: "ScorePromptMessage" });
+export type ScorePromptMessage = z.infer<typeof scorePromptMessageSchema>;
+
+/** The assembled scoring prompt the server hands a reviewer agent: the rendered
+ * messages (MQM rubric + project guidance + glossary + source/target) plus the
+ * `promptVersion` to stamp back, and a `nextCursor` for the batch (review_locale)
+ * form. Returned by both the MCP prompt and the REST score-prompt endpoint, so
+ * the methodology can't drift between transports. */
+export const scorePromptSchema = z.object({
+  messages: z.array(scorePromptMessageSchema),
+  promptVersion: z.string().describe("Version of the scoring methodology; stamp this when submitting the score."),
+  nextCursor: z.string().optional().describe("Opaque cursor for the next page of the batch (review_locale) form."),
+}).openapi({ ref: "ScorePrompt" });
+export type ScorePrompt = z.infer<typeof scorePromptSchema>;
+
 // ---- QA report --------------------------------------------------------------
 
 /** A single QA problem found on one translation by one check. The canonical

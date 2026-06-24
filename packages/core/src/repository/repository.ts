@@ -18,6 +18,7 @@ import type {
   Membership,
   Project,
   QaConfig,
+  ScoreConfig,
   Translation,
   TranslationKey,
   User,
@@ -37,6 +38,7 @@ import {
   orgGSI1PK,
   projectPK,
   qaConfigSK,
+  scoreConfigSK,
   transPK,
   userPK,
   webhookSK,
@@ -50,6 +52,7 @@ import {
   toMembership,
   toProject,
   toQaConfig,
+  toScoreConfig,
   toTranslation,
   toUser,
   toWebhook,
@@ -441,6 +444,22 @@ export class Repository {
       PK: projectPK(config.projectId),
       SK: qaConfigSK(),
       entityType: "QaConfig",
+      ...config,
+    });
+    return config;
+  }
+
+  // ---- AI-scoring config (per-project singleton) ----------------------------
+
+  async getScoreConfig(projectId: string): Promise<ScoreConfig | undefined> {
+    return this.getItem(projectPK(projectId), scoreConfigSK(), toScoreConfig);
+  }
+
+  async putScoreConfig(config: ScoreConfig): Promise<ScoreConfig> {
+    await this.putItem({
+      PK: projectPK(config.projectId),
+      SK: scoreConfigSK(),
+      entityType: "ScoreConfig",
       ...config,
     });
     return config;

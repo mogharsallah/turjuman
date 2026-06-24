@@ -10,6 +10,8 @@ export type {
   TranslationPage,
   BundleEntry,
   BundlePage,
+  ReviewResult,
+  ScorePrompt,
 } from "@turjuman/schema";
 
 export interface CreateProjectInput {
@@ -43,6 +45,25 @@ export interface SetTranslationInput {
   status?: Exclude<TranslationStatus, "untranslated">;
   /** Provenance of the value; stamped onto the translation when known. */
   origin?: TranslationOrigin;
+}
+
+/** A single AI score submission (one translation), shared by the score and review surfaces. */
+export interface ScoreInput {
+  namespace?: string;
+  name: string;
+  /** MQM quality score, integer 0–100. */
+  score: number;
+  /** The model's rationale for the score. */
+  comment?: string;
+  /** Identifier of the model that produced the score (provenance). */
+  model?: string;
+}
+
+/** Patch for a project's AI-scoring config (all fields optional). */
+export interface SetScoreConfigInput {
+  threshold?: number;
+  autoApprove?: boolean;
+  guidance?: string;
 }
 
 export interface AddGlossaryTermInput {

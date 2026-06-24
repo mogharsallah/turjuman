@@ -10,6 +10,7 @@
   "exports": {
     ".": "./dist/index.js",
     "./qa": "./dist/qa/index.js",
+    "./scoring": "./dist/scoring/index.js",
     "./package.json": "./package.json"
   },
   "files": [

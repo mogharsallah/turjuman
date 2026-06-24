@@ -46,7 +46,7 @@ export interface QaContext {
   targetStatus: TranslationStatus | undefined;
   /**
    * Derived by the service from status: true when the translation is expected to
-   * carry a value (translated/approved). Insulates checks from the status enum.
+   * carry a value (translated/needs_review/approved). Insulates checks from the status enum.
    */
   expectsValue: boolean;
   /** Derived by the service: the source moved on since this value was written. */

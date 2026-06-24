@@ -7,6 +7,8 @@ export { MembersService } from "./members.js";
 export { ProjectsService } from "./projects.js";
 export { QaService } from "./qa.js";
 export type { RunChecksOptions, SetQaConfigInput } from "./qa.js";
+export { ScoringService } from "./scoring.js";
+export type { ScorePromptSelection } from "./scoring.js";
 export { TranslationMemoryService } from "./tm.js";
 export { TranslationsService } from "./translations.js";
 export { UsersService } from "./users.js";
@@ -16,6 +18,10 @@ export type {
   CreateKeyInput,
   UpdateKeyInput,
   SetTranslationInput,
+  ScoreInput,
+  SetScoreConfigInput,
+  ReviewResult,
+  ScorePrompt,
   KeyWithTranslations,
   KeyPage,
   BundleEntry,
