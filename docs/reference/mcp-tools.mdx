@@ -1,7 +1,7 @@
 ---
 title: "MCP tools reference for Kalem"
 sidebarTitle: "MCP Tools"
-description: "Complete catalogue of Kalem's 40+ MCP tools — projects, locales, keys, translations, glossary, QA, webhooks, and user administration."
+description: "Complete catalogue of Kalem's MCP tools — projects, keys, translations, glossary, QA scoring, webhooks, and user administration."
 ---
 
 Kalem's MCP server exposes tools that cover every management operation — from creating projects and managing keys to running QA checks and administering users. Every tool call is authenticated with `Authorization: Bearer <api-key>`. You can mount the server directly in any MCP-compatible agent and start managing your translations programmatically.
@@ -57,22 +57,39 @@ Kalem's MCP server exposes tools that cover every management operation — from 
 | `get_qa_config` | Read the per-project QA configuration |
 | `set_qa_config` | Write the per-project QA configuration (enable/disable checks, remap severities, add ignores) |
 
-## Webhooks
+## Webhooks & Lifecycle
 
 | Tool | Purpose |
 |---|---|
 | `list_webhooks` | List all webhooks registered for a project |
 | `add_webhook` | Register a new webhook — the signing secret is returned only once at creation time |
 | `remove_webhook` | Remove a registered webhook |
+| `delete_project` | Permanently delete a project and all its data — requires `confirm: true` |
+
+## Quality Scoring
+
+| Tool | Purpose |
+|---|---|
+| `score_translation` | Submit an MQM quality score (0–100) for a single translation; routes to `needs_review` or `approved` based on project threshold |
+| `review_translations` | Submit batch review decisions for multiple translations in one call |
+| `list_for_review` | List translations that are currently in the `needs_review` state (paged) |
+| `get_score_config` | Read the per-project scoring configuration (threshold, auto-approve settings) |
+| `set_score_config` | Write the per-project scoring configuration |
 
 ## Administration
 
 | Tool | Purpose |
 |---|---|
-| `list_users` / `create_user` | List or create users in your organisation |
+| `list_users` | List users in your organisation |
+| `create_user` | Create a new user account |
 | `set_user_role` | Set a user's global role — OWNER-gated for privileged roles |
-| `list_members` / `add_member` / `set_member_role` / `remove_member` | Manage per-project membership |
-| `create_api_key` / `list_api_keys` / `revoke_api_key` | Create, list, and revoke API keys |
+| `list_members` | List members of a project |
+| `add_member` | Add a user to a project |
+| `set_member_role` | Change a project member's role |
+| `remove_member` | Remove a user from a project |
+| `create_api_key` | Create a new API key |
+| `list_api_keys` | List all API keys in your organisation |
+| `revoke_api_key` | Permanently revoke an API key |
 
 ---
 
@@ -110,7 +127,7 @@ You can further restrict tools at mount time using query parameters on the MCP s
 | `tools` | Comma-separated tool names | Expose only the listed tools |
 | `groups` | Comma-separated group names | Expose only tools in the listed groups |
 
-Available group names: `projects`, `keys`, `translations`, `glossary`, `webhooks`, `qa`, `admin`, `read`.
+Available group names: `projects`, `keys`, `translations`, `glossary`, `webhooks`, `qa`, `scoring`, `admin`, `read`.
 
 The `read` group is a convenience alias that includes all list/get/search/lookup tools across every resource type.
 
@@ -128,7 +145,7 @@ These hints are declared in each tool's MCP schema so compatible agent framework
 | Property | Tools where set | Meaning |
 |---|---|---|
 | `readOnlyHint: true` | All `list_*`, `get_*`, `search_*`, `lookup_*` | Tool does not modify any server state |
-| `destructiveHint: true` | `delete_key`, `remove_webhook`, `revoke_api_key`, `remove_member`, `remove_glossary_term` | Tool permanently removes data |
+| `destructiveHint: true` | `delete_key`, `delete_project`, `remove_webhook`, `revoke_api_key`, `remove_member`, `remove_glossary_term` | Tool permanently removes data |
 | `idempotentHint: true` | `set_translation`, `set_translation_status`, `set_qa_config`, `set_user_role`, `set_member_role` | Calling the tool multiple times with the same arguments produces the same result |
 
 ---

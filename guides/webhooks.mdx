@@ -1,5 +1,5 @@
 ---
-title: "Receive Kalem webhooks for translation events"
+title: "Set up and verify Kalem webhooks for translation events"
 sidebarTitle: "Webhooks"
 description: "Register HMAC-SHA256-signed webhooks to receive real-time events when translations, keys, and locales change in your Kalem projects."
 ---
@@ -89,7 +89,7 @@ if (!ok) {
 
 Kalem delivers webhooks on a **best-effort, at-most-once** basis:
 
-- **No retries.** If your endpoint doesn't respond with a `2xx` status within 5 seconds, the delivery is dropped. Failed deliveries do not block events to other registered endpoints.
+- **No retries.** If your endpoint doesn't respond with a `2xx` status within the timeout window (5 seconds by default; override with `KALEM_WEBHOOK_TIMEOUT_MS` on your server), the delivery is dropped. Failed deliveries do not block events to other registered endpoints.
 - **No ordering guarantees.** Events for the same resource may arrive out of order under load.
 - **Deduplication is your responsibility.** Use the `timestamp` and resource identifiers in the payload to detect and discard duplicates.
 

@@ -1,10 +1,12 @@
 ---
-title: "Run QA checks on your translations"
+title: "Run automated QA checks on your Kalem translations"
 sidebarTitle: "Quality Checks"
-description: "Kalem's advisory QA layer validates translations for ICU syntax, placeholder parity, glossary consistency, and more — from the CLI, MCP server, or REST API."
+description: "Kalem's advisory QA layer validates translations for ICU syntax, placeholder parity, glossary consistency, and more — via CLI, MCP server, or REST API."
 ---
 
 QA in Kalem is advisory. It surfaces problems and reports them — it never auto-approves translations or silently discards findings. Use QA output as structured input for human reviewers and as a hard gate in your CI pipeline.
+
+Running checks requires only read access to translations. Any API key or user with the VIEWER role or higher can trigger `run_qa_checks`, `kalem check`, or the REST checks endpoint.
 
 ## Running checks
 

@@ -1,5 +1,5 @@
 ---
-title: "Sync locale files with the Kalem CLI"
+title: "Sync locale files and source strings with the Kalem CLI"
 sidebarTitle: "Sync with CLI"
 description: "Use the kalem CLI to pull translated locale files into your repo and push source strings to Kalem — for local development and CI pipelines."
 ---
@@ -39,10 +39,17 @@ Three flags modify this behavior:
 
 By default, `pull` writes only **approved values** — translations that have passed review. In-progress and draft work stays in Kalem and doesn't ship to your repository.
 
-Pass `--working` to include draft translations that haven't been approved yet:
+Two flags modify this behavior:
+
+| Flag | Effect |
+|---|---|
+| `--working` | Includes draft (unapproved) translations in addition to approved values. Useful when previewing in-progress work locally. |
+| `--exclude-stale` | Skips translations that have been marked stale because their source string changed. The stale values are omitted from the output file entirely. |
 
 ```bash
-kalem pull --working   # includes unapproved in-progress translations
+kalem pull --working               # includes unapproved in-progress translations
+kalem pull --exclude-stale         # omits stale translations from the output
+kalem pull --working --exclude-stale  # both
 ```
 
 <Warning>

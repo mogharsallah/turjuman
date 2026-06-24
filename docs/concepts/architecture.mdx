@@ -1,26 +1,26 @@
 ---
 title: "How Kalem is built: architecture overview"
 sidebarTitle: "Architecture"
-description: "Kalem's two transports (MCP server and REST API) share one core service layer and one DynamoDB table. Learn how requests flow and how the data model is structured."
+description: "Kalem's two transports (MCP server and REST API) share one service layer and one DynamoDB table. Learn how requests flow and how the data model is structured."
 ---
 
-Kalem exposes two surfaces for interacting with your translation data: an **MCP server** designed for AI agents and an agentic IDE like Claude Code, and a **REST API** designed for deterministic CLI and CI workflows. Both surfaces are thin transport adapters — they translate incoming requests into calls against the same shared `core` service layer, which owns all business logic, authorization, and persistence. There is no way for the two surfaces to drift out of sync because neither contains logic of its own.
+Kalem exposes two surfaces for interacting with your translation data: an **MCP server** designed for AI agents and agentic IDEs like Claude Code, and a **REST API** designed for deterministic CLI and CI workflows. Both surfaces are thin transport adapters — they translate incoming requests into calls against the same shared service layer, which owns all business logic, authorization, and persistence. There is no way for the two surfaces to drift out of sync because neither contains logic of its own.
 
 ## Request flow
 
 ```
 Claude Code / agent ──Streamable HTTP + Bearer key──► MCP Server ─┐
 Developer CLI / CI ──REST + Bearer key──────────────► REST API ───┤
-                                                                   └─► Core services → DynamoDB
+                                                                   └─► Service layer → DynamoDB
 ```
 
-Every inbound request — whether it arrives as an MCP tool call or a REST request — carries a `Bearer` API key in the `Authorization` header. The core layer resolves that key to a user and their roles before any operation runs.
+Every inbound request — whether it arrives as an MCP tool call or a REST request — carries a `Bearer` API key in the `Authorization` header. The service layer resolves that key to a user and their roles before any operation runs.
 
 The infrastructure is entirely serverless: Kalem runs on **AWS Lambda Function URLs** (no API Gateway in the path) backed by a **single DynamoDB table**. A `/health` endpoint is available for uptime checks and deployment verification.
 
 ## Two surfaces, one brain
 
-The MCP server and the REST API are deliberately kept as thin as possible. All business logic — including RBAC enforcement, translation state transitions, staleness detection, and glossary lookups — lives exclusively in the `core` services. This means:
+The MCP server and the REST API are deliberately kept as thin as possible. All business logic — including RBAC enforcement, translation state transitions, staleness detection, and glossary lookups — lives exclusively in the shared service layer. This means:
 
 - A bug fix or a new permission rule lands in one place and takes effect across both surfaces simultaneously.
 - Adding a new MCP tool never risks introducing a parallel code path with different authorization behavior.
@@ -42,15 +42,15 @@ These are the core entities you interact with when using Kalem.
 
 | Entity | Key fields | Notes |
 |---|---|---|
-| **Project** | `id`, `name`, `baseLocale` | The top-level container. `baseLocale` is the source language (e.g. `en`). |
+| **Project** | `id`, `name`, `slug`, `baseLocale` | The top-level container. `baseLocale` is the source language (e.g. `en`). |
 | **Locale** | `code`, `projectId` | A target language added to a project (e.g. `fr`, `ja`). |
-| **TranslationKey** | `namespace`, `name`, `description`, `tags`, `plural` | Identifies a single string within a project. Namespaces group related keys together. |
+| **TranslationKey** | `namespace`, `name`, `description`, `tags`, `plural`, `state` | Identifies a single string within a project. Namespaces group related keys together. `state` is `active` or `deprecated`. |
 | **Translation** | `value`, `approvedValue`, `status`, `stale`, `origin` | The actual string data for a key in a specific locale. See below. |
-| **Glossary term** | `term`, `definition`, `projectId` | A preferred translation or do-not-translate entry used to guide AI translation. |
+| **Glossary term** | `term`, `translations`, `doNotTranslate`, `projectId` | A preferred translation or do-not-translate entry used to guide AI translation. |
 | **Webhook** | `url`, `events`, `projectId` | An outbound notification sent when translation events occur. |
 | **User** | `id`, `email`, `globalRole` | A person or service account with a global org role. |
-| **Membership** | `userId`, `projectId`, `projectRole` | Grants a user a role on a specific project. |
-| **API key** | `key`, `userId`, `readOnly`, `expiresAt` | A bearer token scoped to a user. `readOnly` and `expiresAt` are set at creation and cannot be changed. |
+| **Membership** | `userId`, `projectId`, `role` | Grants a user a role on a specific project. |
+| **API key** | `id`, `userId`, `readOnly`, `expiresAt` | A bearer token scoped to a user. `readOnly` and `expiresAt` are set at creation and cannot be changed. |
 
 ### The Translation entity in detail
 
@@ -59,7 +59,7 @@ A Translation holds two string slots:
 - **`value`** — the working draft. This is updated whenever a translation is written, whether by a human editor, an AI agent, or an import.
 - **`approvedValue`** — a stable snapshot of the last approved version. This is only updated when a translation moves to the `approved` status.
 
-The `status` field follows a linear progression: `untranslated` → `translated` → `approved`. A translation can also carry a `stale` flag, which is set automatically when the base-locale value for that key changes — signaling that the translation may no longer be accurate.
+The `status` field follows a linear progression: `untranslated` → `translated` → `approved`. A translation can also enter a `needs_review` state — used when AI scoring flags a value as below the project quality threshold, holding it back from approval until a human reviews it. A translation can also carry a `stale` flag, which is set automatically when the base-locale value for that key changes — signaling that the translation may no longer be accurate.
 
 The `origin` field records how a translation was produced: `human`, `llm`, `tm` (translation memory), `mt` (machine translation), or `import`.
 

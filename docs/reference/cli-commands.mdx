@@ -14,14 +14,13 @@ Deploy commands (`deploy`, `status`, `teardown`, `bootstrap`) live in the separa
 
 ## Installation
 
-The CLI source lives in `packages/cli` in the Kalem monorepo. To build and run it locally:
+Install the CLI from the npm registry:
 
 ```bash
-npm run build
-node packages/cli/dist/index.js <command>
+npm install -g kalem
 ```
 
-When published, the binary is available as `kalem`:
+Once installed, the binary is available as `kalem`:
 
 ```bash
 kalem <command>
@@ -84,7 +83,7 @@ Environment variables take precedence over `~/.kalem/auth.json` when both are pr
 | `projects` | List all projects your API key can access |
 | `locales` | List the locales configured for the current project |
 | `formats` | List all supported file format IDs |
-| `pull [--working]` | Download translations from Kalem and write locale files to disk |
+| `pull [--working] [--exclude-stale]` | Download translations from Kalem and write locale files to disk |
 | `build` | Alias for `pull` — useful in build scripts |
 | `push [--prune] [--dry-run] [--check]` | Read locale files and upload translations to Kalem |
 | `check [--locale <code>] [--check <id...>] [--approved]` | Run advisory QA checks and print the findings report |
@@ -94,6 +93,7 @@ Environment variables take precedence over `~/.kalem/auth.json` when both are pr
 | Flag | Effect |
 |---|---|
 | `--working` | Pull the current working (draft) values instead of the last-approved values |
+| `--exclude-stale` | Skip translations whose source value has changed since they were last written |
 
 ### `push` options
 

@@ -68,6 +68,8 @@ A reviewer with EDITOR or MANAGER role inspects the translated strings and appro
 2. The current `value` is copied into the `approvedValue` snapshot.
 3. The `stale` flag is cleared (if it was set).
 
+Translations that fail automated QA scoring may land in a `needs_review` state — they carry a working value but are held back from approval until a human reviewer signs off. A reviewer can approve or revise these just like any other translated string.
+
 Approval is the gate between "being worked on" and "ready to ship". Until a translation is approved, it will not appear in the default delivery output.
 </Step>
 
@@ -110,9 +112,13 @@ Each translation moves forward along this chain:
 
 ```
 untranslated ──► translated ──► approved
+                     │
+                     └──► needs_review ──► approved
 ```
 
 Status never moves backward automatically. If an approved translation is edited, it returns to `translated` (not `approved`) until it is reviewed again.
+
+The `needs_review` state is an intermediate hold: a translation has a working value but was flagged by automated QA scoring as below the project's quality threshold. A human reviewer must inspect and either approve or revise it before it can be delivered.
 
 ### Dual-slot: `value` and `approvedValue`
 

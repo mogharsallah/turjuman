@@ -1,5 +1,5 @@
 ---
-title: "Translate with AI agents using Kalem's MCP server"
+title: "Drive your translation workflow with Kalem's MCP server"
 sidebarTitle: "Translate with MCP"
 description: "Connect your MCP client (Claude Code or any MCP-compatible agent) to Kalem and manage translations in natural language using 40+ tools."
 ---
@@ -44,9 +44,9 @@ Replace `<your-mcp-function-url>` with your self-hosted MCP endpoint and `op_liv
 
     1. `create_project` — creates the project and returns a `projectId`
     2. `add_locale` — adds `en` (base), `fr`, and `de`
-    3. `bulk_create_keys` — imports your source strings
-    4. `bulk_set_translations` — sets base-locale values
-    5. `translate_keys` — triggers AI translation into `fr` and `de`
+    3. `create_key` — creates each source string as a named key in the project
+    4. `bulk_set_translations` — sets base-locale values for all keys in one call
+    5. `bulk_set_translations` — writes the agent-generated translations for `fr` and `de`
   </Accordion>
 
   <Accordion title="Run a review pass">
@@ -58,7 +58,7 @@ Replace `<your-mcp-function-url>` with your self-hosted MCP endpoint and `op_liv
 
     1. `list_untranslated` — finds strings still needing attention
     2. `list_stale` — surfaces strings whose source has changed since last translation
-    3. `get_translation` — fetches individual values for inspection
+    3. `get_translations` — fetches the current translation values for a key across locales
     4. `set_translation` — updates values the agent corrects
     5. `run_qa_checks` — validates the final state before sign-off
   </Accordion>
@@ -73,7 +73,7 @@ Replace `<your-mcp-function-url>` with your self-hosted MCP endpoint and `op_liv
     1. `list_glossary` — retrieves your glossary terms so the agent can enforce consistent terminology
     2. `lookup_translation_memory` — checks for previously approved translations that match the source string
     3. `bulk_set_translations` — writes new translations, pre-populated from memory hits
-    4. `translate_keys` — fills remaining strings using AI, informed by the glossary context
+    4. `bulk_set_translations` — fills remaining strings with AI-generated translations informed by the glossary context
   </Accordion>
 
   <Accordion title="Grant access to a teammate">

@@ -26,27 +26,27 @@ Per-project roles are granted through a Membership record that links a user to a
 
 | Role | Description |
 |---|---|
-| **MANAGER** | Full control over the project, including managing members, locales, and keys. Can approve translations. |
-| **EDITOR** | Can write and approve translations, manage glossary terms, and add context to keys. Designed for translators and AI agents doing translation work. |
-| **DEVELOPER** | Can push and pull locale files (ingest and deliver). Designed for CI pipelines and developer tooling. Cannot write or approve translations. |
+| **MANAGER** | Full control over the project, including managing members, locales, and keys. Can write and approve translations. |
+| **EDITOR** | Can write and approve translations, manage keys, manage glossary terms, and add context to keys. Designed for translators and AI agents doing translation work. |
+| **DEVELOPER** | Can push and pull locale files (ingest and deliver), manage keys and locales, and write translations. Cannot approve translations. Designed for CI pipelines and developer tooling. |
 | **VIEWER** | Read-only access to all project content. Cannot modify anything. |
 
 ## Permission matrix
 
-The table below shows what each role can do. OWNER and ADMIN share the same permission set across all projects.
+The table below shows what each role can do. OWNER and ADMIN act as MANAGER on every project in their organization.
 
 | Operation | OWNER / ADMIN | MANAGER | EDITOR | DEVELOPER | VIEWER |
 |---|:---:|:---:|:---:|:---:|:---:|
 | Read project, keys, and translations | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Write translations (working `value`) | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Write translations (working `value`) | ✅ | ✅ | ✅ | ✅ | ❌ |
 | Approve translations | ✅ | ✅ | ✅ | ❌ | ❌ |
-| Manage keys (create, update, deprecate) | ✅ | ✅ | ❌ | ✅ | ❌ |
-| Manage locales (add, remove) | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Manage keys (create, update, deprecate) | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Manage locales (add, remove) | ✅ | ✅ | ❌ | ✅ | ❌ |
 | Manage project members | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Create projects / manage org users | ✅ | ❌ | ❌ | ❌ | ❌ |
 
 <Note>
-  DEVELOPER can manage keys (push source strings) but cannot write or approve translations. This is intentional: CI should be able to ingest new source strings without being able to overwrite human or AI translations.
+  DEVELOPER can write translations and manage keys (ideal for CI pipelines that ingest source strings and backfill translations) but cannot approve translations. Approval always requires a human EDITOR or MANAGER to sign off.
 </Note>
 
 ## OWNER vs ADMIN
@@ -67,7 +67,7 @@ Each stage of the [continuous localization loop](/concepts/lifecycle) maps to a 
 |---|---|---|
 | Provision, Setup | Operator | Global OWNER or ADMIN |
 | Ingest, Deliver (CI) | Developer / pipeline | Project DEVELOPER |
-| Translate | AI agent or human translator | Project EDITOR |
+| Translate | AI agent or human translator | Project EDITOR or DEVELOPER |
 | Approve | Reviewer | Project EDITOR or MANAGER |
 | Manage project members / locales | Team lead | Project MANAGER or global ADMIN/OWNER |
 
@@ -91,8 +91,8 @@ You can set an ISO-8601 expiry timestamp on a key. Once that instant passes, the
 
 ## MCP tool scoping
 
-When your AI agent calls `tools/list` on the MCP server, Kalem automatically filters the returned tool catalog to only include the tools the authenticated key's user is permitted to call. An EDITOR key will not see tools that require MANAGER or DEVELOPER permissions, and a `readOnly` key will only see read tools. This means your agent's available actions are always consistent with the key's permissions — there is no risk of an agent attempting an operation it is not allowed to perform.
+When your AI agent calls `tools/list` on the MCP server, Kalem automatically filters the returned tool catalog to only include the tools the authenticated key's user is permitted to call. An EDITOR key will not see tools that require MANAGER permissions, and a `readOnly` key will only see read tools. This means your agent's available actions are always consistent with the key's permissions — there is no risk of an agent attempting an operation it is not allowed to perform.
 
 <Tip>
-  Give your CI pipeline a DEVELOPER-scoped API key and your AI translation agent an EDITOR-scoped key. This way, a misconfigured pipeline can never accidentally overwrite translations, and an agent can never push or pull raw locale files outside the intended workflow.
+  Give your CI pipeline a DEVELOPER-scoped API key and your AI translation agent an EDITOR-scoped key. This way, a misconfigured pipeline can never accidentally approve translations, and your agent gets the full writing and key-management surface it needs.
 </Tip>

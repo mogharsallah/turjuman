@@ -19,22 +19,8 @@ Self-hosting Kalem means running it in your own AWS account: one DynamoDB table 
 ## Deploy
 
 <Steps>
-  <Step title="Install and build (from a repo clone)">
-    If you're deploying from a clone of the Kalem repo, install dependencies and build first:
-
-    ```bash
-    npm install && npm run build
-    ```
-
-    Alternatively, run the deployer directly with `npx` — it ships as a self-contained package with pre-bundled Lambda assets:
-
-    ```bash
-    npx @kalem/deploy deploy
-    ```
-  </Step>
-
   <Step title="Run the deploy command">
-    Run the interactive deployer:
+    Run the interactive deployer with `npx` — it ships as a self-contained package with pre-bundled Lambda assets, so no repo clone is required:
 
     ```bash
     npx @kalem/deploy deploy
@@ -152,15 +138,6 @@ kalem login --url <ApiUrl> --key <your-api-key>
 
 This saves your credentials to `~/.kalem/auth.json`. After logging in, you can run `kalem init`, `kalem pull`, and `kalem push` as normal.
 
-## Runtime environment
-
-The Lambda functions read these environment variables (set automatically by the deploy stack):
-
-| Variable | Description |
-|----------|-------------|
-| `KALEM_TABLE` | DynamoDB table name. Set to the `TableName` stack output. |
-| `KALEM_ALLOWED_ORIGIN` | CORS allowed origin for Function URL responses. Defaults to `*`. |
-
 ## Health check
 
 Both Lambda Function URLs respond to an unauthenticated `GET /health`:
@@ -187,10 +164,10 @@ This lists all Kalem-managed CloudFormation stacks in the configured region, the
 
 ## Update
 
-To deploy a new version of Kalem, pull the latest changes and redeploy:
+To deploy a new version of Kalem, run:
 
 ```bash
-git pull && npm install && npm run build && npx @kalem/deploy deploy
+npx @kalem/deploy deploy
 ```
 
 Because `kalem.deploy.json` (or the SSM canonical copy) retains your settings, the redeploy is non-interactive and updates the Lambda code in-place.
@@ -201,13 +178,17 @@ Because `kalem.deploy.json` (or the SSM canonical copy) retains your settings, t
   Teardown permanently deletes your CloudFormation stack and, by default, the DynamoDB table and all its data. This is irreversible.
 </Warning>
 
-To remove the stack:
+To remove the stack interactively (you will be prompted to confirm by typing the stack name):
 
 ```bash
 npx @kalem/deploy teardown
 ```
 
-The command asks you to confirm by typing the stack name before proceeding.
+To skip the confirmation prompt, pass `--yes`. To target a specific stack by name, use `--stack-name`:
+
+```bash
+npx @kalem/deploy teardown --yes --stack-name my-kalem-stack
+```
 
 To preserve the DynamoDB table (and its data) while removing the Lambda functions and other resources:
 
@@ -231,9 +212,9 @@ If you deployed the CloudFormation stack manually (without using `@kalem/deploy 
 ```bash
 npx @kalem/deploy bootstrap \
   --table <TableName> \
+  --region us-east-1 \
   --email you@example.com \
-  --name "Your Name" \
-  --region us-east-1
+  --name "Your Name"
 ```
 
 This creates the first OWNER and prints the API key once. Re-running the command when the org already has users is safe — it exits without making changes.

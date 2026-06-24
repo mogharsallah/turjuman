@@ -1,7 +1,7 @@
 ---
 title: "Locale file formats supported by Kalem"
 sidebarTitle: "File Formats"
-description: "Kalem's CLI reads and writes 9 locale file formats: JSON (nested/flat), YAML, Flutter ARB, Java properties, CSV, Android strings.xml, and iOS .strings/.stringsdict."
+description: "Kalem's 9 locale file formats — JSON, YAML, ARB, properties, CSV, Android XML, iOS strings — with plural conversion and {locale} path patterns."
 ---
 
 Kalem stores all translation values internally as [ICU MessageFormat](https://unicode-org.github.io/icu/userguide/format_parse/messages/) strings. When you run `kalem pull`, the CLI converts each value from ICU into the native representation expected by the target format. When you run `kalem push`, the CLI converts in the opposite direction — reading the format's native representation and writing ICU back to Kalem.
