@@ -194,6 +194,7 @@ Docs map (in `docs/`, all published): `index.mdx` (intro) · `quickstart.mdx` (r
 `self-hosting.mdx` (deploy) · `concepts/architecture.mdx` (data model, single-table, request flow) ·
 `concepts/roles-and-permissions.mdx` (RBAC) · `concepts/lifecycle.mdx` (the usage lifecycle: stages,
 key/translation state model, dual-slot delivery) · `guides/translate-with-mcp.mdx` ·
+`guides/code-mode.mdx` (the two MCP modes, `search_sdk`/`run_code`, the sandbox) ·
 `guides/sync-with-cli.mdx` · `guides/quality-checks.mdx` · `guides/webhooks.mdx` ·
 `reference/mcp-tools.mdx` · `reference/cli-commands.mdx` (commands, multi-target config, push/pull
 semantics) · `reference/file-formats.mdx` · `reference/qa-checks.mdx` (the QA check catalogue, config,

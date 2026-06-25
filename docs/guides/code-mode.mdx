@@ -1,0 +1,115 @@
+---
+title: "Code mode: run TypeScript against the Turjuman SDK"
+sidebarTitle: "Code mode"
+description: "Code mode swaps Turjuman's full MCP tool catalogue for two tools — search_sdk and run_code — so an agent writes TypeScript that runs in a sandbox and only the final result returns, cutting context tokens dramatically."
+---
+
+A Turjuman MCP connection runs in one of two **mutually exclusive** modes:
+
+- **Classic mode** (default) — every operation is its own MCP tool. The agent picks
+  tools by name and calls them one at a time.
+- **Code mode** — the server advertises just two tools, `search_sdk` and
+  `run_code`. The agent discovers operations with `search_sdk`, then writes a short
+  TypeScript program that calls them and runs it with `run_code`. Only the final
+  result comes back.
+
+Code mode exists to cut **context tokens**. In classic mode every tool's name,
+description, and JSON schema is injected into the model's context on every turn —
+a large, permanent tax that grows with the toolset. Code mode advertises two
+tools instead of the full catalogue, and a multi-step job (read untranslated keys
+→ translate → write them back) becomes **one** `run_code` call instead of a tool
+call per step, so intermediate data never round-trips through the model.
+
+<Note>
+  Both modes run the same operations with the same authorization. Code mode is a
+  different *surface*, not a different *permission set* — see
+  [Roles & permissions](/concepts/roles-and-permissions). A read-only key still
+  can't write in code mode: the write is denied in the core, not hidden.
+</Note>
+
+## Connect in code mode
+
+Add `?mode=code` to the MCP server URL when you configure the connection:
+
+```
+https://<your-mcp-function-url>/?mode=code
+```
+
+Omit it (or pass `?mode=classic`) for the full tool catalogue. The modes are
+mutually exclusive — `?mode=code` cannot be combined with the `?tools=` / `?groups=`
+classic-mode scoping params, and doing so returns a `400`.
+
+## Discover operations with `search_sdk`
+
+`search_sdk` returns the operations you can call from `run_code` — their names,
+domain group, one-line description, input fields, and read-only/destructive hints.
+
+```jsonc
+// search_sdk
+{ "query": "translation" }
+```
+
+Pass a `query` to filter (by name, group, or description) or omit it to list
+everything. The operation names are identical to the classic-mode tool names, so
+anything in the [MCP tools reference](/reference/mcp-tools) is callable here.
+
+## Run code with `run_code`
+
+Write TypeScript that calls operations as `await turjuman.<operation>(args)` and
+`return` a value. The code runs in an isolated sandbox whose **only** capability
+is the Turjuman SDK — there is no network, filesystem, or environment access, so
+nothing but SDK calls can reach the server.
+
+```ts
+// run_code — translate every untranslated French key in one round-trip
+const project = (await turjuman.list_projects({}))[0];
+const { keys } = await turjuman.list_untranslated({ projectId: project.id, locale: "fr" });
+
+const entries = keys.map((k) => ({
+  name: k.name,
+  namespace: k.namespace,
+  value: translate(k.baseValue, "fr"), // your own logic / a prior reasoning step
+}));
+
+const result = await turjuman.bulk_set_translations({
+  projectId: project.id,
+  locale: "fr",
+  entries,
+});
+return { translated: result.written, skipped: result.skipped };
+```
+
+`run_code` returns a structured result:
+
+| Field | Meaning |
+|---|---|
+| `ok` | `true` if the code ran to completion, `false` on error or timeout |
+| `result` | The value your code returned (truncated if very large) |
+| `logs` | Captured `console.log` / `console.warn` / … lines, for debugging |
+| `error` | A model-actionable message when `ok` is `false` |
+| `opsUsed` | How many `turjuman.*` calls the run made |
+| `truncated` | Whether `result` was shortened to fit the output cap |
+
+<Warning>
+  Each run is bounded: a wall-clock timeout, a memory cap, an output-size cap, and
+  a limit on the number of operation calls. A script that loops forever or returns
+  a huge payload is stopped with an error rather than hanging the connection.
+</Warning>
+
+## When to use which mode
+
+<CardGroup cols={2}>
+  <Card title="Use code mode" icon="code">
+    Multi-step jobs (read → transform → write), large intermediate data you don't
+    want in context, or any workflow where you'd otherwise chain many tool calls.
+  </Card>
+  <Card title="Use classic mode" icon="wrench">
+    One-off actions, interactive exploration, or clients that expect a
+    conventional per-tool surface. It's the default and needs no extra setup.
+  </Card>
+</CardGroup>
+
+Errors from inside the sandbox surface the same way as classic-mode tool errors:
+an expected failure (a bad argument, a permission denial, a missing record) comes
+back with its code and message so the agent can react; an unexpected internal
+fault is masked behind a request-id reference and logged server-side.

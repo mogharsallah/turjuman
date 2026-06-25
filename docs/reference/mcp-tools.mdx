@@ -107,6 +107,32 @@ Tools that return lists support cursor-based pagination. Pass `limit` (default `
 
 ---
 
+## Code mode
+
+A connection runs in one of two **mutually exclusive** modes, chosen with the
+`mode` URL parameter:
+
+| Mode | URL | Advertised tools |
+|---|---|---|
+| **Classic** (default) | `…/` or `…/?mode=classic` | The full catalogue above |
+| **Code** | `…/?mode=code` | Only `search_sdk` + `run_code` |
+
+In code mode the agent calls operations from inside a sandboxed TypeScript program
+instead of one tool at a time, which collapses a multi-step job into a single call
+and keeps the full catalogue out of the model's context.
+
+| Tool | Purpose |
+|---|---|
+| `search_sdk` | Discover operations (name, group, description, input fields, hints); pass a `query` to filter or omit it to list all |
+| `run_code` | Run TypeScript that calls `await turjuman.<operation>(args)` and returns a value; the sandbox has no network/filesystem, and only the final result is returned |
+
+Code mode runs the same operations with the same authorization — it is a
+different surface, not a different permission set. See the
+[Code mode guide](/guides/code-mode) for usage and the result shape. `?mode=code`
+cannot be combined with the `tools` / `groups` scoping params below.
+
+---
+
 ## Toolset scoping
 
 You can limit which tools are exposed when you mount the MCP server. This is useful for read-only agents, narrowly scoped workflows, or least-privilege API keys.

@@ -133,7 +133,11 @@ required, the grant-less-Lambda hardening variant.
   the generated routes `$ref` shared components for **both** request body and
   response. Expanding REST toward full MCP parity is deferred (the REST surface is
   intentionally a subset).
-- **Phase 5 — Docs.** Pending.
+- **Phase 5 — Docs.** Done. New `guides/code-mode.mdx` (the two modes,
+  `search_sdk`/`run_code`, the result shape, when to use it), registered in
+  `docs.json`. `reference/mcp-tools.mdx` gains a "Code mode" section;
+  `concepts/architecture.mdx` gains the operation-layer concept + a "Code mode and
+  the sandbox" section.
 
 ## Consequences
 

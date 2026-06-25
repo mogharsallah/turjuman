@@ -20,6 +20,8 @@ The infrastructure is entirely serverless: Turjuman runs on **AWS Lambda Functio
 
 ## Two surfaces, one brain
 
+Between the transports and the service layer sits a single **operation layer**: every capability is declared once — its typed inputs and outputs, its description, and a handler that calls the service. The MCP server projects each operation as a tool, the REST API projects the applicable ones as routes, and code mode (below) exposes them to a sandbox. Because all three are projections of the same declarations, a capability behaves and authorizes identically no matter which surface reaches it.
+
 The MCP server and the REST API are deliberately kept as thin as possible. All business logic — including RBAC enforcement, translation state transitions, staleness detection, and glossary lookups — lives exclusively in the shared service layer. This means:
 
 - A bug fix or a new permission rule lands in one place and takes effect across both surfaces simultaneously.
@@ -35,6 +37,12 @@ The MCP server and the REST API are deliberately kept as thin as possible. All b
 The REST API is intentionally scoped to a small set of **file-shaped, automatable operations**: listing projects and locales, exporting translation files, and importing them back. These are the actions a CI job or a developer script needs to run reliably without any interactive decision-making.
 
 Everything else — creating and managing projects, inviting members, writing translations, managing glossary terms, configuring webhooks — is exposed exclusively through the MCP server. This keeps the REST API predictable and easy to integrate into shell scripts and pipelines, while giving agents a rich, expressive surface to work with.
+
+## Code mode and the sandbox
+
+The MCP server can run in **code mode** (`?mode=code`), an alternative to advertising the full tool catalogue. Instead of one tool per operation, it exposes two: `search_sdk` to discover operations and `run_code` to execute TypeScript that calls them. The code runs in an isolated **QuickJS-WASM sandbox** whose only capability is the operation layer — there is no network, filesystem, or environment access. Each `turjuman.<operation>(args)` call is dispatched in-process to the very same handler a normal MCP tool call runs, with the request's authenticated context, so authorization is unchanged; only the final result returns.
+
+This collapses a multi-step job into a single round-trip and keeps the tool catalogue out of the model's context, which is a large token saving on big toolsets. The two modes are mutually exclusive per connection. See the [Code mode guide](/guides/code-mode) for details.
 
 ## Domain model
 
