@@ -184,6 +184,64 @@ describe("runCode — isolation (the security crux)", () => {
     expect((res.result as string)).toContain("output truncated");
   });
 
+  it("truncates by BYTES (not code units) and never exceeds the cap or splits a char", async () => {
+    const cap = 256;
+    const res = await runCode({
+      ctx: fakeCtx({}),
+      // Multibyte content: each 😀 is 4 UTF-8 bytes but 2 UTF-16 code units.
+      code: `return "😀".repeat(5000);`,
+      limits: { maxOutputBytes: cap },
+    });
+    expect(res.ok).toBe(true);
+    expect(res.truncated).toBe(true);
+    const out = res.result as string;
+    // The returned payload must fit the byte budget (a code-unit slice would blow it).
+    expect(Buffer.byteLength(out, "utf8")).toBeLessThanOrEqual(cap);
+    // No lone replacement char from a split surrogate/multibyte sequence.
+    expect(out).not.toContain("�");
+  });
+
+  it("bounds total console.* log bytes (logs can't blow the output budget)", async () => {
+    const res = await runCode({
+      ctx: fakeCtx({}),
+      code: `for (let i = 0; i < 200; i++) console.log("😀".repeat(2000)); return "ok";`,
+      limits: { maxLogBytes: 4096 },
+    });
+    expect(res.ok).toBe(true);
+    const total = res.logs.reduce((n, l) => n + Buffer.byteLength(l.message, "utf8"), 0);
+    expect(total).toBeLessThanOrEqual(4096);
+    // No multibyte char was split when clamping an entry to the remaining budget.
+    for (const l of res.logs) expect(l.message).not.toContain("�");
+  });
+
+  it("does not crash or use-after-free when a bridge call is not awaited", async () => {
+    const rejections: unknown[] = [];
+    const onRej = (r: unknown) => rejections.push(r);
+    process.on("unhandledRejection", onRej);
+    try {
+      let ranAfter = false;
+      const list = vi.fn(async () => {
+        await new Promise((r) => setTimeout(r, 40));
+        ranAfter = true;
+        return [{ id: "p1" }];
+      });
+      const res = await runCode({
+        ctx: fakeCtx({ projects: { list } }),
+        // Fire-and-forget: dispatch a slow op, then return before it settles.
+        code: `turjuman.list_projects({}); return "returned-early";`,
+      });
+      expect(res.ok).toBe(true);
+      expect(res.result).toBe("returned-early");
+      // The run drains the in-flight dispatch before disposing the context, so the
+      // op completed and nothing touched a freed runtime.
+      expect(ranAfter).toBe(true);
+      await new Promise((r) => setTimeout(r, 60));
+      expect(rejections).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onRej);
+    }
+  });
+
   it("enforces the bridge-call budget", async () => {
     const list = vi.fn(async () => []);
     const res = await runCode({

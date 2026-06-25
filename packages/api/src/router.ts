@@ -6,7 +6,6 @@ import { describeRoute, openAPIRouteHandler, resolver, validator } from "hono-op
 import { z } from "zod";
 import * as formats from "@turjuman/formats";
 import {
-  AppError,
   type Actor,
   BEARER_CHALLENGE,
   TurjumanService,
@@ -16,15 +15,14 @@ import {
   bulkSetResultSchema,
   bundleEntrySchema,
   errorEnvelopeSchema,
-  errorInfo,
   errorStatus,
   importKeysBodySchema,
   importKeysResultSchema,
   importTranslationsBodySchema,
   keyPageSchema,
   localeSchema,
-  logError,
   logInfo,
+  maskError,
   parseBearer,
   projectSchema,
   qaConfigBodySchema,
@@ -190,15 +188,15 @@ export function createApp(deps: RouterDeps): Hono<Env> {
   // and where thrown requests get their one access-log line.
   app.onError((err, c) => {
     const requestId = c.get("requestId");
-    if (err instanceof AppError) {
-      const status = errorStatus(err.code);
+    // One masking policy across every transport boundary (core's `maskError`): an
+    // AppError surfaces its code + message; anything else is logged server-side
+    // (request id + stack) and returned as a generic body, never leaking internals.
+    const masked = maskError(err, { msg: "api_unhandled", requestId });
+    if (masked.isAppError) {
+      const status = errorStatus(masked.code);
       accessLog(c, status);
-      return c.json({ error: err.message, code: err.code, requestId }, status as ContentfulStatusCode);
+      return c.json({ error: masked.message, code: masked.code, requestId }, status as ContentfulStatusCode);
     }
-    // Never leak an internal error's message to the client; log it (with the
-    // request id + stack, server-side only) so it's traceable in CloudWatch, and
-    // return a generic body.
-    logError({ msg: "api_unhandled", requestId, error: errorInfo(err) });
     accessLog(c, 500);
     return c.json({ error: "Internal error", code: "INTERNAL", requestId }, 500);
   });
@@ -267,13 +265,28 @@ export function createApp(deps: RouterDeps): Hono<Env> {
     responseDescription: string;
   }
 
+  const PROJECTS_PREFIX = "/v1/projects";
+
   const projectOperation = (name: string, cfg: ProjectionConfig): void => {
     const op = OPERATIONS_BY_NAME.get(name);
     if (!op?.http || !op.output) {
       throw new Error(`Operation "${name}" has no http binding or output schema to project`);
     }
     const { method, path, params = {} } = op.http;
-    const subPath = path.replace(/^\/v1\/projects/, "") || "/";
+    // This sub-app is mounted at /v1/projects, so a binding outside that prefix
+    // can't be projected here — fail loud at startup rather than silently mount it
+    // at the wrong URL.
+    if (path !== PROJECTS_PREFIX && !path.startsWith(`${PROJECTS_PREFIX}/`)) {
+      throw new Error(`Operation "${name}" path "${path}" is not under ${PROJECTS_PREFIX}; cannot project it onto the projects router`);
+    }
+    const subPath = path.slice(PROJECTS_PREFIX.length) || "/";
+    // A param maps onto the URL as a `:name` path segment when it appears in the
+    // path, otherwise as a query param (per the HttpBinding contract).
+    const paramSources = Object.entries(params).map(([urlName, field]) => ({
+      urlName,
+      field,
+      fromPath: path.includes(`:${urlName}`),
+    }));
     const status = cfg.status ?? 200;
     const spec = describeRoute({
       summary: cfg.summary,
@@ -288,9 +301,22 @@ export function createApp(deps: RouterDeps): Hono<Env> {
         user: c.get("user"),
         requestId: c.get("requestId"),
       };
-      const input: Record<string, unknown> = {};
-      for (const [pathParam, field] of Object.entries(params)) input[field] = c.req.param(pathParam);
-      if (cfg.body) Object.assign(input, (c.req.valid as (t: "json") => Record<string, unknown>)("json"));
+      const merged: Record<string, unknown> = {};
+      for (const p of paramSources) {
+        const raw = p.fromPath ? c.req.param(p.urlName) : c.req.query(p.urlName);
+        if (raw !== undefined) merged[p.field] = raw;
+      }
+      if (cfg.body) Object.assign(merged, (c.req.valid as (t: "json") => Record<string, unknown>)("json"));
+      // Re-validate the assembled input against the operation's OWN schema, so the
+      // REST surface enforces exactly the constraints MCP and the sandbox do (the
+      // body schema only documents/validates the body sub-shape; the op input may
+      // be stricter, e.g. an array `.max(...)`). A failure maps to a 400 VALIDATION.
+      let input: unknown;
+      try {
+        input = op.input.parse(merged);
+      } catch (e) {
+        throw validation(e instanceof z.ZodError ? (e.errors[0]?.message ?? "Invalid request") : "Invalid request");
+      }
       return c.json(await op.handler(input, ctx), status);
     };
     if (cfg.body) {

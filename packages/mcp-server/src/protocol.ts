@@ -6,7 +6,7 @@ import type {
   JSONRPCMessage,
   ToolAnnotations,
 } from "@modelcontextprotocol/sdk/types.js";
-import { AppError, errorInfo, logError } from "@turjuman/core";
+import { maskError } from "@turjuman/core";
 import {
   OPERATIONS,
   type OpContext,
@@ -81,24 +81,13 @@ function toolCallback(def: Operation, ctx: OpContext) {
       if (structured) result.structuredContent = structured;
       return result;
     } catch (e) {
-      // AppErrors are intentional, model-actionable failures (bad input, a
-      // permission denial) — surface their code + message so the agent can
-      // adjust. Anything else (a raw DynamoDB/AWS SDK error) is an internal
-      // fault: log it server-side and return a generic message plus the
-      // correlation id, so nothing internal leaks into the model context.
-      if (e instanceof AppError) {
-        return { content: [{ type: "text", text: `Error: ${e.code}: ${e.message}` }], isError: true };
-      }
-      logError({
-        msg: "tool_handler_error",
-        requestId: ctx.requestId,
-        tool: def.name,
-        error: errorInfo(e),
-      });
-      return {
-        content: [{ type: "text", text: `Error: Internal error (ref: ${ctx.requestId})` }],
-        isError: true,
-      };
+      // One masking policy across every boundary (core's `maskError`): an
+      // AppError is intentional and model-actionable, so surface its code +
+      // message; anything else is logged server-side and replaced with a generic
+      // message + correlation id, so nothing internal leaks into model context.
+      const masked = maskError(e, { msg: "tool_handler_error", requestId: ctx.requestId, tool: def.name });
+      const text = masked.isAppError ? `Error: ${masked.code}: ${masked.message}` : `Error: ${masked.message}`;
+      return { content: [{ type: "text", text }], isError: true };
     }
   };
 }
@@ -120,9 +109,8 @@ function promptCallback(def: PromptDef, ctx: OpContext) {
         })),
       };
     } catch (e) {
-      if (e instanceof AppError) throw new Error(`${e.code}: ${e.message}`);
-      logError({ msg: "prompt_handler_error", requestId: ctx.requestId, prompt: def.name, error: errorInfo(e) });
-      throw new Error(`Internal error (ref: ${ctx.requestId})`);
+      const masked = maskError(e, { msg: "prompt_handler_error", requestId: ctx.requestId, prompt: def.name });
+      throw new Error(masked.isAppError ? `${masked.code}: ${masked.message}` : masked.message);
     }
   };
 }

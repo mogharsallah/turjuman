@@ -1,4 +1,4 @@
-import { AppError, errorInfo, logError } from "@turjuman/core";
+import { maskError } from "@turjuman/core";
 import { OPERATIONS_BY_NAME, type OpContext } from "@turjuman/sdk";
 
 /**
@@ -34,14 +34,11 @@ export function createOpDispatcher(ctx: OpContext): OpDispatcher {
     try {
       return await op.handler(parsed, ctx);
     } catch (e) {
-      if (e instanceof AppError) throw new Error(`${e.code}: ${e.message}`);
-      logError({
-        msg: "sandbox_op_error",
-        requestId: ctx.requestId,
-        operation: name,
-        error: errorInfo(e),
-      });
-      throw new Error(`Internal error (ref: ${ctx.requestId})`);
+      // Same masking policy as every other transport boundary (see core's
+      // `maskError`): an AppError surfaces its code + message; anything else is
+      // logged server-side and replaced with a correlation-id reference.
+      const masked = maskError(e, { msg: "sandbox_op_error", requestId: ctx.requestId, operation: name });
+      throw new Error(masked.isAppError ? `${masked.code}: ${masked.message}` : masked.message);
     }
   };
 }

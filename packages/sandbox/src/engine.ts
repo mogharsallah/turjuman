@@ -62,7 +62,10 @@ export async function evalInSandbox(req: EvalRequest): Promise<RunResult> {
   const startedAt = Date.now();
   const deadline = startedAt + limits.timeoutMs;
   const logs: SandboxLogEntry[] = [];
-  const counters = { ops: 0 };
+  // ops: bridge calls made; inflight: bridge dispatches not yet settled (the run
+  // must not dispose the context while any are pending); logBytes: running total
+  // of captured log bytes (bounded independently of the result).
+  const counters = { ops: 0, inflight: 0, logBytes: 0 };
 
   // Singlefile variant: the WASM is embedded in the JS, so the engine bundles
   // self-contained (no separate .wasm asset to ship to Lambda).
@@ -74,7 +77,7 @@ export async function evalInSandbox(req: EvalRequest): Promise<RunResult> {
   let disposable = false;
 
   try {
-    installLog(ctx, logs, limits);
+    installLog(ctx, logs, limits, counters);
     installBridge(ctx, req.dispatch, limits, counters);
 
     const boot = ctx.evalCode(req.stubSource);
@@ -104,9 +107,16 @@ export async function evalInSandbox(req: EvalRequest): Promise<RunResult> {
       },
     );
 
-    // Drive the guest to settlement: run pending jobs (resolving bridge promises
-    // and microtasks), then yield so in-flight host dispatches can progress.
-    while (!settled) {
+    // Drive the run to quiescence: run pending jobs (resolving bridge promises and
+    // microtasks), then yield so in-flight host dispatches can progress. The run is
+    // done only when the script's promise has settled AND no bridge dispatch is
+    // still in flight. Waiting for in-flight dispatches is essential: a guest that
+    // fires `turjuman.*` without awaiting it would otherwise have its settlement
+    // callback run `hostToHandle()` against an already-disposed context — a
+    // use-after-free that hard-aborts the WASM runtime. On a deadline we return
+    // WITHOUT disposing (disposable stays false), abandoning the throwaway module
+    // to GC, since a still-pending dispatch may yet touch the context.
+    while (!settled || counters.inflight > 0) {
       const jobs = runtime.executePendingJobs();
       if (jobs.error) {
         const message = readError(ctx, jobs.error);
@@ -114,7 +124,7 @@ export async function evalInSandbox(req: EvalRequest): Promise<RunResult> {
         return fail(timeoutOr(deadline, message), logs, counters.ops, startedAt);
       }
       jobs.dispose();
-      if (settled) break;
+      if (settled && counters.inflight === 0) break;
       if (Date.now() > deadline) {
         return fail("Execution timed out", logs, counters.ops, startedAt);
       }
@@ -150,15 +160,27 @@ export async function evalInSandbox(req: EvalRequest): Promise<RunResult> {
   }
 }
 
-/** Install `console.*` capture as a plain host function (`__log`). */
-function installLog(ctx: QuickJSContext, logs: SandboxLogEntry[], limits: SandboxLimits): void {
+/** Install `console.*` capture as a plain host function (`__log`). Bounded by both
+ * entry count (`maxLogs`) and total bytes (`maxLogBytes`) — the latter so a guest
+ * can't inflate the response past the output budget via many large log lines
+ * (logs are returned to the model alongside the result). */
+function installLog(
+  ctx: QuickJSContext,
+  logs: SandboxLogEntry[],
+  limits: SandboxLimits,
+  counters: { logBytes: number },
+): void {
   const fn = ctx.newFunction("__log", (levelHandle, argsHandle) => {
-    if (logs.length >= limits.maxLogs) return;
+    if (logs.length >= limits.maxLogs || counters.logBytes >= limits.maxLogBytes) return;
     const level = ctx.getString(levelHandle);
     const args = argsHandle === undefined ? [] : ctx.dump(argsHandle);
     const parts = Array.isArray(args) ? args : [args];
     const message = parts.map((a) => (typeof a === "string" ? a : safeJson(a))).join(" ");
-    logs.push({ level, message: message.slice(0, 2000) });
+    // Clamp each entry to 2000 chars, then to whatever byte budget remains, on a
+    // UTF-8 boundary so a multibyte char is never split.
+    const bounded = sliceUtf8(message.slice(0, 2000), limits.maxLogBytes - counters.logBytes);
+    counters.logBytes += Buffer.byteLength(bounded, "utf8");
+    logs.push({ level, message: bounded });
   });
   ctx.setProp(ctx.global, "__log", fn);
   fn.dispose();
@@ -172,7 +194,7 @@ function installBridge(
   ctx: QuickJSContext,
   dispatch: OpDispatcher,
   limits: SandboxLimits,
-  counters: { ops: number },
+  counters: { ops: number; inflight: number },
 ): void {
   const fn = ctx.newFunction("__callOp", (nameHandle, argsHandle) => {
     const name = ctx.getString(nameHandle);
@@ -185,6 +207,10 @@ function installBridge(
         ? Promise.reject(new Error(`Exceeded operation budget (${limits.maxOps} calls)`))
         : Promise.resolve().then(() => dispatch(name, args));
 
+    // Count this dispatch as in flight until its result is marshalled back into
+    // the guest, so the settlement loop never disposes the context out from under
+    // a pending callback (a use-after-free / WASM abort).
+    counters.inflight += 1;
     void work.then(
       (result) => {
         const handle = hostToHandle(ctx, result);
@@ -196,7 +222,9 @@ function installBridge(
         deferred.reject(handle);
         handle.dispose();
       },
-    );
+    ).finally(() => {
+      counters.inflight -= 1;
+    });
 
     return deferred.handle;
   });
@@ -226,12 +254,31 @@ function fail(error: string, logs: SandboxLogEntry[], opsUsed: number, startedAt
 }
 
 /** Serialize the result and, if it exceeds the byte cap, replace it with a
- * truncated string note (so a huge return can't blow the model's context). */
+ * truncated string note (so a huge return can't blow the model's context). The
+ * cut is by BYTES, not UTF-16 code units, and lands on a UTF-8 boundary — and the
+ * note is reserved within the budget, so the returned string never exceeds
+ * `maxBytes`. */
 function truncateOutput(value: unknown, maxBytes: number): { value: unknown; truncated: boolean } {
   const json = safeJson(value);
   const bytes = Buffer.byteLength(json, "utf8");
   if (bytes <= maxBytes) return { value, truncated: false };
-  return { value: `${json.slice(0, maxBytes)}…[output truncated: ${bytes} bytes; cap ${maxBytes}]`, truncated: true };
+  const note = `…[output truncated: ${bytes} bytes; cap ${maxBytes}]`;
+  const noteBytes = Buffer.byteLength(note, "utf8");
+  const kept = sliceUtf8(json, maxBytes - noteBytes);
+  return { value: `${kept}${note}`, truncated: true };
+}
+
+/** Return the longest UTF-8 prefix of `s` that fits in `maxBytes`, never splitting
+ * a multibyte character. Returns "" for a non-positive budget. */
+function sliceUtf8(s: string, maxBytes: number): string {
+  if (maxBytes <= 0) return "";
+  const buf = Buffer.from(s, "utf8");
+  if (buf.length <= maxBytes) return s;
+  let cut = maxBytes;
+  // If the cut lands inside a multibyte sequence (a continuation byte 0b10xxxxxx),
+  // back up to the start of that sequence so it's dropped whole.
+  while (cut > 0 && ((buf[cut] ?? 0) & 0xc0) === 0x80) cut--;
+  return buf.toString("utf8", 0, cut);
 }
 
 function safeJson(value: unknown): string {

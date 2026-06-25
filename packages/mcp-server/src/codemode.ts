@@ -32,7 +32,9 @@ export const codemodeTools: Operation[] = [
     }),
     annotations: { readOnlyHint: true },
     handler: async (a) => {
-      const operations = searchOperations(a.query ?? "", a.limit ?? 25);
+      // `searchOperations` owns the default page size (kept in one place so it
+      // can't drift from this tool's documented behaviour).
+      const operations = searchOperations(a.query ?? "", a.limit);
       return { count: operations.length, operations };
     },
   }),

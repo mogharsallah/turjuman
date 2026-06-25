@@ -113,4 +113,21 @@ describe("REST router — error, authz, validation & pagination", () => {
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ code: "VALIDATION" });
   });
+
+  it("enforces the operation's OWN input schema on a projected route (no transport drift)", async () => {
+    // set_qa_config's op input caps `ignore` at .max(500); the REST body schema
+    // doesn't. The projection re-validates against op.input, so an over-cap array
+    // is rejected with 400 before the service is touched — exactly as over MCP.
+    const setConfig = vi.fn();
+    const app = appWith({ qa: { setConfig } });
+    const ignore = Array.from({ length: 501 }, () => ({ checkId: "icu" }));
+    const res = await app.request("/v1/projects/p1/qa-config", {
+      method: "PUT",
+      headers: { ...auth.headers, "content-type": "application/json" },
+      body: JSON.stringify({ ignore }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ code: "VALIDATION" });
+    expect(setConfig).not.toHaveBeenCalled();
+  });
 });

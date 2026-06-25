@@ -217,6 +217,15 @@ async function route(args: {
         outcome: "invalid_tool_scope",
       };
     }
+    // Deliberately no per-actor tool filtering here (classic mode applies
+    // `allowedToolsForActor`). The code-mode surface is the fixed pair
+    // search_sdk + run_code, and both are appropriate for every authenticated
+    // actor: a read-only key can legitimately use run_code for reads, and any
+    // write it attempts is still authorized by core RBAC at dispatch (the same
+    // `OpContext` the classic path uses) — hiding run_code would only break
+    // read-only code-mode use without adding a real control. The presentation
+    // filter that matters in classic mode (trimming a ~45-tool list) has no
+    // analogue for a 2-tool surface.
     selection = { mode: "code" };
   } else {
     // Scope the advertised toolset. Two layers, both narrowing only:

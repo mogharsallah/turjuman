@@ -83,7 +83,7 @@ function scoreMatch(s: OperationSummary, terms: string[]): number {
  * group, and description). An empty query returns the whole registry (capped at
  * `limit`), so a model can list everything. Results are ordered best-match first.
  */
-export function searchOperations(query: string, limit = 20): OperationSummary[] {
+export function searchOperations(query: string, limit = 25): OperationSummary[] {
   const all = OPERATIONS.map(summarizeOperation);
   const q = query.trim().toLowerCase();
   if (!q) return all.slice(0, limit);

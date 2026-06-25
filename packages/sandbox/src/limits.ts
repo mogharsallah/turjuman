@@ -17,6 +17,10 @@ export interface SandboxLimits {
   maxOps: number;
   /** Max number of captured `console.*` log entries; further logs are dropped. */
   maxLogs: number;
+  /** Max total bytes of captured `console.*` output; further logs are dropped.
+   * Bounds the log payload independently of `maxOutputBytes` (logs ride back to
+   * the model alongside the result), so many large lines can't blow its context. */
+  maxLogBytes: number;
 }
 
 export const DEFAULT_LIMITS: SandboxLimits = {
@@ -25,6 +29,7 @@ export const DEFAULT_LIMITS: SandboxLimits = {
   maxOutputBytes: 256 * 1024,
   maxOps: 1_000,
   maxLogs: 200,
+  maxLogBytes: 64 * 1024,
 };
 
 /** Merge caller overrides onto the defaults. */
