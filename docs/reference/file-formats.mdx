@@ -1,10 +1,10 @@
 ---
-title: "Kalem locale file formats: JSON, YAML, ARB, Android, and iOS"
+title: "Turjuman locale file formats: JSON, YAML, ARB, Android, and iOS"
 sidebarTitle: "File Formats"
-description: "Kalem's locale file formats — JSON nested/flat, YAML, Flutter ARB, Java properties, CSV, Android XML, and iOS strings with plural handling."
+description: "Turjuman's locale file formats — JSON nested/flat, YAML, Flutter ARB, Java properties, CSV, Android XML, and iOS strings with plural handling."
 ---
 
-Kalem stores all translation values internally as [ICU MessageFormat](https://unicode-org.github.io/icu/userguide/format_parse/messages/) strings. When you run `turjuman pull`, the CLI converts each value from ICU into the native representation expected by the target format. When you run `turjuman push`, the CLI converts in the opposite direction — reading the format's native representation and writing ICU back to Kalem.
+Turjuman stores all translation values internally as [ICU MessageFormat](https://unicode-org.github.io/icu/userguide/format_parse/messages/) strings. When you run `turjuman pull`, the CLI converts each value from ICU into the native representation expected by the target format. When you run `turjuman push`, the CLI converts in the opposite direction — reading the format's native representation and writing ICU back to Turjuman.
 
 ---
 
@@ -22,7 +22,7 @@ Kalem stores all translation values internally as [ICU MessageFormat](https://un
 | `ios-strings` | `.strings` | iOS singular strings; descriptions are written as `/* comment */` above each entry |
 | `ios-stringsdict` | `.stringsdict` | iOS plurals using `NSStringPluralRuleType` |
 
-Run `turjuman formats` to get the live list directly from your Kalem instance.
+Run `turjuman formats` to get the live list directly from your Turjuman instance.
 
 <Note>
 For iOS projects you should configure **both** `ios-strings` and `ios-stringsdict` as separate targets in your `turjuman.config.json`, both pointing at the same `.lproj` directory. Singular keys are handled by `.strings` and plural keys are handled by `.stringsdict` — they complement each other rather than overlap.
@@ -32,7 +32,7 @@ For iOS projects you should configure **both** `ios-strings` and `ios-stringsdic
 
 ## Plural handling
 
-Kalem stores plurals as ICU MessageFormat plural expressions:
+Turjuman stores plurals as ICU MessageFormat plural expressions:
 
 ```
 {count, plural, one {# item} other {# items}}

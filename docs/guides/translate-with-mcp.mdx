@@ -1,19 +1,19 @@
 ---
-title: "Translate with AI agents using Kalem's MCP server"
+title: "Translate with AI agents using Turjuman's MCP server"
 sidebarTitle: "Translate with MCP"
-description: "Connect your MCP client (Claude Code or any MCP-compatible agent) to Kalem and manage translations in natural language using 40+ tools."
+description: "Connect your MCP client (Claude Code or any MCP-compatible agent) to Turjuman and manage translations in natural language using 40+ tools."
 ---
 
-The MCP server is Kalem's primary interface. Connect any MCP-compatible agent — Claude Code, a custom agent loop, or any other client — and drive your entire translation workflow in natural language. The server exposes 40+ tools covering projects, keys, translations, glossaries, translation memory, QA, members, and API keys.
+The MCP server is Turjuman's primary interface. Connect any MCP-compatible agent — Claude Code, a custom agent loop, or any other client — and drive your entire translation workflow in natural language. The server exposes 40+ tools covering projects, keys, translations, glossaries, translation memory, QA, members, and API keys.
 
 ## Connect your MCP client
 
-Add the following to your `.mcp.json` (or equivalent client config) to register Kalem as an MCP server:
+Add the following to your `.mcp.json` (or equivalent client config) to register Turjuman as an MCP server:
 
 ```json
 {
   "mcpServers": {
-    "kalem": {
+    "turjuman": {
       "type": "http",
       "url": "https://<your-mcp-function-url>/",
       "headers": { "Authorization": "Bearer <your-api-key>" }
@@ -29,7 +29,7 @@ Replace `<your-mcp-function-url>` with your self-hosted MCP endpoint and `<your-
 </Tip>
 
 <Warning>
-  Your API key grants full access to your Kalem instance. Never commit it to version control. Use an environment variable or a secrets manager, and reference it from your MCP config at runtime.
+  Your API key grants full access to your Turjuman instance. Never commit it to version control. Use an environment variable or a secrets manager, and reference it from your MCP config at runtime.
 </Warning>
 
 ## Example workflows
@@ -107,4 +107,4 @@ Replace `<your-mcp-function-url>` with your self-hosted MCP endpoint and `<your-
 
 **Paginate large result sets.** Tools like `list_keys`, `list_untranslated`, and `list_stale` accept a `limit` parameter and return a `nextCursor` when there are more results. Pass that cursor back as `cursor` in the next call to page through the full set.
 
-**The server is stateless.** There is no session to manage and no state that persists between tool calls beyond what's stored in Kalem itself. Your agent can call tools in any order, retry failed calls freely, and reconnect without ceremony.
+**The server is stateless.** There is no session to manage and no state that persists between tool calls beyond what's stored in Turjuman itself. Your agent can call tools in any order, retry failed calls freely, and reconnect without ceremony.

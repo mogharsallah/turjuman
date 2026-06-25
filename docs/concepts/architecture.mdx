@@ -1,10 +1,10 @@
 ---
-title: "Kalem architecture: MCP server, REST API, and data model"
+title: "Turjuman architecture: MCP server, REST API, and data model"
 sidebarTitle: "Architecture"
-description: "Kalem runs two surfaces — an MCP server for AI agents and a REST API for CI — over one shared service layer and a single DynamoDB table."
+description: "Turjuman runs two surfaces — an MCP server for AI agents and a REST API for CI — over one shared service layer and a single DynamoDB table."
 ---
 
-Kalem exposes two surfaces for interacting with your translation data: an **MCP server** designed for AI agents and agentic IDEs like Claude Code, and a **REST API** designed for deterministic CLI and CI workflows. Both surfaces are thin transport adapters — they translate incoming requests into calls against the same shared service layer, which owns all business logic, authorization, and persistence. There is no way for the two surfaces to drift out of sync because neither contains logic of its own.
+Turjuman exposes two surfaces for interacting with your translation data: an **MCP server** designed for AI agents and agentic IDEs like Claude Code, and a **REST API** designed for deterministic CLI and CI workflows. Both surfaces are thin transport adapters — they translate incoming requests into calls against the same shared service layer, which owns all business logic, authorization, and persistence. There is no way for the two surfaces to drift out of sync because neither contains logic of its own.
 
 ## Request flow
 
@@ -16,7 +16,7 @@ Developer CLI / CI ──REST + Bearer key────────────�
 
 Every inbound request — whether it arrives as an MCP tool call or a REST request — carries a `Bearer` API key in the `Authorization` header. The service layer resolves that key to a user and their roles before any operation runs.
 
-The infrastructure is entirely serverless: Kalem runs on **AWS Lambda Function URLs** (no API Gateway in the path) backed by a **single DynamoDB table**. A `/health` endpoint is available for uptime checks and deployment verification.
+The infrastructure is entirely serverless: Turjuman runs on **AWS Lambda Function URLs** (no API Gateway in the path) backed by a **single DynamoDB table**. A `/health` endpoint is available for uptime checks and deployment verification.
 
 ## Two surfaces, one brain
 
@@ -27,7 +27,7 @@ The MCP server and the REST API are deliberately kept as thin as possible. All b
 - You can call either surface interchangeably and always get the same result for the same operation.
 
 <Note>
-  If you are integrating Kalem into an AI agent workflow, prefer the MCP server — it gives your agent access to the full 40+ tool catalog. Use the REST API when you need file-shaped, deterministic operations in a script or CI pipeline.
+  If you are integrating Turjuman into an AI agent workflow, prefer the MCP server — it gives your agent access to the full 40+ tool catalog. Use the REST API when you need file-shaped, deterministic operations in a script or CI pipeline.
 </Note>
 
 ## Why the REST surface is narrow
@@ -38,7 +38,7 @@ Everything else — creating and managing projects, inviting members, writing tr
 
 ## Domain model
 
-These are the core entities you interact with when using Kalem.
+These are the core entities you interact with when using Turjuman.
 
 | Entity | Key fields | Notes |
 |---|---|---|

@@ -1,13 +1,13 @@
 ---
-title: "Deploy Kalem to your own AWS account with one command"
+title: "Deploy Turjuman to your own AWS account with one command"
 sidebarTitle: "Self-Hosting"
-description: "Self-host Kalem on AWS using @turjuman/aws-deploy — one DynamoDB table and three Lambda Function URLs. No SAM CLI, no cdk bootstrap required."
+description: "Self-host Turjuman on AWS using @turjuman/aws-deploy — one DynamoDB table and three Lambda Function URLs. No SAM CLI, no cdk bootstrap required."
 ---
 
-Self-hosting Kalem means running it in your own AWS account: one DynamoDB table and up to three Lambda Function URLs (MCP server, REST API, and webhook dispatcher). The `@turjuman/aws-deploy` package handles everything — CDK synthesis, bootstrapping, CloudFormation deployment, and first-owner creation — in a single interactive command. You don't need the SAM CLI, a separate CDK bootstrap step, or a clone of the Kalem repo.
+Self-hosting Turjuman means running it in your own AWS account: one DynamoDB table and up to three Lambda Function URLs (MCP server, REST API, and webhook dispatcher). The `@turjuman/aws-deploy` package handles everything — CDK synthesis, bootstrapping, CloudFormation deployment, and first-owner creation — in a single interactive command. You don't need the SAM CLI, a separate CDK bootstrap step, or a clone of the Turjuman repo.
 
 <Warning>
-  The CDK stack is conventional but has **not yet been verified end-to-end against a live AWS account**. Use the [Quickstart](/quickstart) to evaluate Kalem locally first, and treat the AWS deploy as beta. Please report any issues you encounter.
+  The CDK stack is conventional but has **not yet been verified end-to-end against a live AWS account**. Use the [Quickstart](/quickstart) to evaluate Turjuman locally first, and treat the AWS deploy as beta. Please report any issues you encounter.
 </Warning>
 
 ## Prerequisites
@@ -27,7 +27,7 @@ Self-hosting Kalem means running it in your own AWS account: one DynamoDB table 
     ```
 
     The command prompts you for:
-    - CloudFormation stack name (default: `kalem`)
+    - CloudFormation stack name (default: `turjuman`)
     - AWS region
     - Allowed CORS origins
     - Lambda memory (MB) and timeout (seconds)
@@ -46,7 +46,7 @@ Self-hosting Kalem means running it in your own AWS account: one DynamoDB table 
     └─────────────────────────────────────────────────────┘
 
     ┌ First owner ────────────────────────────────────────┐
-    │ API key: km_live_xxxxxxxxxxxxxxxxxxxx               │
+    │ API key: op_live_xxxxxxxxxxxxxxxxxxxx               │
     │                                                     │
     │ Store this now — it is shown only once.             │
     │ Saved to ~/.turjuman/auth.json (you're logged in).  │
@@ -113,7 +113,7 @@ Add the `McpUrl` to your `.mcp.json`:
 ```json
 {
   "mcpServers": {
-    "kalem": {
+    "turjuman": {
       "type": "http",
       "url": "<McpUrl>",
       "headers": {
@@ -154,17 +154,17 @@ A `200` response confirms the function is deployed and reachable. Use this in mo
 
 ## Check deploy status
 
-To see whether Kalem is installed in your AWS account and region:
+To see whether Turjuman is installed in your AWS account and region:
 
 ```bash
 npx @turjuman/aws-deploy status
 ```
 
-This lists all Kalem-managed CloudFormation stacks in the configured region, their current status, and their stack outputs.
+This lists all Turjuman-managed CloudFormation stacks in the configured region, their current status, and their stack outputs.
 
 ## Update
 
-To deploy a new version of Kalem, run:
+To deploy a new version of Turjuman, run:
 
 ```bash
 npx @turjuman/aws-deploy deploy
@@ -187,7 +187,7 @@ npx @turjuman/aws-deploy teardown
 To skip the confirmation prompt, pass `--yes`. To target a specific stack by name, use `--stack-name`:
 
 ```bash
-npx @turjuman/aws-deploy teardown --yes --stack-name my-kalem-stack
+npx @turjuman/aws-deploy teardown --yes --stack-name my-turjuman-stack
 ```
 
 To preserve the DynamoDB table (and its data) while removing the Lambda functions and other resources:
@@ -198,7 +198,7 @@ npx @turjuman/aws-deploy teardown --keep-table
 
 ## Cost
 
-Kalem uses on-demand DynamoDB billing and AWS Lambda, both of which have generous free tiers:
+Turjuman uses on-demand DynamoDB billing and AWS Lambda, both of which have generous free tiers:
 
 - **Lambda**: 1 million free requests and 400,000 GB-seconds of compute per month.
 - **DynamoDB**: 25 GB of storage, 25 read capacity units, and 25 write capacity units free (or pay-per-request at fractions of a cent per million operations).

@@ -1,10 +1,10 @@
 ---
-title: "turjuman CLI commands and configuration reference for Kalem"
+title: "turjuman CLI commands and configuration reference for Turjuman"
 sidebarTitle: "CLI Commands"
 description: "Full reference for the turjuman CLI — all commands, turjuman.config.json structure, auth configuration, exit codes, and --json for CI."
 ---
 
-The `turjuman` CLI is purpose-built for deterministic locale file work: it pulls translations from Kalem and writes them to your repository as locale files, and it pushes locale files back to Kalem. Everything else — creating projects, managing keys, running QA from an agent, administering users — goes through the MCP server or the REST API.
+The `turjuman` CLI is purpose-built for deterministic locale file work: it pulls translations from Turjuman and writes them to your repository as locale files, and it pushes locale files back to Turjuman. Everything else — creating projects, managing keys, running QA from an agent, administering users — goes through the MCP server or the REST API.
 
 <Note>
 Deploy commands (`deploy`, `status`, `teardown`, `bootstrap`) live in the separate `@turjuman/aws-deploy` package and are not part of the core CLI documented here.
@@ -30,11 +30,11 @@ turjuman <command>
 
 ## Configuration
 
-Kalem uses two configuration files with different scopes and commit policies.
+Turjuman uses two configuration files with different scopes and commit policies.
 
 ### `turjuman.config.json` — project configuration
 
-This file lives in your repository root, is created by `turjuman init`, and **should be committed to version control**. It tells the CLI which project to work with and how to map Kalem namespaces to local file paths.
+This file lives in your repository root, is created by `turjuman init`, and **should be committed to version control**. It tells the CLI which project to work with and how to map Turjuman namespaces to local file paths.
 
 ```json
 {
@@ -56,7 +56,7 @@ This file stores your API URL and key for the current machine. It is created by 
 
 ```json
 {
-  "url": "https://kalem.example.com",
+  "url": "https://your-turjuman-api.example.com",
   "key": "op_live_xxxxxxxxxxxxxx"
 }
 ```
@@ -67,7 +67,7 @@ In CI pipelines, use environment variables instead of `auth.json`:
 
 | Variable | Purpose |
 |---|---|
-| `TURJUMAN_API_URL` | Base URL of your Kalem instance |
+| `TURJUMAN_API_URL` | Base URL of your Turjuman instance |
 | `TURJUMAN_API_KEY` | API key for authentication |
 
 Environment variables take precedence over `~/.turjuman/auth.json` when both are present.
@@ -83,9 +83,9 @@ Environment variables take precedence over `~/.turjuman/auth.json` when both are
 | `projects` | List all projects your API key can access |
 | `locales` | List the locales configured for the current project |
 | `formats` | List all supported file format IDs |
-| `pull [--working] [--exclude-stale]` | Download translations from Kalem and write locale files to disk |
+| `pull [--working] [--exclude-stale]` | Download translations from Turjuman and write locale files to disk |
 | `build` | Alias for `pull` — useful in build scripts |
-| `push [--prune] [--dry-run] [--check]` | Read locale files and upload translations to Kalem |
+| `push [--prune] [--dry-run] [--check]` | Read locale files and upload translations to Turjuman |
 | `check [--locale <code>] [--check <id...>] [--approved]` | Run advisory QA checks and print the findings report |
 
 ### `pull` options
@@ -99,7 +99,7 @@ Environment variables take precedence over `~/.turjuman/auth.json` when both are
 
 | Flag | Effect |
 |---|---|
-| `--prune` | Delete keys in Kalem that are absent from the pushed files |
+| `--prune` | Delete keys in Turjuman that are absent from the pushed files |
 | `--dry-run` | Compute the diff and print what would change without writing anything |
 | `--check` | After pushing, run QA checks and exit with code `1` if there are error-severity findings |
 
@@ -140,14 +140,14 @@ turjuman check --json > findings.json
 | `3` | API or network error — the server returned an error response or was unreachable |
 
 <Note>
-API error responses include a `requestId` field. You can provide this ID when reporting issues — it correlates directly with the corresponding entry in your Kalem server logs.
+API error responses include a `requestId` field. You can provide this ID when reporting issues — it correlates directly with the corresponding entry in your Turjuman server logs.
 </Note>
 
 ---
 
 ## Supported formats
 
-Run `turjuman formats` to get the live list from your Kalem instance. The currently supported format IDs are:
+Run `turjuman formats` to get the live list from your Turjuman instance. The currently supported format IDs are:
 
 | Format ID | File type |
 |---|---|

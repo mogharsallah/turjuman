@@ -1,7 +1,7 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "luma",
-  "name": "Kalem",
+  "name": "Turjuman",
   "description": "Open-source, self-hosted translation management driven by AI agents over MCP, with a developer CLI for deterministic locale-file sync.",
   "logo": {
     "light": "https://media.brand.dev/1ec7fa9c-3b46-4da7-92c7-b9caf7baf99b.svg",
@@ -15,7 +15,7 @@
   "navbar": {
     "primary": {
       "type": "github",
-      "href": "https://github.com/mogharsallah/kalem"
+      "href": "https://github.com/mogharsallah/turjuman"
     }
   },
   "navigation": {
@@ -78,7 +78,7 @@
   },
   "footer": {
     "socials": {
-      "github": "https://github.com/mogharsallah/kalem"
+      "github": "https://github.com/mogharsallah/turjuman"
     }
   }
 }

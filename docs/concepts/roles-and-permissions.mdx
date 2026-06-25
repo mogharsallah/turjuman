@@ -1,18 +1,18 @@
 ---
-title: "Roles and permissions: controlling access in Kalem projects"
+title: "Roles and permissions: controlling access in Turjuman projects"
 sidebarTitle: "Roles & Permissions"
-description: "Kalem uses two role dimensions: global org roles and per-project roles. Learn how to assign roles and scope API keys for least-privilege access."
+description: "Turjuman uses two role dimensions: global org roles and per-project roles. Learn how to assign roles and scope API keys for least-privilege access."
 ---
 
-Every request to Kalem — whether through the MCP server or the REST API — must include an `Authorization: Bearer <api-key>` header. Kalem resolves that key to a user, then evaluates the user's roles before allowing any operation to proceed. There are no anonymous requests. If a key is missing, expired, or revoked, the request receives a `401` response immediately.
+Every request to Turjuman — whether through the MCP server or the REST API — must include an `Authorization: Bearer <api-key>` header. Turjuman resolves that key to a user, then evaluates the user's roles before allowing any operation to proceed. There are no anonymous requests. If a key is missing, expired, or revoked, the request receives a `401` response immediately.
 
 ## Two role dimensions
 
-Kalem uses two orthogonal role dimensions. You need both to understand what a user can do.
+Turjuman uses two orthogonal role dimensions. You need both to understand what a user can do.
 
 ### Global roles
 
-Global roles apply across the entire Kalem organization. Every user has exactly one global role.
+Global roles apply across the entire Turjuman organization. Every user has exactly one global role.
 
 | Role | Description |
 |---|---|
@@ -53,10 +53,10 @@ The table below shows what each role can do. OWNER and ADMIN act as MANAGER on e
 
 OWNER and ADMIN have nearly identical day-to-day permissions, with one important difference: **only an OWNER can grant or change privileged global roles** (OWNER and ADMIN). An ADMIN cannot promote another user to ADMIN or OWNER, and cannot demote an OWNER.
 
-Additionally, Kalem enforces that at least one OWNER must always exist in the organization. If you are the last OWNER, you cannot demote yourself until another user has been promoted to OWNER.
+Additionally, Turjuman enforces that at least one OWNER must always exist in the organization. If you are the last OWNER, you cannot demote yourself until another user has been promoted to OWNER.
 
 <Warning>
-  Be careful when provisioning the first OWNER of a new Kalem instance. There is no recovery path if you lose access to the sole OWNER account.
+  Be careful when provisioning the first OWNER of a new Turjuman instance. There is no recovery path if you lose access to the sole OWNER account.
 </Warning>
 
 ## Roles across the lifecycle
@@ -91,7 +91,7 @@ You can set an ISO-8601 expiry timestamp on a key. Once that instant passes, the
 
 ## MCP tool scoping
 
-When your AI agent calls `tools/list` on the MCP server, Kalem automatically filters the returned tool catalog to only include the tools the authenticated key's user is permitted to call. An EDITOR key will not see tools that require MANAGER permissions, and a `readOnly` key will only see read tools. This means your agent's available actions are always consistent with the key's permissions — there is no risk of an agent attempting an operation it is not allowed to perform.
+When your AI agent calls `tools/list` on the MCP server, Turjuman automatically filters the returned tool catalog to only include the tools the authenticated key's user is permitted to call. An EDITOR key will not see tools that require MANAGER permissions, and a `readOnly` key will only see read tools. This means your agent's available actions are always consistent with the key's permissions — there is no risk of an agent attempting an operation it is not allowed to perform.
 
 <Tip>
   Give your CI pipeline a DEVELOPER-scoped API key and your AI translation agent an EDITOR-scoped key. This way, a misconfigured pipeline can never accidentally approve translations, and your agent gets the full writing and key-management surface it needs.

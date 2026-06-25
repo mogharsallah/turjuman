@@ -1,10 +1,10 @@
 ---
-title: "Get Kalem running locally in minutes with LocalStack"
+title: "Run Turjuman locally in minutes — no AWS account needed"
 sidebarTitle: "Quickstart"
-description: "Run the full Kalem stack locally with LocalStack — no AWS account needed. Connect your MCP client and start translating in under 5 minutes."
+description: "Run the full Turjuman stack locally using LocalStack and Docker. Connect an MCP client and translate your first project in under 10 minutes."
 ---
 
-This guide gets you a fully working Kalem stack running on your machine in minutes. Instead of deploying to AWS, you run the MCP server and REST API inside LocalStack — a local AWS emulator — using Docker. No cloud account, no credentials, no cost — just Node.js, pnpm, and Docker.
+This guide gets you a fully working Turjuman stack running on your machine in minutes. You run the MCP server and REST API against LocalStack — a local AWS emulator — using Docker. No cloud account, no credentials, no cost: just Node.js, pnpm, and Docker.
 
 <Note>
   The API key printed by the setup script determines both your identity and your permissions. Whoever holds it has full OWNER access. Store it somewhere safe and keep it out of version control.
@@ -15,60 +15,64 @@ This guide gets you a fully working Kalem stack running on your machine in minut
 - Node.js 24 or later
 - pnpm (enabled via `corepack enable`)
 - Docker (for LocalStack)
-- The Kalem repo cloned locally
+- The Turjuman repo cloned locally
 
 ## Steps
 
 <Steps>
   <Step title="Install dependencies and build">
-    Clone the repo (if you haven't already) and run the standard install + build:
+    Clone the repo (if you haven't already) and install dependencies:
 
     ```bash
+    git clone https://github.com/mogharsallah/turjuman.git
+    cd turjuman
     pnpm install && pnpm run build
     ```
+
+    This compiles all workspace packages — `mcp-server`, `api`, `cli`, and `core` — into their `dist/` directories.
   </Step>
 
   <Step title="Start LocalStack">
-    Start the local AWS emulator (LocalStack) using Docker Compose. This provides DynamoDB, Lambda, and the other AWS services Kalem needs locally:
+    Start the local AWS emulator using Docker Compose:
 
     ```bash
     pnpm run localstack:up
     ```
 
-    This starts LocalStack on port 4566 and waits until it is healthy before returning.
+    This starts LocalStack on port 4566 and waits until it is healthy before returning. LocalStack provides a local DynamoDB instance and the Lambda runtime that Turjuman needs.
   </Step>
 
-  <Step title="Start the dev stack">
-    Deploy Kalem into LocalStack and bootstrap your first owner in one command:
+  <Step title="Deploy and bootstrap">
+    Deploy the Turjuman stack into LocalStack and create your first owner:
 
     ```bash
     pnpm run dev
     ```
 
-    This builds and deploys the MCP and API Lambda functions into LocalStack with hot-reload, creates a first OWNER user, and prints your stack URLs and API key:
+    This deploys the MCP and API Lambda functions locally, creates a first OWNER user, and prints your stack URLs and API key:
 
     ```
-    Deployed "kalem-dev".
+    Deployed "turjuman-dev".
       MCP:     http://localhost:4566/restapis/.../mcp/...
       REST:    http://localhost:4566/restapis/.../api/...
-      owner:   dev-owner@kalem.test
-      apiKey:  km_live_xxxxxxxxxxxxxxxxxxxx
+      owner:   dev-owner@turjuman.test
+      apiKey:  op_live_xxxxxxxxxxxxxxxxxxxx
 
     Use the key as `Authorization: Bearer <apiKey>`.
     ```
 
-    Copy the `MCP` URL and `apiKey` values — you will need them in the next step. The process stays running and hot-reloads code changes. Press `Ctrl+C` to stop.
+    Copy the `MCP` URL and `apiKey` values — you will need them in the next step. Leave the process running; press `Ctrl+C` to stop.
   </Step>
 
   <Step title="Connect your MCP client">
-    Add Kalem to your MCP client configuration. For Claude Code (`.mcp.json` in your project root):
+    Add Turjuman to your MCP client configuration. For Claude Code, create or update `.mcp.json` in your project root:
 
-    ```json
+    ```json .mcp.json
     {
       "mcpServers": {
-        "kalem": {
+        "turjuman": {
           "type": "http",
-          "url": "<MCP URL printed by pnpm run dev>",
+          "url": "<MCP URL from previous step>",
           "headers": {
             "Authorization": "Bearer <your-api-key>"
           }
@@ -77,10 +81,10 @@ This guide gets you a fully working Kalem stack running on your machine in minut
     }
     ```
 
-    Replace `<MCP URL printed by pnpm run dev>` and `<your-api-key>` with the values printed in the previous step. Restart your MCP client to pick up the new config.
+    Replace the URL and API key with the values printed in Step 3. Restart your MCP client to pick up the new configuration.
 
     <Note>
-      Keep your API key out of version control. If `.mcp.json` is committed, reference the key via an environment variable or a secrets manager rather than pasting the literal value. Revoke any leaked key immediately using the `revoke_api_key` MCP tool.
+      Keep your API key out of version control. If `.mcp.json` is committed to your repo, reference the key via an environment variable or a secrets manager rather than pasting it in plaintext. Revoke any leaked key immediately using the `revoke_api_key` MCP tool.
     </Note>
   </Step>
 
@@ -89,9 +93,9 @@ This guide gets you a fully working Kalem stack running on your machine in minut
 
     > *"Create a project called Web App with base locale `en`. Add `fr` and `es` locales. Then translate all the keys into French and Spanish."*
 
-    Kalem's MCP tools handle the project setup, and the connected LLM translates the keys directly — no separate translation engine needed.
+    Turjuman's MCP tools handle the project setup, and the connected LLM translates the keys directly — no separate translation engine needed.
 
-    You can also ask things like:
+    You can also try:
     - *"What projects do I have?"*
     - *"Add a key called `checkout.empty_cart` with the English value `Your cart is empty.`"*
     - *"Run QA on the French locale and show me any issues."*
@@ -105,10 +109,10 @@ This guide gets you a fully working Kalem stack running on your machine in minut
     A full walkthrough of translation workflows using the MCP server and your AI agent.
   </Card>
   <Card title="Sync with the CLI" icon="terminal" href="/guides/sync-with-cli">
-    Use `turjuman pull` and `turjuman push` to keep locale files in your repo in sync with Kalem.
+    Use `turjuman pull` and `turjuman push` to keep locale files in your repo in sync with Turjuman.
   </Card>
   <Card title="Self-host on AWS" icon="cloud" href="/self-hosting">
-    Deploy Kalem to your own AWS account with a single command when you're ready.
+    Deploy Turjuman to your own AWS account with a single command when you're ready.
   </Card>
   <Card title="Architecture" icon="building" href="/concepts/architecture">
     Understand the domain model, data storage, and Lambda surfaces.

@@ -1,10 +1,10 @@
 ---
-title: "Sync locale files with the Kalem CLI"
+title: "Sync locale files with the Turjuman CLI"
 sidebarTitle: "Sync with CLI"
-description: "Use the turjuman CLI to pull translated locale files into your repo and push source strings to Kalem — for local development and CI pipelines."
+description: "Use the turjuman CLI to pull translated locale files into your repo and push source strings to Turjuman — for local development and CI pipelines."
 ---
 
-The CLI handles the file work you shouldn't hand to an LLM: exporting translated locale files into your repo and importing source strings back into Kalem. Use it locally during development and in CI to keep your repository and Kalem in sync.
+The CLI handles the file work you shouldn't hand to an LLM: exporting translated locale files into your repo and importing source strings back into Turjuman. Use it locally during development and in CI to keep your repository and Turjuman in sync.
 
 ## Typical workflow
 
@@ -19,11 +19,11 @@ turjuman push   # upload source strings + any local translations
 
 ## `push` semantics
 
-`push` reads your locale files and syncs them to Kalem. Understanding what it does and doesn't do is important before you run it in CI.
+`push` reads your locale files and syncs them to Turjuman. Understanding what it does and doesn't do is important before you run it in CI.
 
 - **Base-locale file** — upserts keys and sets their base values. New keys are created; existing keys are updated if the value has changed.
 - **Other locale files** — set translations for keys that already exist. A locale file cannot create new keys; only the base locale can.
-- **Keys absent from the base-locale file** are **deprecated**, not deleted. Kalem retains them for audit history and automatically reactivates them if they reappear in a future push.
+- **Keys absent from the base-locale file** are **deprecated**, not deleted. Turjuman retains them for audit history and automatically reactivates them if they reappear in a future push.
 
 Three flags modify this behavior:
 
@@ -35,9 +35,9 @@ Three flags modify this behavior:
 
 ## `pull` semantics
 
-`pull` downloads the current state of each locale from Kalem and writes locale files to the paths defined in `turjuman.config.json`.
+`pull` downloads the current state of each locale from Turjuman and writes locale files to the paths defined in `turjuman.config.json`.
 
-By default, `pull` writes only **approved values** — translations that have passed review. In-progress and draft work stays in Kalem and doesn't ship to your repository.
+By default, `pull` writes only **approved values** — translations that have passed review. In-progress and draft work stays in Turjuman and doesn't ship to your repository.
 
 Pass `--working` to include draft translations that haven't been approved yet:
 
@@ -46,7 +46,7 @@ turjuman pull --working   # includes unapproved in-progress translations
 ```
 
 <Warning>
-  `pull` is not a perfect round-trip. Kalem may store richer metadata (comments, plural variants, context) that the locale file format can't represent. Always treat the locale files as a build artifact of Kalem — the source of truth lives in Kalem, not in the files.
+  `pull` is not a perfect round-trip. Turjuman may store richer metadata (comments, plural variants, context) that the locale file format can't represent. Always treat the locale files as a build artifact of Turjuman — the source of truth lives in Turjuman, not in the files.
 </Warning>
 
 ## Using the CLI in CI
@@ -55,7 +55,7 @@ In CI environments, skip `turjuman login` and use environment variables instead 
 
 | Variable | Purpose |
 |---|---|
-| `TURJUMAN_API_URL` | Your Kalem API base URL |
+| `TURJUMAN_API_URL` | Your Turjuman API base URL |
 | `TURJUMAN_API_KEY` | API key with appropriate scopes |
 
 A typical CI gate that validates your source strings and checks translation quality before merging:
@@ -66,7 +66,7 @@ turjuman push --dry-run --check
 
 This pushes nothing but reports what would change and exits non-zero if QA checks find errors — making it safe to run on every pull request.
 
-A GitHub Actions example is available at [`examples/translations-sync.yml`](https://github.com/mogharsallah/kalem/blob/main/examples/translations-sync.yml) in the Kalem repository.
+A GitHub Actions example is available at [`examples/translations-sync.yml`](https://github.com/mogharsallah/turjuman/blob/main/examples/translations-sync.yml) in the Turjuman repository.
 
 ### Exit codes
 
@@ -75,7 +75,7 @@ A GitHub Actions example is available at [`examples/translations-sync.yml`](http
 | `0` | Success — no errors |
 | `1` | QA error — one or more error-severity findings |
 | `2` | Usage error — bad flags, missing config, or invalid arguments |
-| `3` | API or network error — Kalem was unreachable or returned an unexpected response |
+| `3` | API or network error — Turjuman was unreachable or returned an unexpected response |
 
 ### Machine-readable output
 

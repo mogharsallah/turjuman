@@ -1,22 +1,22 @@
 ---
-title: "Continuous localization lifecycle: how Kalem manages strings"
+title: "Continuous localization lifecycle: how Turjuman manages strings"
 sidebarTitle: "Lifecycle"
-description: "How Kalem moves source strings from ingest through translation and approval to delivery, and how key and translation state is tracked throughout."
+description: "How Turjuman moves source strings from ingest through translation and approval to delivery, and how key and translation state is tracked throughout."
 ---
 
-Continuous localization means your translations move with your code rather than in a separate, infrequent release cycle. Just as you run tests on every commit, you push new source strings to Kalem on every relevant change, let the translation pipeline run, and pull approved translations back in before shipping. Kalem is designed around this loop: every stage is event-driven and automatable, and the state model ensures that nothing stale or unapproved reaches your users unless you explicitly ask for it.
+Continuous localization means your translations move with your code rather than in a separate, infrequent release cycle. Just as you run tests on every commit, you push new source strings to Turjuman on every relevant change, let the translation pipeline run, and pull approved translations back in before shipping. Turjuman is designed around this loop: every stage is event-driven and automatable, and the state model ensures that nothing stale or unapproved reaches your users unless you explicitly ask for it.
 
 ## The loop at a glance
 
 | # | Stage | Who drives it | What happens |
 |---|---|---|---|
-| 0 | **Provision** | Operator (OWNER/ADMIN) | Create the Kalem project, set the base locale, configure settings. |
+| 0 | **Provision** | Operator (OWNER/ADMIN) | Create the Turjuman project, set the base locale, configure settings. |
 | 1 | **Setup** | Operator | Add target locales, invite members, create a glossary, configure webhooks. |
-| 2 | **Ingest** | Developer / CI | Push new and changed source strings from your codebase into Kalem. |
+| 2 | **Ingest** | Developer / CI | Push new and changed source strings from your codebase into Turjuman. |
 | 3 | **Enrich** | Developer / Agent | Add context — descriptions, tags, glossary terms — to help translators and AI. |
 | 4 | **Translate** | Agent (LLM) / Human editor | Produce translations for each locale. Fills the working `value` slot. |
 | 5 | **Approve** | Reviewer (MANAGER/EDITOR) | Sign off on translations. Snapshots `value` into `approvedValue`. |
-| 6 | **Deliver** | Developer / CI | Pull approved translations out of Kalem into your app's locale files. |
+| 6 | **Deliver** | Developer / CI | Pull approved translations out of Turjuman into your app's locale files. |
 | 7 | **Loop** | — | New source changes re-enter at Ingest; the cycle continues. |
 
 ## Stage-by-stage breakdown
@@ -32,7 +32,7 @@ With a project in place, an OWNER or ADMIN adds the target locales you want to s
 </Step>
 
 <Step title="Ingest">
-Your developers or CI pipeline calls `turjuman push` (or the equivalent REST import endpoint) to sync the current set of source strings into Kalem. Kalem compares the incoming keys against what it already holds:
+Your developers or CI pipeline calls `turjuman push` (or the equivalent REST import endpoint) to sync the current set of source strings into Turjuman. Turjuman compares the incoming keys against what it already holds:
 
 - **New keys** are created with status `untranslated` in every target locale.
 - **Changed base values** cause all existing translations for that key to be flagged `stale`.
@@ -89,16 +89,16 @@ Use `--working` only in development environments where you want to preview in-pr
 
 ## State model
 
-Understanding how Kalem tracks state helps you predict what happens as strings and translations evolve.
+Understanding how Turjuman tracks state helps you predict what happens as strings and translations evolve.
 
 ### Key lifecycle: `active` and `deprecated`
 
 A TranslationKey is always in one of two states within its namespace:
 
 - **`active`** — the key is present in the current source. It is pushed regularly and translations are expected to be maintained.
-- **`deprecated`** — the key was not present in the most recent push for its namespace. Kalem retains deprecated keys and their translations rather than deleting them.
+- **`deprecated`** — the key was not present in the most recent push for its namespace. Turjuman retains deprecated keys and their translations rather than deleting them.
 
-If a deprecated key reappears in a subsequent push, Kalem restores it to `active` automatically. This means renaming a namespace or temporarily removing a string does not destroy translation history.
+If a deprecated key reappears in a subsequent push, Turjuman restores it to `active` automatically. This means renaming a namespace or temporarily removing a string does not destroy translation history.
 
 <Warning>
   Deprecation is namespace-scoped. If you push namespace `common` and omit a key that exists in namespace `auth`, the `auth` key is not affected. Always push the full contents of each namespace you intend to update.
@@ -135,4 +135,4 @@ The `origin` field on every translation records how it was produced. This is rea
 
 ## Git as the release layer
 
-Kalem does not have its own concept of releases or versioned snapshots. Your locale files are plain text — commit them to your repository like any other source file. A git tag or a deploy commit is your frozen release. This keeps the delivery model simple: `turjuman pull` writes files, your CI commits them, your deploy process picks them up. There are no over-the-air translation objects to manage.
+Turjuman does not have its own concept of releases or versioned snapshots. Your locale files are plain text — commit them to your repository like any other source file. A git tag or a deploy commit is your frozen release. This keeps the delivery model simple: `turjuman pull` writes files, your CI commits them, your deploy process picks them up. There are no over-the-air translation objects to manage.
