@@ -1,20 +1,20 @@
 import {
-  type ToolDef,
+  type Operation,
   localeCode,
   localeKeyList,
   namespace,
+  op,
   pageCursor,
   pageLimit,
   projectId,
   reviewResultSchema,
   scoreConfigSchema,
   scoreValueSchema,
-  tool,
   translationSchema,
   z,
-} from "./base.js";
+} from "../base.js";
 
-/** An MQM quality score, 0–100 — the shared bound from core, with a tool-facing description. */
+/** An MQM quality score, 0–100 — the shared bound from core, with a caller-facing description. */
 const scoreValue = scoreValueSchema.describe("MQM quality score, 0–100.");
 
 /**
@@ -24,8 +24,8 @@ const scoreValue = scoreValueSchema.describe("MQM quality score, 0–100.");
  * routes: below the project threshold → `needs_review`; at/above with
  * auto-approve on (and a review role, machine-origin value) → `approved`.
  */
-export const scoringTools: ToolDef[] = [
-  tool({
+export const scoringOps: Operation[] = [
+  op({
     name: "score_translation",
     description:
       "Submit an MQM quality score (0–100) and optional comment for one translation. Grade with the score_translation prompt first. Routing: below the project threshold → needs_review; at/above with auto-approve enabled (and a review role, machine-origin value) → approved; otherwise translated. A re-score overwrites the previous score.",
@@ -48,7 +48,7 @@ export const scoringTools: ToolDef[] = [
         model: a.model,
       }),
   }),
-  tool({
+  op({
     name: "review_translations",
     description:
       "Submit scores for many translations in one locale at once (after batch grading with the review_locale prompt). Routes each like score_translation. Returns counts of written/approved/flagged plus any skipped unknown keys.",
@@ -83,7 +83,7 @@ export const scoringTools: ToolDef[] = [
         })),
       ),
   }),
-  tool({
+  op({
     name: "list_for_review",
     description:
       "List keys whose translation for a locale is flagged needs_review (scored below the project threshold). Work this queue: fix the value or approve it. Paged: returns up to `limit` keys (default 100, max 200) plus a `nextCursor`.",
@@ -97,7 +97,7 @@ export const scoringTools: ToolDef[] = [
       return { locale: a.locale, count: page.keys.length, keys: page.keys, nextCursor: page.nextCursor };
     },
   }),
-  tool({
+  op({
     name: "get_score_config",
     description:
       "Get the project's AI-scoring config: the auto-approve `threshold` (0–100), the `autoApprove` opt-in, and any evaluation `guidance` merged into the scoring prompt.",
@@ -105,7 +105,7 @@ export const scoringTools: ToolDef[] = [
     output: scoreConfigSchema,
     handler: (a, { service, actor }) => service.scoring.getConfig(actor, a.projectId),
   }),
-  tool({
+  op({
     name: "set_score_config",
     description:
       "Set the project's AI-scoring config. `threshold` (0–100, default 90) is the auto-approve bar; `autoApprove` (default off) turns on auto-promotion of high-scored machine translations; `guidance` is merged into the scoring prompt. Requires a project-management role.",

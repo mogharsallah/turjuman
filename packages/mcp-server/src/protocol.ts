@@ -7,9 +7,14 @@ import type {
   ToolAnnotations,
 } from "@modelcontextprotocol/sdk/types.js";
 import { AppError, errorInfo, logError } from "@turjuman/core";
+import {
+  OPERATIONS,
+  type OpContext,
+  type Operation,
+  effectiveAnnotations,
+} from "@turjuman/sdk";
 import pkg from "../package.json" with { type: "json" };
 import { PROMPTS, type PromptDef } from "./prompts/index.js";
-import { TOOLS, type ToolContext, type ToolDef } from "./tools/index.js";
 
 /**
  * Stateless MCP over Streamable HTTP, backed by the official SDK.
@@ -63,10 +68,10 @@ function asStructured(data: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-/** Adapt one of our type-erased {@link ToolDef}s to an SDK tool callback. Tool
+/** Adapt one of our type-erased {@link Operation}s to an SDK tool callback. Tool
  * execution errors are surfaced as `isError` content (per MCP guidance) so the
  * agent can react, rather than as JSON-RPC protocol errors. */
-function toolCallback(def: ToolDef, ctx: ToolContext) {
+function toolCallback(def: Operation, ctx: OpContext) {
   return async (args: unknown): Promise<CallToolResult> => {
     try {
       const data = await def.handler(args, ctx);
@@ -102,7 +107,7 @@ function toolCallback(def: ToolDef, ctx: ToolContext) {
  * surface as thrown (JSON-RPC) errors — an AppError keeps its code/message; an
  * unexpected fault is logged server-side and masked behind the request id, so
  * nothing internal leaks into the model context. */
-function promptCallback(def: PromptDef, ctx: ToolContext) {
+function promptCallback(def: PromptDef, ctx: OpContext) {
   return async (args: Record<string, string | undefined>): Promise<GetPromptResult> => {
     try {
       const prompt = await def.handler(args, ctx);
@@ -121,28 +126,18 @@ function promptCallback(def: PromptDef, ctx: ToolContext) {
   };
 }
 
-/** Behaviour hints for a tool. An explicit `def.annotations` wins; otherwise we
- * derive them from the verb in the tool name — read tools are read-only, the
- * delete/revoke/remove family is destructive, and the rest are non-destructive
- * writes (set_/update_ are also idempotent). */
-export function annotationsFor(def: ToolDef): ToolAnnotations {
-  if (def.annotations) return def.annotations;
-  const name = def.name;
-  if (/^(list|get|search|lookup)_/.test(name)) return { readOnlyHint: true };
-  if (/^(delete|revoke|remove)_/.test(name)) {
-    return { readOnlyHint: false, destructiveHint: true };
-  }
-  return {
-    readOnlyHint: false,
-    destructiveHint: false,
-    ...(/^(set|update)_/.test(name) ? { idempotentHint: true } : {}),
-  };
+/** Behaviour hints for a tool, as MCP `ToolAnnotations`. The classification
+ * (read-only / destructive / idempotent) is a property of the operation, so it
+ * lives in `@turjuman/sdk` (`effectiveAnnotations`); here we only adapt the
+ * SDK's transport-free `OpAnnotations` onto MCP's structurally-identical type. */
+export function annotationsFor(def: Operation): ToolAnnotations {
+  return effectiveAnnotations(def);
 }
 
-/** The static SDK registration for every tool, assembled once at module scope.
- * Only the authenticated {@link ToolContext} is injected per request (via the
- * tool callback), so this work is not repeated on every invocation. */
-const REGISTRATIONS = TOOLS.map((def) => ({
+/** The static SDK registration for every operation, assembled once at module
+ * scope. Only the authenticated {@link OpContext} is injected per request (via
+ * the tool callback), so this work is not repeated on every invocation. */
+const REGISTRATIONS = OPERATIONS.map((def) => ({
   def,
   config: {
     description: def.description,
@@ -153,13 +148,13 @@ const REGISTRATIONS = TOOLS.map((def) => ({
 }));
 
 /** A fresh server per request so each tool callback closes over this request's
- * authenticated {@link ToolContext}, keeping the server a pure, stateless
+ * authenticated {@link OpContext}, keeping the server a pure, stateless
  * function. Registration reuses the module-scope {@link REGISTRATIONS} configs,
  * so only the per-request callbacks are built here. When `allowed` is given
  * (client-requested URL tool-scoping), only those tools are registered — which
  * scopes both `tools/list` and `tools/call` from the one seam. This is a
  * presentation filter only; RBAC in core still authorizes every call. */
-function buildServer(ctx: ToolContext, allowed?: ReadonlySet<string>): McpServer {
+function buildServer(ctx: OpContext, allowed?: ReadonlySet<string>): McpServer {
   const server = new McpServer(SERVER_INFO, { instructions: INSTRUCTIONS });
   for (const { def, config } of REGISTRATIONS) {
     if (allowed && !allowed.has(def.name)) continue;
@@ -210,7 +205,7 @@ class PumpTransport implements Transport {
  */
 export async function handleMessage(
   message: JsonRpcMessage,
-  ctx: ToolContext,
+  ctx: OpContext,
   allowed?: ReadonlySet<string>,
 ): Promise<JsonRpcResponse | null> {
   const method = message.method;

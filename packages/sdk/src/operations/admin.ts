@@ -1,25 +1,25 @@
 import {
-  type ToolDef,
+  type Operation,
   apiKeyCreatedSchema,
   emailSchema,
   globalRole,
   membershipSchema,
+  op,
   projectId,
   projectRole,
-  tool,
   userSchema,
   z,
-} from "./base.js";
+} from "../base.js";
 
 /** Org users, project members, and API keys (admin surface). */
-export const adminTools: ToolDef[] = [
-  tool({
+export const adminOps: Operation[] = [
+  op({
     name: "list_users",
     description: "List users in your organization.",
     input: z.object({}),
     handler: (_a, { service, actor }) => service.users.list(actor),
   }),
-  tool({
+  op({
     name: "create_user",
     description:
       "Create a user identity (so they can be assigned project roles and API keys). Requires admin.",
@@ -27,7 +27,7 @@ export const adminTools: ToolDef[] = [
     output: userSchema,
     handler: (a, { service, actor }) => service.users.create(actor, a),
   }),
-  tool({
+  op({
     name: "set_user_role",
     description: "Set a user's organization-wide role. Requires admin.",
     input: z.object({ userId: z.string(), globalRole }),
@@ -36,13 +36,13 @@ export const adminTools: ToolDef[] = [
       return { userId: a.userId, globalRole: a.globalRole };
     },
   }),
-  tool({
+  op({
     name: "list_members",
     description: "List the members of a project and their roles.",
     input: z.object({ projectId }),
     handler: (a, { service, actor }) => service.members.list(actor, a.projectId),
   }),
-  tool({
+  op({
     name: "add_member",
     description:
       "Grant a user a role on a project. Identify the user by userId or email. " +
@@ -63,7 +63,7 @@ export const adminTools: ToolDef[] = [
         a.role,
       ),
   }),
-  tool({
+  op({
     name: "set_member_role",
     description: "Change an existing member's role on a project.",
     input: z.object({ projectId, userId: z.string(), role: projectRole }),
@@ -71,7 +71,7 @@ export const adminTools: ToolDef[] = [
     handler: (a, { service, actor }) =>
       service.members.setRole(actor, a.projectId, a.userId, a.role),
   }),
-  tool({
+  op({
     name: "remove_member",
     description:
       "Detach a user from a project (revokes their project role). Removes the membership only — it does not delete the user account.",
@@ -81,7 +81,7 @@ export const adminTools: ToolDef[] = [
       return { removed: a.userId };
     },
   }),
-  tool({
+  op({
     name: "create_api_key",
     description:
       "Create an API key. Omit userId to create one for yourself. The secret is returned ONCE — store it securely. Pass readOnly to mint a key limited to read actions (e.g. CI pulls), and expiresAt to set an expiry.",
@@ -107,13 +107,13 @@ export const adminTools: ToolDef[] = [
       };
     },
   }),
-  tool({
+  op({
     name: "list_api_keys",
     description: "List API key metadata (never the secret) for yourself or, as admin, another user.",
     input: z.object({ userId: z.string().optional() }),
     handler: (a, { service, actor }) => service.apiKeys.list(actor, a.userId),
   }),
-  tool({
+  op({
     name: "revoke_api_key",
     description:
       "Permanently revoke an API key by id (from list_api_keys). Revoking your own key is always allowed; revoking another user's key requires admin. Use this immediately if a key leaks.",

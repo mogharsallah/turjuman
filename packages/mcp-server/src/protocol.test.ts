@@ -1,11 +1,11 @@
 import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js";
 import { notFound } from "@turjuman/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { OPERATIONS, type OpContext } from "@turjuman/sdk";
 import { handleMessage } from "./protocol.js";
-import type { ToolContext } from "./tools/index.js";
 
 // initialize/tools/list/ping do not touch the service, so a stub context is fine.
-const ctx = {} as ToolContext;
+const ctx = {} as OpContext;
 
 // A well-formed MCP initialize carries the client's capabilities and info; the
 // SDK validates these, so include them (real clients always do).
@@ -35,6 +35,17 @@ describe("MCP protocol handler", () => {
       ctx,
     )) as { result: { protocolVersion: string } };
     expect(res.result.protocolVersion).toBe(LATEST_PROTOCOL_VERSION);
+  });
+
+  it("projects every @turjuman/sdk operation to a classic-mode tool", async () => {
+    // The MCP server is a thin projection of the SDK registry: classic mode must
+    // expose exactly the operation set (no hand-kept tool list to drift).
+    const res = (await handleMessage({ jsonrpc: "2.0", id: 20, method: "tools/list" }, ctx)) as {
+      result: { tools: { name: string }[] };
+    };
+    const listed = new Set(res.result.tools.map((t) => t.name));
+    const operations = new Set(OPERATIONS.map((o) => o.name));
+    expect(listed).toEqual(operations);
   });
 
   it("lists tools with JSON Schemas", async () => {
@@ -91,7 +102,7 @@ describe("MCP protocol handler", () => {
       actor: { userId: "u", orgId: "o", globalRole: "OWNER" },
       service: { scoring: { buildScorePrompt } },
       requestId: "req_test",
-    } as unknown as ToolContext;
+    } as unknown as OpContext;
 
     const res = (await handleMessage(
       {
@@ -134,7 +145,7 @@ describe("MCP protocol handler", () => {
       service: { projects: { get: async () => project } },
       actor: { userId: "u", orgId: "o", globalRole: "OWNER", readOnly: false },
       user: {},
-    } as unknown as ToolContext;
+    } as unknown as OpContext;
     const res = (await handleMessage(
       {
         jsonrpc: "2.0",
@@ -153,7 +164,7 @@ describe("MCP protocol handler", () => {
       service: { projects: { list: async () => [{ id: "proj_1" }] } },
       actor: { userId: "u", orgId: "o", globalRole: "OWNER", readOnly: false },
       user: {},
-    } as unknown as ToolContext;
+    } as unknown as OpContext;
     const res = (await handleMessage(
       { jsonrpc: "2.0", id: 33, method: "tools/call", params: { name: "list_projects", arguments: {} } },
       callCtx,
@@ -169,7 +180,7 @@ describe("MCP protocol handler", () => {
       actor: { userId: "u", orgId: "o", globalRole: "OWNER", readOnly: false },
       user: {},
       requestId: "req-test",
-    } as unknown as ToolContext;
+    } as unknown as OpContext;
     const res = (await handleMessage(
       {
         jsonrpc: "2.0",
@@ -195,7 +206,7 @@ describe("MCP protocol handler", () => {
       actor: { userId: "u", orgId: "o", globalRole: "OWNER", readOnly: false },
       user: {},
       requestId: "req-test",
-    } as unknown as ToolContext;
+    } as unknown as OpContext;
     const res = (await handleMessage(
       {
         jsonrpc: "2.0",
@@ -228,7 +239,7 @@ describe("MCP protocol handler", () => {
       actor: { userId: "u", orgId: "o", globalRole: "OWNER", readOnly: false },
       user: {},
       requestId: "req-test",
-    } as unknown as ToolContext;
+    } as unknown as OpContext;
     const res = (await handleMessage(
       {
         jsonrpc: "2.0",
@@ -274,7 +285,7 @@ describe("MCP protocol handler", () => {
       actor: { userId: "u", orgId: "o", globalRole: "OWNER", readOnly: false },
       user: {},
       requestId: "req-test",
-    } as unknown as ToolContext;
+    } as unknown as OpContext;
     const entries = Array.from({ length: 501 }, (_, i) => ({ name: `k${i}`, value: "v" }));
     const res = (await handleMessage(
       {
@@ -300,7 +311,7 @@ describe("MCP protocol handler", () => {
       actor: { userId: "u", orgId: "o", globalRole: "OWNER", readOnly: false },
       user: {},
       requestId: "req-test",
-    } as unknown as ToolContext;
+    } as unknown as OpContext;
     const res = (await handleMessage(
       {
         jsonrpc: "2.0",
@@ -326,7 +337,7 @@ describe("MCP protocol handler", () => {
       actor: { userId: "u", orgId: "o", globalRole: "OWNER", readOnly: false },
       user: {},
       requestId: "req-test",
-    } as unknown as ToolContext;
+    } as unknown as OpContext;
     const res = (await handleMessage(
       {
         jsonrpc: "2.0",

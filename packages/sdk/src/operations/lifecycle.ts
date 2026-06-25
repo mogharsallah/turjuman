@@ -1,14 +1,14 @@
-import { type ToolDef, projectId, tool, webhookSchema, z } from "./base.js";
+import { type Operation, op, projectId, webhookSchema, z } from "../base.js";
 
 /** Webhooks and destructive project lifecycle. */
-export const lifecycleTools: ToolDef[] = [
-  tool({
+export const lifecycleOps: Operation[] = [
+  op({
     name: "list_webhooks",
     description: "List a project's webhooks (including their signing secrets).",
     input: z.object({ projectId }),
     handler: (a, { service, actor }) => service.webhooks.list(actor, a.projectId),
   }),
-  tool({
+  op({
     name: "add_webhook",
     description:
       "Register a webhook that receives HMAC-signed POSTs on changes. Events: translation.updated, translation.stale, key.created, key.updated, key.deleted, locale.added (or '*' for all).",
@@ -23,7 +23,7 @@ export const lifecycleTools: ToolDef[] = [
     handler: (a, { service, actor }) =>
       service.webhooks.add(actor, a.projectId, { url: a.url, events: a.events }),
   }),
-  tool({
+  op({
     name: "remove_webhook",
     description: "Delete a webhook.",
     input: z.object({ projectId, webhookId: z.string() }),
@@ -32,7 +32,7 @@ export const lifecycleTools: ToolDef[] = [
       return { removed: a.webhookId };
     },
   }),
-  tool({
+  op({
     name: "delete_project",
     description:
       "DESTRUCTIVE: permanently delete a project and ALL its locales, keys, translations, members, glossary and webhooks. Set confirm=true to proceed.",

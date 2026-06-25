@@ -13,9 +13,9 @@ import {
   repositoryFromEnv,
   unauthorized,
 } from "@turjuman/core";
+import type { OpContext } from "@turjuman/sdk";
 import { handleMessage } from "./protocol.js";
 import { allowedToolsForActor, resolveToolScope } from "./scope.js";
-import type { ToolContext } from "./tools/index.js";
 
 /**
  * AWS Lambda entry point for the Turjuman MCP server. Works behind both an API
@@ -231,7 +231,7 @@ async function route(args: {
     meta.tool = msg.params.name;
   }
 
-  const ctx: ToolContext = { service: deps.service, actor: auth.actor, user: auth.user, requestId };
+  const ctx: OpContext = { service: deps.service, actor: auth.actor, user: auth.user, requestId };
   const response = await handleMessage(message as Record<string, unknown>, ctx, allowed);
 
   // Flush the best-effort last-used stamp before returning: it started during

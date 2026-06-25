@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ScorePrompt } from "@turjuman/core";
-import type { ToolContext } from "../tools/base.js";
+import type { OpContext } from "@turjuman/sdk";
 
 /**
  * Server-provided MCP Prompts — the *methodology* surface of AI scoring.
@@ -20,7 +20,7 @@ export interface PromptDef {
   name: string;
   description: string;
   argsSchema: Record<string, z.ZodTypeAny>;
-  handler: (args: Record<string, string | undefined>, ctx: ToolContext) => Promise<ScorePrompt>;
+  handler: (args: Record<string, string | undefined>, ctx: OpContext) => Promise<ScorePrompt>;
 }
 
 /** Parse a string prompt arg to a positive integer page size, or `undefined`. */

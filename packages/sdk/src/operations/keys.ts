@@ -1,17 +1,17 @@
 import {
-  type ToolDef,
+  type Operation,
   keyPageSchema,
   keyWithTranslationsSchema,
   namespace,
+  op,
   projectId,
-  tool,
   translationKeySchema,
   z,
-} from "./base.js";
+} from "../base.js";
 
 /** Translation keys (the strings to be translated). */
-export const keyTools: ToolDef[] = [
-  tool({
+export const keyOps: Operation[] = [
+  op({
     name: "list_keys",
     description:
       "List translation keys in a project, optionally filtered by namespace or tag. " +
@@ -33,7 +33,7 @@ export const keyTools: ToolDef[] = [
           })
         : service.keys.list(actor, a.projectId, { namespace: a.namespace, tag: a.tag }),
   }),
-  tool({
+  op({
     name: "search_keys",
     description:
       "Search keys by name, description, or tag (substring match). Paged: returns up to `limit` " +
@@ -50,7 +50,7 @@ export const keyTools: ToolDef[] = [
     handler: (a, { service, actor }) =>
       service.keys.searchPage(actor, a.projectId, a.query, { limit: a.limit ?? 100, cursor: a.cursor }),
   }),
-  tool({
+  op({
     name: "get_key",
     description: "Get one key plus all of its translations across locales.",
     input: z.object({ projectId, name: z.string(), namespace }),
@@ -58,7 +58,7 @@ export const keyTools: ToolDef[] = [
     handler: (a, { service, actor }) =>
       service.keys.get(actor, a.projectId, a.name, a.namespace),
   }),
-  tool({
+  op({
     name: "create_key",
     description:
       "Create a translation key. Provide a clear description for translators/the LLM. Optionally set baseValue for the project's base locale.",
@@ -76,7 +76,7 @@ export const keyTools: ToolDef[] = [
     handler: ({ projectId: id, ...input }, { service, actor }) =>
       service.keys.create(actor, id, input),
   }),
-  tool({
+  op({
     name: "update_key",
     description:
       "Update a key's metadata (description, plural flag, maxLength, tags) — not its translated text. To write a translation value, use set_translation.",
@@ -93,7 +93,7 @@ export const keyTools: ToolDef[] = [
     handler: ({ projectId: id, name, namespace: ns, ...patch }, { service, actor }) =>
       service.keys.update(actor, id, name, patch, ns),
   }),
-  tool({
+  op({
     name: "delete_key",
     description:
       "DESTRUCTIVE: delete a key and all of its translations across every locale. Set confirm=true to proceed.",
