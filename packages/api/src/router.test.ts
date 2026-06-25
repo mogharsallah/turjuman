@@ -75,4 +75,53 @@ describe("REST router", () => {
       "#/components/schemas/ErrorEnvelope",
     );
   });
+
+  it("$refs both request and response for SDK-projected routes (no inlining)", async () => {
+    const res = await app.request("/v1/openapi.json");
+    const spec = (await res.json()) as {
+      components: { schemas: Record<string, unknown> };
+      paths: Record<
+        string,
+        Record<
+          string,
+          {
+            requestBody?: { content: { "application/json": { schema: { $ref?: string } } } };
+            responses: Record<string, { content?: { "application/json": { schema: { $ref?: string } } } }>;
+          }
+        >
+      >;
+    };
+    const ref = (schema?: { $ref?: string }) => schema?.$ref;
+
+    // get_project (projected): the 200 response is the shared Project component.
+    const getProject = spec.paths["/v1/projects/{id}"]?.get;
+    expect(ref(getProject?.responses?.["200"]?.content?.["application/json"].schema)).toBe(
+      "#/components/schemas/Project",
+    );
+
+    // add_locale (projected): request body AND 201 response are both $refs to shared
+    // components — the flat operation input is split so the body renders as its own
+    // component (AddLocaleBody) while the response reuses Locale.
+    const addLocale = spec.paths["/v1/projects/{id}/locales"]?.post;
+    expect(ref(addLocale?.requestBody?.content["application/json"].schema)).toBe(
+      "#/components/schemas/AddLocaleBody",
+    );
+    expect(ref(addLocale?.responses?.["201"]?.content?.["application/json"].schema)).toBe(
+      "#/components/schemas/Locale",
+    );
+
+    // score_translation (projected): a richer request body + response, both $ref'd.
+    const score = spec.paths["/v1/projects/{id}/translations/score"]?.post;
+    expect(ref(score?.requestBody?.content["application/json"].schema)).toBe(
+      "#/components/schemas/ScoreTranslationBody",
+    );
+    expect(ref(score?.responses?.["200"]?.content?.["application/json"].schema)).toBe(
+      "#/components/schemas/Translation",
+    );
+
+    // Each referenced component is defined exactly once.
+    for (const name of ["Project", "Locale", "AddLocaleBody", "ScoreTranslationBody", "Translation"]) {
+      expect(spec.components.schemas[name]).toBeDefined();
+    }
+  });
 });

@@ -70,9 +70,17 @@ describe("searchOperations", () => {
 });
 
 describe("coverage tracker", () => {
-  it("lists operations without an http binding (the REST gap)", () => {
-    // Phase 1: no http bindings yet, so every operation is reported missing.
-    expect(operationsMissingHttp().sort()).toEqual(OPERATIONS.map((o) => o.name).sort());
+  it("reports which operations still lack an HTTP route (the REST gap vs MCP)", () => {
+    const missing = new Set(operationsMissingHttp());
+    // Operations migrated to the REST projection carry an http binding and so are
+    // NOT in the gap; every other operation is still MCP-only.
+    const withHttp = OPERATIONS.filter((o) => o.http).map((o) => o.name);
+    expect(withHttp.length).toBeGreaterThan(0);
+    for (const name of withHttp) expect(missing.has(name)).toBe(false);
+    expect(missing.size).toBe(OPERATIONS.length - withHttp.length);
+    // A spot check of the currently-migrated set and a still-missing example.
+    expect(missing.has("get_project")).toBe(false);
+    expect(missing.has("create_project")).toBe(true);
   });
 });
 

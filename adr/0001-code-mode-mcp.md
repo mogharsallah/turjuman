@@ -119,7 +119,20 @@ required, the grant-less-Lambda hardening variant.
   verified to instantiate from the esbuilt Lambda asset with no external `.wasm`.
   No CDK change — it runs in the existing MCP function.
 - **Phase 4 — Refactor the REST API to a projection + coverage tracker + `$ref`
-  guard.** Pending.
+  guard.** Done (incremental, per the chosen scope). The discovery: the existing
+  ~21 REST routes are deliberately NOT 1:1 with the operations (REST envelopes,
+  CLI-only import/bundle endpoints with no MCP equivalent, `import` vs `llm`
+  origin). So the 9 routes that map cleanly to an operation were migrated to a
+  `projectOperation(...)` generator in `api/src/router.ts` (path params → input
+  fields, reused ref-annotated body schema, response = `op.output`); the ~12
+  genuinely-REST-specific routes stay bespoke. The migration produced a
+  **byte-identical OpenAPI snapshot** (zero `$ref`/spec drift). Each operation
+  carries an `http` binding, driving a self-maintaining coverage tracker
+  (`operationsMissingHttp()`, `api/src/coverage.test.ts`) — currently 9/45
+  projected, 36 MCP-only. The `router.test.ts` `$ref` guard is extended to assert
+  the generated routes `$ref` shared components for **both** request body and
+  response. Expanding REST toward full MCP parity is deferred (the REST surface is
+  intentionally a subset).
 - **Phase 5 — Docs.** Pending.
 
 ## Consequences

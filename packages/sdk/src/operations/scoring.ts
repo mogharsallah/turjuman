@@ -39,6 +39,7 @@ export const scoringOps: Operation[] = [
       model: z.string().optional().describe("Identifier of the model that produced the score (provenance)."),
     }),
     output: translationSchema,
+    http: { method: "post", path: "/v1/projects/:id/translations/score", params: { id: "projectId" } },
     handler: (a, { service, actor }) =>
       service.scoring.score(actor, a.projectId, a.locale, {
         name: a.name,
@@ -69,6 +70,7 @@ export const scoringOps: Operation[] = [
         .max(500),
     }),
     output: reviewResultSchema,
+    http: { method: "post", path: "/v1/projects/:id/translations/review", params: { id: "projectId" } },
     handler: (a, { service, actor }) =>
       service.scoring.reviewBatch(
         actor,
@@ -103,6 +105,7 @@ export const scoringOps: Operation[] = [
       "Get the project's AI-scoring config: the auto-approve `threshold` (0–100), the `autoApprove` opt-in, and any evaluation `guidance` merged into the scoring prompt.",
     input: z.object({ projectId }),
     output: scoreConfigSchema,
+    http: { method: "get", path: "/v1/projects/:id/score-config", params: { id: "projectId" } },
     handler: (a, { service, actor }) => service.scoring.getConfig(actor, a.projectId),
   }),
   op({
@@ -116,6 +119,7 @@ export const scoringOps: Operation[] = [
       guidance: z.string().optional().describe("Per-project evaluation guidance, merged into the scoring prompt."),
     }),
     output: scoreConfigSchema,
+    http: { method: "put", path: "/v1/projects/:id/score-config", params: { id: "projectId" } },
     handler: ({ projectId: id, ...input }, { service, actor }) =>
       service.scoring.setConfig(actor, id, input),
   }),

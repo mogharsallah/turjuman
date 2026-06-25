@@ -30,6 +30,7 @@ export const qaOps: Operation[] = [
     // Advisory only: computes findings, never mutates. The name doesn't match the
     // read-verb convention, so the hint is set explicitly.
     annotations: { readOnlyHint: true },
+    http: { method: "post", path: "/v1/projects/:id/checks", params: { id: "projectId" } },
     handler: (a, { service, actor }) =>
       service.qa.run(actor, a.projectId, { locale: a.locale, checkIds: a.checks, slot: a.slot }),
   }),
@@ -38,6 +39,7 @@ export const qaOps: Operation[] = [
     description: "Get the project's QA configuration (per-check enable/severity overrides and ignore rules).",
     input: z.object({ projectId }),
     output: qaConfigSchema,
+    http: { method: "get", path: "/v1/projects/:id/qa-config", params: { id: "projectId" } },
     handler: (a, { service, actor }) => service.qa.getConfig(actor, a.projectId),
   }),
   op({
@@ -64,6 +66,7 @@ export const qaOps: Operation[] = [
         .describe("Mute rules; each must specify at least one field."),
     }),
     output: qaConfigSchema,
+    http: { method: "put", path: "/v1/projects/:id/qa-config", params: { id: "projectId" } },
     handler: ({ projectId: id, ...input }, { service, actor }) => service.qa.setConfig(actor, id, input),
   }),
 ];

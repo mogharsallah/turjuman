@@ -107,11 +107,12 @@ export interface OpContext {
  * document a correct request `$ref` distinct from the flat tool input.
  */
 export interface HttpBinding {
-  method: "get" | "post" | "patch" | "delete";
-  /** Route path with `:name` placeholders, e.g. "/v1/projects/:projectId/locales". */
+  method: "get" | "post" | "put" | "patch" | "delete";
+  /** Route path with `:name` placeholders, e.g. "/v1/projects/:id/locales". */
   path: string;
-  /** Input fields carried on the URL (path or query); the rest form the body. */
-  params?: string[];
+  /** Map of URL path-param name → operation input field (e.g. `{ id: "projectId" }`).
+   * The remaining input fields form the JSON request body (write methods). */
+  params?: Record<string, string>;
 }
 
 /**

@@ -21,6 +21,7 @@ export const projectOps: Operation[] = [
     description: "Get a single project's details.",
     input: z.object({ projectId }),
     output: projectSchema,
+    http: { method: "get", path: "/v1/projects/:id", params: { id: "projectId" } },
     handler: (a, { service, actor }) => service.projects.get(actor, a.projectId),
   }),
   op({
@@ -60,6 +61,7 @@ export const projectOps: Operation[] = [
       'Add (attach) a target locale to an existing project, e.g. "fr" or "es-MX". To create the project itself, use create_project.',
     input: z.object({ projectId, code: localeCodeSchema, name: z.string().optional() }),
     output: localeSchema,
+    http: { method: "post", path: "/v1/projects/:id/locales", params: { id: "projectId" } },
     handler: (a, { service, actor }) => service.locales.add(actor, a.projectId, a.code, a.name),
   }),
 ];
