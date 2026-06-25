@@ -14,6 +14,7 @@ import {
   effectiveAnnotations,
 } from "@turjuman/sdk";
 import pkg from "../package.json" with { type: "json" };
+import { codemodeTools } from "./codemode.js";
 import { PROMPTS, type PromptDef } from "./prompts/index.js";
 
 /**
@@ -134,29 +135,50 @@ export function annotationsFor(def: Operation): ToolAnnotations {
   return effectiveAnnotations(def);
 }
 
-/** The static SDK registration for every operation, assembled once at module
- * scope. Only the authenticated {@link OpContext} is injected per request (via
- * the tool callback), so this work is not repeated on every invocation. */
-const REGISTRATIONS = OPERATIONS.map((def) => ({
-  def,
-  config: {
-    description: def.description,
-    inputSchema: def.input,
-    annotations: annotationsFor(def),
-    ...(def.output ? { outputSchema: def.output } : {}),
-  },
-}));
+/** Build the static MCP registration config for one operation. */
+function registrationFor(def: Operation) {
+  return {
+    def,
+    config: {
+      description: def.description,
+      inputSchema: def.input,
+      annotations: annotationsFor(def),
+      ...(def.output ? { outputSchema: def.output } : {}),
+    },
+  };
+}
+
+/** The static registrations for each mode, assembled once at module scope. Only
+ * the authenticated {@link OpContext} is injected per request (via the tool
+ * callback), so this work is not repeated on every invocation.
+ *  - classic: every business operation as its own tool;
+ *  - code:    just `search_sdk` + `run_code` (the model writes code instead).
+ * The two are mutually exclusive — a connection is in one mode or the other. */
+const CLASSIC_REGISTRATIONS = OPERATIONS.map(registrationFor);
+const CODEMODE_REGISTRATIONS = codemodeTools.map(registrationFor);
+
+/** Which toolset to advertise for a request. Classic mode may be narrowed by a
+ * client-requested allowlist (URL tool-scoping); code mode is the fixed pair. */
+export type ToolSelection =
+  | { mode: "classic"; allowed?: ReadonlySet<string> }
+  | { mode: "code" };
+
+const DEFAULT_SELECTION: ToolSelection = { mode: "classic" };
 
 /** A fresh server per request so each tool callback closes over this request's
  * authenticated {@link OpContext}, keeping the server a pure, stateless
- * function. Registration reuses the module-scope {@link REGISTRATIONS} configs,
- * so only the per-request callbacks are built here. When `allowed` is given
- * (client-requested URL tool-scoping), only those tools are registered — which
- * scopes both `tools/list` and `tools/call` from the one seam. This is a
+ * function. Registration reuses the module-scope registration configs, so only
+ * the per-request callbacks are built here. The {@link ToolSelection} picks the
+ * mode (classic toolset vs the code-mode pair); in classic mode an `allowed`
+ * allowlist (client-requested URL tool-scoping) further narrows the toolset,
+ * scoping both `tools/list` and `tools/call` from the one seam. This is a
  * presentation filter only; RBAC in core still authorizes every call. */
-function buildServer(ctx: OpContext, allowed?: ReadonlySet<string>): McpServer {
+function buildServer(ctx: OpContext, selection: ToolSelection): McpServer {
   const server = new McpServer(SERVER_INFO, { instructions: INSTRUCTIONS });
-  for (const { def, config } of REGISTRATIONS) {
+  const registrations =
+    selection.mode === "code" ? CODEMODE_REGISTRATIONS : CLASSIC_REGISTRATIONS;
+  const allowed = selection.mode === "classic" ? selection.allowed : undefined;
+  for (const { def, config } of registrations) {
     if (allowed && !allowed.has(def.name)) continue;
     server.registerTool(def.name, config, toolCallback(def, ctx));
   }
@@ -206,14 +228,14 @@ class PumpTransport implements Transport {
 export async function handleMessage(
   message: JsonRpcMessage,
   ctx: OpContext,
-  allowed?: ReadonlySet<string>,
+  selection: ToolSelection = DEFAULT_SELECTION,
 ): Promise<JsonRpcResponse | null> {
   const method = message.method;
   const id = message.id ?? null;
   if (!method) return err(id, -32600, "Invalid request: missing method");
   if (method.startsWith("notifications/") || id === null) return null;
 
-  const server = buildServer(ctx, allowed);
+  const server = buildServer(ctx, selection);
   const transport = new PumpTransport();
   await server.connect(transport);
   try {

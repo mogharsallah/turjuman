@@ -109,7 +109,15 @@ required, the grant-less-Lambda hardening variant.
   timers in the guest; host `ctx`/token unreachable; infinite loop hits the time
   cap; oversized output truncated; bridge routes to the right handler with the
   request actor; errors masked at the boundary).
-- **Phase 3 — Code-mode MCP tools (`search_sdk` + `run_code`).** Pending.
+- **Phase 3 — Code-mode MCP tools (`search_sdk` + `run_code`).** Done. The MCP
+  server selects a mode per connection via `?mode=code` (default `classic`),
+  enforced mutually exclusive in `handler.ts`/`scope.ts`/`protocol.ts`: code mode
+  advertises only `search_sdk` + `run_code` (defined in `mcp-server/src/codemode.ts`
+  above the operation layer), classic mode the full toolset. `run_code` drives
+  `@turjuman/sandbox` with the request's authenticated context. The sandbox is
+  bundled self-contained via the QuickJS **singlefile** variant (wasm embedded),
+  verified to instantiate from the esbuilt Lambda asset with no external `.wasm`.
+  No CDK change — it runs in the existing MCP function.
 - **Phase 4 — Refactor the REST API to a projection + coverage tracker + `$ref`
   guard.** Pending.
 - **Phase 5 — Docs.** Pending.

@@ -1,10 +1,10 @@
+import variant from "@jitl/quickjs-singlefile-mjs-release-sync";
 import {
   type QuickJSContext,
   type QuickJSHandle,
   type QuickJSWASMModule,
-  RELEASE_SYNC,
-  newQuickJSWASMModule,
-} from "quickjs-emscripten";
+  newQuickJSWASMModuleFromVariant,
+} from "quickjs-emscripten-core";
 import type { OpDispatcher } from "./dispatcher.js";
 import { type SandboxLimits, resolveLimits } from "./limits.js";
 import { errorHandle, hostToHandle } from "./marshal.js";
@@ -64,7 +64,9 @@ export async function evalInSandbox(req: EvalRequest): Promise<RunResult> {
   const logs: SandboxLogEntry[] = [];
   const counters = { ops: 0 };
 
-  const mod: QuickJSWASMModule = await newQuickJSWASMModule(RELEASE_SYNC);
+  // Singlefile variant: the WASM is embedded in the JS, so the engine bundles
+  // self-contained (no separate .wasm asset to ship to Lambda).
+  const mod: QuickJSWASMModule = await newQuickJSWASMModuleFromVariant(variant);
   const runtime = mod.newRuntime();
   runtime.setMemoryLimit(limits.memoryBytes);
   runtime.setInterruptHandler(() => Date.now() > deadline);

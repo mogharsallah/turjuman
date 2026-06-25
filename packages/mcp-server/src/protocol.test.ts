@@ -222,7 +222,10 @@ describe("MCP protocol handler", () => {
 
   it("scopes tools/list to the requested allowlist", async () => {
     const allowed = new Set(["get_key", "list_keys"]);
-    const res = (await handleMessage({ jsonrpc: "2.0", id: 50, method: "tools/list" }, ctx, allowed)) as {
+    const res = (await handleMessage({ jsonrpc: "2.0", id: 50, method: "tools/list" }, ctx, {
+      mode: "classic",
+      allowed,
+    })) as {
       result: { tools: { name: string }[] };
     };
     const names = res.result.tools.map((t) => t.name);
@@ -248,11 +251,65 @@ describe("MCP protocol handler", () => {
         params: { name: "delete_key", arguments: { projectId: "p", name: "k", confirm: true } },
       },
       callCtx,
-      new Set(["get_key"]),
+      { mode: "classic", allowed: new Set(["get_key"]) },
     )) as { result: { isError?: boolean; content: { text: string }[] } };
     expect(res.result.isError).toBe(true);
     expect(res.result.content[0]?.text).toContain("delete_key");
     expect(del).not.toHaveBeenCalled();
+  });
+
+  it("code mode advertises only search_sdk and run_code", async () => {
+    const res = (await handleMessage({ jsonrpc: "2.0", id: 60, method: "tools/list" }, ctx, {
+      mode: "code",
+    })) as { result: { tools: { name: string }[] } };
+    expect(res.result.tools.map((t) => t.name).sort()).toEqual(["run_code", "search_sdk"]);
+  });
+
+  it("search_sdk returns matching operation signatures", async () => {
+    const res = (await handleMessage(
+      { jsonrpc: "2.0", id: 61, method: "tools/call", params: { name: "search_sdk", arguments: { query: "translation" } } },
+      ctx,
+      { mode: "code" },
+    )) as { result: { structuredContent?: { count: number; operations: { name: string }[] } } };
+    const ops = res.result.structuredContent?.operations ?? [];
+    expect(ops.length).toBeGreaterThan(0);
+    expect(ops.map((o) => o.name)).toContain("bulk_set_translations");
+  });
+
+  it("run_code executes against the SDK through the sandbox", async () => {
+    const list = vi.fn(async () => [{ id: "p1" }, { id: "p2" }]);
+    const callCtx = {
+      service: { projects: { list } },
+      actor: { userId: "u", orgId: "o", globalRole: "OWNER", readOnly: false },
+      user: {},
+      requestId: "req-test",
+    } as unknown as OpContext;
+    const res = (await handleMessage(
+      {
+        jsonrpc: "2.0",
+        id: 62,
+        method: "tools/call",
+        params: {
+          name: "run_code",
+          arguments: { code: "const ps = await turjuman.list_projects({}); return ps.length;" },
+        },
+      },
+      callCtx,
+      { mode: "code" },
+    )) as { result: { structuredContent?: { ok: boolean; result: unknown; opsUsed: number } } };
+    expect(res.result.structuredContent?.ok).toBe(true);
+    expect(res.result.structuredContent?.result).toBe(2);
+    expect(res.result.structuredContent?.opsUsed).toBe(1);
+    expect(list).toHaveBeenCalledWith(callCtx.actor);
+  });
+
+  it("does not expose the business toolset in code mode (mutually exclusive)", async () => {
+    const res = (await handleMessage({ jsonrpc: "2.0", id: 63, method: "tools/list" }, ctx, {
+      mode: "code",
+    })) as { result: { tools: { name: string }[] } };
+    const names = res.result.tools.map((t) => t.name);
+    expect(names).not.toContain("create_project");
+    expect(names).not.toContain("list_projects");
   });
 
   it("returns null for notifications", async () => {

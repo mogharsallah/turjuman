@@ -41,9 +41,10 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@jitl/quickjs-singlefile-mjs-release-sync": "^0.31.0",
     "@turjuman/core": "workspace:*",
     "@turjuman/sdk": "workspace:*",
-    "quickjs-emscripten": "^0.31.0",
+    "quickjs-emscripten-core": "^0.31.0",
     "zod": "^3.24.1"
   }
 }

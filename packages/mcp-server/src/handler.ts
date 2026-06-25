@@ -14,8 +14,8 @@ import {
   unauthorized,
 } from "@turjuman/core";
 import type { OpContext } from "@turjuman/sdk";
-import { handleMessage } from "./protocol.js";
-import { allowedToolsForActor, resolveToolScope } from "./scope.js";
+import { type ToolSelection, handleMessage } from "./protocol.js";
+import { allowedToolsForActor, resolveMode, resolveToolScope } from "./scope.js";
 
 /**
  * AWS Lambda entry point for the Turjuman MCP server. Works behind both an API
@@ -197,21 +197,45 @@ async function route(args: {
   if (!auth) return { result: unauthorized(corsHeaders()), outcome: "unauthorized" };
   meta.keyId = auth.keyId;
 
-  // Scope the advertised toolset. Two layers, both narrowing only:
-  //  1. the key's own permissions (a read-only key sees read tools; tools the
-  //     global role can never reach are hidden) — always applied;
-  //  2. an optional client request via ?tools=/?groups= query params (a typo
-  //     fails loud with 400 so it can't silently hide tools).
-  // Core RBAC still authorizes every call; this only trims what is shown.
-  const scope = resolveToolScope(query);
-  if (scope && "error" in scope) {
+  // Pick the connection mode (?mode=). Code mode advertises only search_sdk +
+  // run_code; classic mode (default) advertises the operation toolset.
+  const mode = resolveMode(query);
+  if (typeof mode === "object") {
     await auth.touch;
-    return { result: json(400, { error: scope.error }), outcome: "invalid_tool_scope" };
+    return { result: json(400, { error: mode.error }), outcome: "invalid_mode" };
   }
-  const actorAllowed = allowedToolsForActor(auth.actor);
-  const allowed = scope
-    ? new Set([...scope.allowed].filter((name) => actorAllowed.has(name)))
-    : actorAllowed;
+
+  let selection: ToolSelection;
+  if (mode === "code") {
+    // Tool-scoping (?tools=/?groups=) only narrows the classic toolset; it is
+    // meaningless against the fixed code-mode pair, so reject the combination
+    // rather than silently ignore it.
+    if (query?.tools || query?.groups) {
+      await auth.touch;
+      return {
+        result: json(400, { error: "?tools= / ?groups= scoping does not apply in code mode (?mode=code)." }),
+        outcome: "invalid_tool_scope",
+      };
+    }
+    selection = { mode: "code" };
+  } else {
+    // Scope the advertised toolset. Two layers, both narrowing only:
+    //  1. the key's own permissions (a read-only key sees read tools; tools the
+    //     global role can never reach are hidden) — always applied;
+    //  2. an optional client request via ?tools=/?groups= query params (a typo
+    //     fails loud with 400 so it can't silently hide tools).
+    // Core RBAC still authorizes every call; this only trims what is shown.
+    const scope = resolveToolScope(query);
+    if (scope && "error" in scope) {
+      await auth.touch;
+      return { result: json(400, { error: scope.error }), outcome: "invalid_tool_scope" };
+    }
+    const actorAllowed = allowedToolsForActor(auth.actor);
+    const allowed = scope
+      ? new Set([...scope.allowed].filter((name) => actorAllowed.has(name)))
+      : actorAllowed;
+    selection = { mode: "classic", allowed };
+  }
 
   let message: unknown;
   try {
@@ -232,7 +256,7 @@ async function route(args: {
   }
 
   const ctx: OpContext = { service: deps.service, actor: auth.actor, user: auth.user, requestId };
-  const response = await handleMessage(message as Record<string, unknown>, ctx, allowed);
+  const response = await handleMessage(message as Record<string, unknown>, ctx, selection);
 
   // Flush the best-effort last-used stamp before returning: it started during
   // authenticate() and has overlapped the work above, so this await costs ~0 but

@@ -48,6 +48,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@turjuman/core": "workspace:*",
+    "@turjuman/sandbox": "workspace:*",
     "@turjuman/sdk": "workspace:*",
     "zod": "^3.24.1"
   },

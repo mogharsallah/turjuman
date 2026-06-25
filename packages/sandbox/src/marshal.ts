@@ -1,4 +1,4 @@
-import type { QuickJSContext, QuickJSHandle } from "quickjs-emscripten";
+import type { QuickJSContext, QuickJSHandle } from "quickjs-emscripten-core";
 
 /**
  * Marshal a host JS value into a QuickJS guest handle. Operation results are

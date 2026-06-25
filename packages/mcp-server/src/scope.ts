@@ -63,6 +63,23 @@ export function allowedToolsForActor(actor: Actor): Set<string> {
 
 export type ToolScope = { allowed: Set<string> } | { error: string };
 
+/**
+ * The connection mode, from `?mode=`:
+ *  - `classic` (default) — every operation is its own MCP tool;
+ *  - `code` — only `search_sdk` + `run_code` (the model writes code).
+ * The two are mutually exclusive. An unknown value fails loud (caller → 400).
+ */
+export type Mode = "classic" | "code";
+
+export function resolveMode(
+  query: Record<string, string | undefined> | undefined,
+): Mode | { error: string } {
+  const raw = query?.mode;
+  if (raw === undefined || raw === "" || raw === "classic") return "classic";
+  if (raw === "code") return "code";
+  return { error: `Unknown mode: ${raw}. Valid modes: classic, code.` };
+}
+
 function splitCsv(value: string | undefined): string[] {
   if (!value) return [];
   return value
