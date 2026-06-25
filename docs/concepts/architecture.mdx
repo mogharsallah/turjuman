@@ -1,7 +1,7 @@
 ---
-title: "How Kalem is built: architecture overview"
+title: "Kalem architecture: MCP server, REST API, and data model"
 sidebarTitle: "Architecture"
-description: "Kalem's two transports (MCP server and REST API) share one service layer and one DynamoDB table. Learn how requests flow and how the data model is structured."
+description: "Kalem runs two surfaces — an MCP server for AI agents and a REST API for CI — over one shared service layer and a single DynamoDB table."
 ---
 
 Kalem exposes two surfaces for interacting with your translation data: an **MCP server** designed for AI agents and agentic IDEs like Claude Code, and a **REST API** designed for deterministic CLI and CI workflows. Both surfaces are thin transport adapters — they translate incoming requests into calls against the same shared service layer, which owns all business logic, authorization, and persistence. There is no way for the two surfaces to drift out of sync because neither contains logic of its own.
@@ -59,7 +59,7 @@ A Translation holds two string slots:
 - **`value`** — the working draft. This is updated whenever a translation is written, whether by a human editor, an AI agent, or an import.
 - **`approvedValue`** — a stable snapshot of the last approved version. This is only updated when a translation moves to the `approved` status.
 
-The `status` field follows a linear progression: `untranslated` → `translated` → `approved`. A translation can also enter a `needs_review` state — used when AI scoring flags a value as below the project quality threshold, holding it back from approval until a human reviews it. A translation can also carry a `stale` flag, which is set automatically when the base-locale value for that key changes — signaling that the translation may no longer be accurate.
+The `status` field follows a linear progression: `untranslated` → `translated` → `approved`. A translation can also carry a `stale` flag, which is set automatically when the base-locale value for that key changes — signaling that the translation may no longer be accurate.
 
 The `origin` field records how a translation was produced: `human`, `llm`, `tm` (translation memory), `mt` (machine translation), or `import`.
 

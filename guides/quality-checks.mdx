@@ -6,7 +6,7 @@ description: "Kalem's advisory QA layer validates translations for ICU syntax, p
 
 QA in Kalem is advisory. It surfaces problems and reports them — it never auto-approves translations or silently discards findings. Use QA output as structured input for human reviewers and as a hard gate in your CI pipeline.
 
-Running checks requires only read access to translations. Any API key or user with the VIEWER role or higher can trigger `run_qa_checks`, `kalem check`, or the REST checks endpoint.
+Running checks requires only the `translation.read` permission. Any API key or user with the VIEWER role or higher can trigger `run_qa_checks`, `kalem check`, or the REST checks endpoint.
 
 ## Running checks
 
@@ -32,6 +32,12 @@ Running checks requires only read access to translations. Any API key or user wi
     kalem check --locale fr
     ```
 
+    Run only specific checks by ID:
+
+    ```bash
+    kalem check --check icu --check placeholders
+    ```
+
     Run checks against approved translations only:
 
     ```bash
@@ -50,7 +56,7 @@ Running checks requires only read access to translations. Any API key or user wi
     ```http
     POST /v1/projects/<id>/checks
     Content-Type: application/json
-    Authorization: Bearer op_live_...
+    Authorization: Bearer <your-api-key>
 
     {
       "locale": "fr",
@@ -115,7 +121,7 @@ Each project has its own QA config. You can enable or disable individual checks 
 
     ```http
     GET /v1/projects/:id/qa-config
-    Authorization: Bearer op_live_...
+    Authorization: Bearer <your-api-key>
     ```
 
     Update it:
@@ -123,7 +129,7 @@ Each project has its own QA config. You can enable or disable individual checks 
     ```http
     PUT /v1/projects/:id/qa-config
     Content-Type: application/json
-    Authorization: Bearer op_live_...
+    Authorization: Bearer <your-api-key>
 
     {
       "checks": {

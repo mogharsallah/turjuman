@@ -1,13 +1,13 @@
 ---
-title: "kalem CLI commands and configuration reference"
+title: "turjuman CLI commands and configuration reference for Kalem"
 sidebarTitle: "CLI Commands"
-description: "Full reference for kalem CLI commands, kalem.config.json structure, auth configuration, exit codes, and the --json flag for CI use."
+description: "Full reference for the turjuman CLI — all commands, turjuman.config.json structure, auth configuration, exit codes, and --json for CI."
 ---
 
-The `kalem` CLI is purpose-built for deterministic locale file work: it pulls translations from Kalem and writes them to your repository as locale files, and it pushes locale files back to Kalem. Everything else — creating projects, managing keys, running QA from an agent, administering users — goes through the MCP server or the REST API.
+The `turjuman` CLI is purpose-built for deterministic locale file work: it pulls translations from Kalem and writes them to your repository as locale files, and it pushes locale files back to Kalem. Everything else — creating projects, managing keys, running QA from an agent, administering users — goes through the MCP server or the REST API.
 
 <Note>
-Deploy commands (`deploy`, `status`, `teardown`, `bootstrap`) live in the separate `@kalem/deploy` package (binary: `kalem-deploy`) and are not part of the core CLI documented here.
+Deploy commands (`deploy`, `status`, `teardown`, `bootstrap`) live in the separate `@turjuman/aws-deploy` package and are not part of the core CLI documented here.
 </Note>
 
 ---
@@ -17,13 +17,13 @@ Deploy commands (`deploy`, `status`, `teardown`, `bootstrap`) live in the separa
 Install the CLI from the npm registry:
 
 ```bash
-npm install -g kalem
+npm install -g @turjuman/cli
 ```
 
-Once installed, the binary is available as `kalem`:
+Once installed, the binary is available as `turjuman`:
 
 ```bash
-kalem <command>
+turjuman <command>
 ```
 
 ---
@@ -32,9 +32,9 @@ kalem <command>
 
 Kalem uses two configuration files with different scopes and commit policies.
 
-### `kalem.config.json` — project configuration
+### `turjuman.config.json` — project configuration
 
-This file lives in your repository root, is created by `kalem init`, and **should be committed to version control**. It tells the CLI which project to work with and how to map Kalem namespaces to local file paths.
+This file lives in your repository root, is created by `turjuman init`, and **should be committed to version control**. It tells the CLI which project to work with and how to map Kalem namespaces to local file paths.
 
 ```json
 {
@@ -50,14 +50,14 @@ This file lives in your repository root, is created by `kalem init`, and **shoul
 
 Each entry in `targets` maps a file format to a path pattern. The `{locale}` placeholder in `path` is substituted with each locale code when reading or writing files (e.g. `locales/fr.json`). The `namespace` field is optional and defaults to `"default"`.
 
-### `~/.kalem/auth.json` — machine credentials
+### `~/.turjuman/auth.json` — machine credentials
 
-This file stores your API URL and key for the current machine. It is created by `kalem login` and **must not be committed to version control**.
+This file stores your API URL and key for the current machine. It is created by `turjuman login` and **must not be committed to version control**.
 
 ```json
 {
-  "apiUrl": "https://kalem.example.com",
-  "apiKey": "kalm_live_xxxxxxxxxxxxxx"
+  "url": "https://kalem.example.com",
+  "key": "op_live_xxxxxxxxxxxxxx"
 }
 ```
 
@@ -67,10 +67,10 @@ In CI pipelines, use environment variables instead of `auth.json`:
 
 | Variable | Purpose |
 |---|---|
-| `KALEM_API_URL` | Base URL of your Kalem instance |
-| `KALEM_API_KEY` | API key for authentication |
+| `TURJUMAN_API_URL` | Base URL of your Kalem instance |
+| `TURJUMAN_API_KEY` | API key for authentication |
 
-Environment variables take precedence over `~/.kalem/auth.json` when both are present.
+Environment variables take precedence over `~/.turjuman/auth.json` when both are present.
 
 ---
 
@@ -78,8 +78,8 @@ Environment variables take precedence over `~/.kalem/auth.json` when both are pr
 
 | Command | What it does |
 |---|---|
-| `login --url <url> --key <key>` | Save credentials to `~/.kalem/auth.json` for this machine |
-| `init --project <id> [--format <fmt>] [--path <pattern>] [--namespace <ns>]` | Scaffold a `kalem.config.json` in the current directory |
+| `login --url <url> --key <key>` | Save credentials to `~/.turjuman/auth.json` for this machine |
+| `init --project <id> [--format <fmt>] [--path <pattern>] [--namespace <ns>]` | Scaffold a `turjuman.config.json` in the current directory |
 | `projects` | List all projects your API key can access |
 | `locales` | List the locales configured for the current project |
 | `formats` | List all supported file format IDs |
@@ -124,8 +124,8 @@ Every command accepts `--json` to produce machine-readable output. When `--json`
 This flag is designed for CI pipelines and scripting where you need to parse command output programmatically.
 
 ```bash
-kalem pull --json | jq '.locales'
-kalem check --json > findings.json
+turjuman pull --json | jq '.locales'
+turjuman check --json > findings.json
 ```
 
 ---
@@ -136,7 +136,7 @@ kalem check --json > findings.json
 |---|---|
 | `0` | Success — command completed without issues |
 | `1` | QA findings with error severity were found |
-| `2` | Usage error — bad flags, missing `kalem.config.json`, or not logged in |
+| `2` | Usage error — bad flags, missing `turjuman.config.json`, or not logged in |
 | `3` | API or network error — the server returned an error response or was unreachable |
 
 <Note>
@@ -147,7 +147,7 @@ API error responses include a `requestId` field. You can provide this ID when re
 
 ## Supported formats
 
-Run `kalem formats` to get the live list from your Kalem instance. The currently supported format IDs are:
+Run `turjuman formats` to get the live list from your Kalem instance. The currently supported format IDs are:
 
 | Format ID | File type |
 |---|---|

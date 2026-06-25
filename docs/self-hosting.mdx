@@ -1,10 +1,10 @@
 ---
-title: "Deploy Kalem to AWS with one command"
+title: "Deploy Kalem to your own AWS account with one command"
 sidebarTitle: "Self-Hosting"
-description: "Self-host Kalem on AWS using @kalem/deploy — one DynamoDB table and three Lambda Function URLs. No SAM CLI, no cdk bootstrap required."
+description: "Self-host Kalem on AWS using @turjuman/aws-deploy — one DynamoDB table and three Lambda Function URLs. No SAM CLI, no cdk bootstrap required."
 ---
 
-Self-hosting Kalem means running it in your own AWS account: one DynamoDB table and up to three Lambda Function URLs (MCP server, REST API, and webhook dispatcher). The `@kalem/deploy` package handles everything — CDK synthesis, bootstrapping, CloudFormation deployment, and first-owner creation — in a single interactive command. You don't need the SAM CLI, a separate CDK bootstrap step, or a clone of the Kalem repo.
+Self-hosting Kalem means running it in your own AWS account: one DynamoDB table and up to three Lambda Function URLs (MCP server, REST API, and webhook dispatcher). The `@turjuman/aws-deploy` package handles everything — CDK synthesis, bootstrapping, CloudFormation deployment, and first-owner creation — in a single interactive command. You don't need the SAM CLI, a separate CDK bootstrap step, or a clone of the Kalem repo.
 
 <Warning>
   The CDK stack is conventional but has **not yet been verified end-to-end against a live AWS account**. Use the [Quickstart](/quickstart) to evaluate Kalem locally first, and treat the AWS deploy as beta. Please report any issues you encounter.
@@ -23,7 +23,7 @@ Self-hosting Kalem means running it in your own AWS account: one DynamoDB table 
     Run the interactive deployer with `npx` — it ships as a self-contained package with pre-bundled Lambda assets, so no repo clone is required:
 
     ```bash
-    npx @kalem/deploy deploy
+    npx @turjuman/aws-deploy deploy
     ```
 
     The command prompts you for:
@@ -42,14 +42,14 @@ Self-hosting Kalem means running it in your own AWS account: one DynamoDB table 
     ┌ Stack outputs ──────────────────────────────────────┐
     │ MCP URL:   https://xxxx.lambda-url.us-east-1.on.aws │
     │ API URL:   https://yyyy.lambda-url.us-east-1.on.aws │
-    │ Table:     kalem-KalemTable-XXXXXXXXXXXX             │
+    │ Table:     turjuman-TurjumanTable-XXXXXXXXXXXX        │
     └─────────────────────────────────────────────────────┘
 
     ┌ First owner ────────────────────────────────────────┐
     │ API key: km_live_xxxxxxxxxxxxxxxxxxxx               │
     │                                                     │
     │ Store this now — it is shown only once.             │
-    │ Saved to ~/.kalem/auth.json (you're logged in).     │
+    │ Saved to ~/.turjuman/auth.json (you're logged in).  │
     └─────────────────────────────────────────────────────┘
     ```
 
@@ -59,19 +59,19 @@ Self-hosting Kalem means running it in your own AWS account: one DynamoDB table 
   </Step>
 
   <Step title="Save your deploy config">
-    The deployer writes a `kalem.deploy.json` file in your working directory. This file caches your settings (stack name, region, Lambda tuning, etc.) so subsequent re-deploys are non-interactive:
+    The deployer writes a `turjuman.deploy.json` file in your working directory. This file caches your settings (stack name, region, Lambda tuning, etc.) so subsequent re-deploys are non-interactive:
 
     ```bash
-    npx @kalem/deploy deploy   # reads kalem.deploy.json; no prompts
+    npx @turjuman/aws-deploy deploy   # reads turjuman.deploy.json; no prompts
     ```
 
     Use `--reconfigure` to re-prompt for all settings:
 
     ```bash
-    npx @kalem/deploy deploy --reconfigure
+    npx @turjuman/aws-deploy deploy --reconfigure
     ```
 
-    `kalem.deploy.json` contains no secrets — it is safe to commit. The canonical copy of your config is also stored in AWS SSM Parameter Store so you can redeploy from any machine.
+    `turjuman.deploy.json` contains no secrets — it is safe to commit. The canonical copy of your config is also stored in AWS SSM Parameter Store so you can redeploy from any machine.
   </Step>
 </Steps>
 
@@ -80,7 +80,7 @@ Self-hosting Kalem means running it in your own AWS account: one DynamoDB table 
 | Output | Description |
 |--------|-------------|
 | `McpUrl` | The Lambda Function URL for the MCP server. Use this in your `.mcp.json`. |
-| `ApiUrl` | The Lambda Function URL for the REST API. Use this with `kalem login`. |
+| `ApiUrl` | The Lambda Function URL for the REST API. Use this with `turjuman login`. |
 | `TableName` | The DynamoDB table name. Needed for the `bootstrap` command and manual operations. |
 
 ## Deploy options
@@ -133,10 +133,10 @@ Add the `McpUrl` to your `.mcp.json`:
 Log in with your `ApiUrl` and API key:
 
 ```bash
-kalem login --url <ApiUrl> --key <your-api-key>
+turjuman login --url <ApiUrl> --key <your-api-key>
 ```
 
-This saves your credentials to `~/.kalem/auth.json`. After logging in, you can run `kalem init`, `kalem pull`, and `kalem push` as normal.
+This saves your credentials to `~/.turjuman/auth.json`. After logging in, you can run `turjuman init`, `turjuman pull`, and `turjuman push` as normal.
 
 ## Health check
 
@@ -157,7 +157,7 @@ A `200` response confirms the function is deployed and reachable. Use this in mo
 To see whether Kalem is installed in your AWS account and region:
 
 ```bash
-npx @kalem/deploy status
+npx @turjuman/aws-deploy status
 ```
 
 This lists all Kalem-managed CloudFormation stacks in the configured region, their current status, and their stack outputs.
@@ -167,10 +167,10 @@ This lists all Kalem-managed CloudFormation stacks in the configured region, the
 To deploy a new version of Kalem, run:
 
 ```bash
-npx @kalem/deploy deploy
+npx @turjuman/aws-deploy deploy
 ```
 
-Because `kalem.deploy.json` (or the SSM canonical copy) retains your settings, the redeploy is non-interactive and updates the Lambda code in-place.
+Because `turjuman.deploy.json` (or the SSM canonical copy) retains your settings, the redeploy is non-interactive and updates the Lambda code in-place.
 
 ## Teardown
 
@@ -181,19 +181,19 @@ Because `kalem.deploy.json` (or the SSM canonical copy) retains your settings, t
 To remove the stack interactively (you will be prompted to confirm by typing the stack name):
 
 ```bash
-npx @kalem/deploy teardown
+npx @turjuman/aws-deploy teardown
 ```
 
 To skip the confirmation prompt, pass `--yes`. To target a specific stack by name, use `--stack-name`:
 
 ```bash
-npx @kalem/deploy teardown --yes --stack-name my-kalem-stack
+npx @turjuman/aws-deploy teardown --yes --stack-name my-kalem-stack
 ```
 
 To preserve the DynamoDB table (and its data) while removing the Lambda functions and other resources:
 
 ```bash
-npx @kalem/deploy teardown --keep-table
+npx @turjuman/aws-deploy teardown --keep-table
 ```
 
 ## Cost
@@ -207,10 +207,10 @@ For most small teams managing translations, the monthly cost is effectively **$0
 
 ## Bootstrap an existing table
 
-If you deployed the CloudFormation stack manually (without using `@kalem/deploy deploy`) or need to create the first owner against an already-deployed table, use the `bootstrap` command:
+If you deployed the CloudFormation stack manually (without using `@turjuman/aws-deploy deploy`) or need to create the first owner against an already-deployed table, use the `bootstrap` command:
 
 ```bash
-npx @kalem/deploy bootstrap \
+npx @turjuman/aws-deploy bootstrap \
   --table <TableName> \
   --region us-east-1 \
   --email you@example.com \

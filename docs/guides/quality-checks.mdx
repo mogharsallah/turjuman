@@ -27,19 +27,19 @@ QA in Kalem is advisory. It surfaces problems and reports them — it never auto
     Run checks against a specific locale:
 
     ```bash
-    kalem check --locale fr
+    turjuman check --locale fr
     ```
 
     Run checks against approved translations only:
 
     ```bash
-    kalem check --approved
+    turjuman check --approved
     ```
 
     Run checks as part of a push:
 
     ```bash
-    kalem push --check
+    turjuman push --check
     ```
 
     `--check` appended to `push` runs the full check suite after the push completes and exits non-zero if any error-severity findings are reported.
@@ -48,7 +48,7 @@ QA in Kalem is advisory. It surfaces problems and reports them — it never auto
     ```http
     POST /v1/projects/<id>/checks
     Content-Type: application/json
-    Authorization: Bearer op_live_...
+    Authorization: Bearer <your-api-key>
 
     {
       "locale": "fr",
@@ -113,7 +113,7 @@ Each project has its own QA config. You can enable or disable individual checks 
 
     ```http
     GET /v1/projects/:id/qa-config
-    Authorization: Bearer op_live_...
+    Authorization: Bearer <your-api-key>
     ```
 
     Update it:
@@ -121,7 +121,7 @@ Each project has its own QA config. You can enable or disable individual checks 
     ```http
     PUT /v1/projects/:id/qa-config
     Content-Type: application/json
-    Authorization: Bearer op_live_...
+    Authorization: Bearer <your-api-key>
 
     {
       "checks": {

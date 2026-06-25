@@ -4,7 +4,7 @@ sidebarTitle: "Overview"
 description: "Endpoint reference for the Kalem self-hosted REST API — authentication, base URL, all supported routes, and the JSON error envelope."
 ---
 
-The Kalem REST API is the backend that powers the `kalem` CLI and your CI pipelines. It exposes a focused set of file-shaped operations — listing projects, exporting delivery bundles, and importing locale files — so that automated workflows always get predictable, deterministic responses. The base URL is the `ApiUrl` printed when you deploy your Kalem instance.
+The Kalem REST API is the backend that powers the `turjuman` CLI and your CI pipelines. It exposes a focused set of file-shaped operations — listing projects, exporting delivery bundles, and importing locale files — so that automated workflows always get predictable, deterministic responses. The base URL is the `ApiUrl` printed when you deploy your Kalem instance.
 
 <Note>
   The REST surface is intentionally narrow. It covers list, export, and import operations only. For full project management — creating or updating projects, translating strings, managing members, or working with your glossary — use the [MCP server](/reference/mcp-tools) instead.
@@ -12,10 +12,10 @@ The Kalem REST API is the backend that powers the `kalem` CLI and your CI pipeli
 
 ## Authentication
 
-Every route under `/v1/projects` requires a bearer token. Pass your API key in the `Authorization` header:
+Every `/v1/` route requires a bearer token, except the public routes listed below. Pass your API key in the `Authorization` header:
 
 ```bash
-curl https://<ApiUrl>/v1/projects \
+curl https://<your-base-url>/v1/projects \
   -H "Authorization: Bearer <your-api-key>"
 ```
 
@@ -35,9 +35,9 @@ The following meta endpoints are public and do not require authentication:
 Your base URL is the `ApiUrl` value printed by the deploy command:
 
 ```bash
-npx @kalem/deploy deploy
+npx @turjuman/aws-deploy deploy
 # ...
-# ApiUrl: https://kalem.example.com
+# ApiUrl: https://example.com
 ```
 
 All paths in this reference are relative to that base URL.
@@ -53,7 +53,7 @@ All paths in this reference are relative to that base URL.
 | `GET` | `/v1/projects/{id}/locales` | List locales |
 | `POST` | `/v1/projects/{id}/locales` | Add a locale |
 | `GET` | `/v1/projects/{id}/keys` | List keys (supports `namespace`, `limit`, `cursor`) |
-| `POST` | `/v1/projects/{id}/keys/import` | Import keys (the `kalem push` operation) |
+| `POST` | `/v1/projects/{id}/keys/import` | Import keys (the `turjuman push` operation) |
 | `GET` | `/v1/projects/{id}/translations` | List translations for a locale |
 | `GET` | `/v1/projects/{id}/bundle` | Export delivery bundle for a locale |
 | `POST` | `/v1/projects/{id}/translations/import` | Bulk-write translation values |
@@ -81,7 +81,7 @@ Include the `requestId` when reporting issues — it lets you correlate the requ
 
 <CardGroup cols={2}>
   <Card title="CLI Commands" icon="terminal" href="/reference/cli-commands">
-    Learn how the `kalem` CLI talks to this API to push and pull locale files.
+    Learn how the `turjuman` CLI talks to this API to push and pull locale files.
   </Card>
   <Card title="MCP Tools" icon="robot" href="/reference/mcp-tools">
     Use the MCP server for full project management, translation, and glossary operations.

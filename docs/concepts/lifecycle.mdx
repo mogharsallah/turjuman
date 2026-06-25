@@ -1,7 +1,7 @@
 ---
-title: "Continuous localization: the Kalem workflow"
+title: "Continuous localization lifecycle: how Kalem manages strings"
 sidebarTitle: "Lifecycle"
-description: "Kalem supports a continuous localization loop — from ingesting source strings to delivering approved translations. Learn each stage, who drives it, and how state flows."
+description: "How Kalem moves source strings from ingest through translation and approval to delivery, and how key and translation state is tracked throughout."
 ---
 
 Continuous localization means your translations move with your code rather than in a separate, infrequent release cycle. Just as you run tests on every commit, you push new source strings to Kalem on every relevant change, let the translation pipeline run, and pull approved translations back in before shipping. Kalem is designed around this loop: every stage is event-driven and automatable, and the state model ensures that nothing stale or unapproved reaches your users unless you explicitly ask for it.
@@ -10,14 +10,14 @@ Continuous localization means your translations move with your code rather than 
 
 | # | Stage | Who drives it | What happens |
 |---|---|---|---|
-| 1 | **Provision** | Operator (OWNER/ADMIN) | Create the Kalem project, set the base locale, configure settings. |
-| 2 | **Setup** | Operator | Add target locales, invite members, create a glossary, configure webhooks. |
-| 3 | **Ingest** | Developer / CI | Push new and changed source strings from your codebase into Kalem. |
-| 4 | **Enrich** | Developer / Agent | Add context — descriptions, tags, glossary terms — to help translators and AI. |
-| 5 | **Translate** | Agent (LLM) / Human editor | Produce translations for each locale. Fills the working `value` slot. |
-| 6 | **Approve** | Reviewer (MANAGER/EDITOR) | Sign off on translations. Snapshots `value` into `approvedValue`. |
-| 7 | **Deliver** | Developer / CI | Pull approved translations out of Kalem into your app's locale files. |
-| ↺ | **Loop** | — | New source changes re-enter at Ingest; the cycle continues. |
+| 0 | **Provision** | Operator (OWNER/ADMIN) | Create the Kalem project, set the base locale, configure settings. |
+| 1 | **Setup** | Operator | Add target locales, invite members, create a glossary, configure webhooks. |
+| 2 | **Ingest** | Developer / CI | Push new and changed source strings from your codebase into Kalem. |
+| 3 | **Enrich** | Developer / Agent | Add context — descriptions, tags, glossary terms — to help translators and AI. |
+| 4 | **Translate** | Agent (LLM) / Human editor | Produce translations for each locale. Fills the working `value` slot. |
+| 5 | **Approve** | Reviewer (MANAGER/EDITOR) | Sign off on translations. Snapshots `value` into `approvedValue`. |
+| 6 | **Deliver** | Developer / CI | Pull approved translations out of Kalem into your app's locale files. |
+| 7 | **Loop** | — | New source changes re-enter at Ingest; the cycle continues. |
 
 ## Stage-by-stage breakdown
 
@@ -32,7 +32,7 @@ With a project in place, an OWNER or ADMIN adds the target locales you want to s
 </Step>
 
 <Step title="Ingest">
-Your developers or CI pipeline calls `kalem push` (or the equivalent REST import endpoint) to sync the current set of source strings into Kalem. Kalem compares the incoming keys against what it already holds:
+Your developers or CI pipeline calls `turjuman push` (or the equivalent REST import endpoint) to sync the current set of source strings into Kalem. Kalem compares the incoming keys against what it already holds:
 
 - **New keys** are created with status `untranslated` in every target locale.
 - **Changed base values** cause all existing translations for that key to be flagged `stale`.
@@ -68,20 +68,18 @@ A reviewer with EDITOR or MANAGER role inspects the translated strings and appro
 2. The current `value` is copied into the `approvedValue` snapshot.
 3. The `stale` flag is cleared (if it was set).
 
-Translations that fail automated QA scoring may land in a `needs_review` state — they carry a working value but are held back from approval until a human reviewer signs off. A reviewer can approve or revise these just like any other translated string.
-
 Approval is the gate between "being worked on" and "ready to ship". Until a translation is approved, it will not appear in the default delivery output.
 </Step>
 
 <Step title="Deliver">
-Your developer or CI pipeline calls `kalem pull` to export the approved translations as locale files. By default, `kalem pull` outputs the `approvedValue` for every key — the stable, reviewed snapshot.
+Your developer or CI pipeline calls `turjuman pull` to export the approved translations as locale files. By default, `turjuman pull` outputs the `approvedValue` for every key — the stable, reviewed snapshot.
 
 ```bash
 # Pull approved translations (default)
-kalem pull --project my-app --locale fr
+turjuman pull
 
 # Pull working drafts instead
-kalem pull --project my-app --locale fr --working
+turjuman pull --working
 ```
 
 Use `--working` only in development environments where you want to preview in-progress translations before they are approved.
@@ -112,13 +110,9 @@ Each translation moves forward along this chain:
 
 ```
 untranslated ──► translated ──► approved
-                     │
-                     └──► needs_review ──► approved
 ```
 
 Status never moves backward automatically. If an approved translation is edited, it returns to `translated` (not `approved`) until it is reviewed again.
-
-The `needs_review` state is an intermediate hold: a translation has a working value but was flagged by automated QA scoring as below the project's quality threshold. A human reviewer must inspect and either approve or revise it before it can be delivered.
 
 ### Dual-slot: `value` and `approvedValue`
 
@@ -127,7 +121,7 @@ Every translation record holds two string slots:
 - **`value`** — the working draft. Updated on every write, regardless of who or what produced it.
 - **`approvedValue`** — the delivery snapshot. Only updated when the translation is approved.
 
-This separation means you can have active editing and a stable delivery channel running in parallel. Your app always sees the last approved version via `kalem pull`, even while an editor is revising the draft.
+This separation means you can have active editing and a stable delivery channel running in parallel. Your app always sees the last approved version via `turjuman pull`, even while an editor is revising the draft.
 
 ### Staleness
 
@@ -141,4 +135,4 @@ The `origin` field on every translation records how it was produced. This is rea
 
 ## Git as the release layer
 
-Kalem does not have its own concept of releases or versioned snapshots. Your locale files are plain text — commit them to your repository like any other source file. A git tag or a deploy commit is your frozen release. This keeps the delivery model simple: `kalem pull` writes files, your CI commits them, your deploy process picks them up. There are no over-the-air translation objects to manage.
+Kalem does not have its own concept of releases or versioned snapshots. Your locale files are plain text — commit them to your repository like any other source file. A git tag or a deploy commit is your frozen release. This keeps the delivery model simple: `turjuman pull` writes files, your CI commits them, your deploy process picks them up. There are no over-the-air translation objects to manage.

@@ -9,7 +9,7 @@ The CLI handles the file work you shouldn't hand to an LLM: exporting translated
 ## Typical workflow
 
 ```bash
-kalem login --url https://<api-url>/ --key op_live_...
+kalem login --url https://<api-url>/ --key <your-api-key>
 kalem init --project proj_123 --format json-nested --path "locales/{locale}.json"
 kalem pull   # download translations into repo
 kalem push   # upload source strings + any local translations

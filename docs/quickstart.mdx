@@ -1,10 +1,10 @@
 ---
-title: "Get started with Kalem locally in minutes"
+title: "Get Kalem running locally in minutes with LocalStack"
 sidebarTitle: "Quickstart"
-description: "Run the full Kalem stack locally with DynamoDB Local — no AWS account needed. Connect an MCP client and translate in under 5 minutes."
+description: "Run the full Kalem stack locally with LocalStack — no AWS account needed. Connect your MCP client and start translating in under 5 minutes."
 ---
 
-This guide gets you a fully working Kalem stack running on your machine in minutes. Instead of deploying to AWS, you run DynamoDB Local in Docker and start the MCP and API servers directly from the repo. No cloud account, no credentials, no cost — just Node.js and Docker.
+This guide gets you a fully working Kalem stack running on your machine in minutes. Instead of deploying to AWS, you run the MCP server and REST API inside LocalStack — a local AWS emulator — using Docker. No cloud account, no credentials, no cost — just Node.js, pnpm, and Docker.
 
 <Note>
   The API key printed by the setup script determines both your identity and your permissions. Whoever holds it has full OWNER access. Store it somewhere safe and keep it out of version control.
@@ -12,8 +12,9 @@ This guide gets you a fully working Kalem stack running on your machine in minut
 
 ## Prerequisites
 
-- Node.js 20 or later
-- Docker (for DynamoDB Local)
+- Node.js 24 or later
+- pnpm (enabled via `corepack enable`)
+- Docker (for LocalStack)
 - The Kalem repo cloned locally
 
 ## Steps
@@ -23,61 +24,40 @@ This guide gets you a fully working Kalem stack running on your machine in minut
     Clone the repo (if you haven't already) and run the standard install + build:
 
     ```bash
-    npm install && npm run build
+    pnpm install && pnpm run build
     ```
   </Step>
 
-  <Step title="Start DynamoDB Local">
-    Start a local DynamoDB instance on port 8000 using the official Docker image:
+  <Step title="Start LocalStack">
+    Start the local AWS emulator (LocalStack) using Docker Compose. This provides DynamoDB, Lambda, and the other AWS services Kalem needs locally:
 
     ```bash
-    docker run -d --rm -p 8000:8000 amazon/dynamodb-local
+    pnpm run localstack:up
     ```
 
-    The `--rm` flag removes the container when it stops. Your data lives only in memory for the duration of the container's lifetime — that's fine for local evaluation.
+    This starts LocalStack on port 4566 and waits until it is healthy before returning.
   </Step>
 
-  <Step title="Create the table and your first owner">
-    Run the setup script to create the DynamoDB table and bootstrap the first OWNER user:
+  <Step title="Start the dev stack">
+    Deploy Kalem into LocalStack and bootstrap your first owner in one command:
 
     ```bash
-    node scripts/dev-setup.mjs you@example.com "Your Name"
+    pnpm run dev
     ```
 
-    The script prints your API key **once**. Copy it now — it is not stored in plaintext anywhere and cannot be recovered.
+    This builds and deploys the MCP and API Lambda functions into LocalStack with hot-reload, creates a first OWNER user, and prints your stack URLs and API key:
 
     ```
-    Table created: Kalem
-    Owner created: you@example.com
-    API key: km_live_xxxxxxxxxxxxxxxxxxxx
+    Deployed "kalem-dev".
+      MCP:     http://localhost:4566/restapis/.../mcp/...
+      REST:    http://localhost:4566/restapis/.../api/...
+      owner:   dev-owner@kalem.test
+      apiKey:  km_live_xxxxxxxxxxxxxxxxxxxx
 
-    Store this now — it is shown only once.
+    Use the key as `Authorization: Bearer <apiKey>`.
     ```
 
-    If you re-run the script after the org already has users, it skips the bootstrap step safely and tells you to reuse your existing key.
-  </Step>
-
-  <Step title="Start the MCP server and API server">
-    Open two terminal windows. In each one, export the environment variables that point the servers at DynamoDB Local:
-
-    ```bash
-    export AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000 KALEM_TABLE=Kalem
-    export AWS_ACCESS_KEY_ID=local AWS_SECRET_ACCESS_KEY=local AWS_REGION=us-east-1
-    ```
-
-    **Terminal 1 — MCP server** (listens on port 3000 by default):
-
-    ```bash
-    node packages/mcp-server/dist/local.js
-    ```
-
-    **Terminal 2 — REST API** (listens on port 3001 by default):
-
-    ```bash
-    node packages/api/dist/local.js
-    ```
-
-    Both servers log their listening address on startup. Leave them running.
+    Copy the `MCP` URL and `apiKey` values — you will need them in the next step. The process stays running and hot-reloads code changes. Press `Ctrl+C` to stop.
   </Step>
 
   <Step title="Connect your MCP client">
@@ -88,7 +68,7 @@ This guide gets you a fully working Kalem stack running on your machine in minut
       "mcpServers": {
         "kalem": {
           "type": "http",
-          "url": "http://localhost:3000/",
+          "url": "<MCP URL printed by pnpm run dev>",
           "headers": {
             "Authorization": "Bearer <your-api-key>"
           }
@@ -97,7 +77,7 @@ This guide gets you a fully working Kalem stack running on your machine in minut
     }
     ```
 
-    Replace `<your-api-key>` with the key printed in Step 3. Restart your MCP client to pick up the new config.
+    Replace `<MCP URL printed by pnpm run dev>` and `<your-api-key>` with the values printed in the previous step. Restart your MCP client to pick up the new config.
 
     <Note>
       Keep your API key out of version control. If `.mcp.json` is committed, reference the key via an environment variable or a secrets manager rather than pasting the literal value. Revoke any leaked key immediately using the `revoke_api_key` MCP tool.
@@ -125,7 +105,7 @@ This guide gets you a fully working Kalem stack running on your machine in minut
     A full walkthrough of translation workflows using the MCP server and your AI agent.
   </Card>
   <Card title="Sync with the CLI" icon="terminal" href="/guides/sync-with-cli">
-    Use `kalem pull` and `kalem push` to keep locale files in your repo in sync with Kalem.
+    Use `turjuman pull` and `turjuman push` to keep locale files in your repo in sync with Kalem.
   </Card>
   <Card title="Self-host on AWS" icon="cloud" href="/self-hosting">
     Deploy Kalem to your own AWS account with a single command when you're ready.

@@ -16,13 +16,13 @@ Add the following to your `.mcp.json` (or equivalent client config) to register 
     "kalem": {
       "type": "http",
       "url": "https://<your-mcp-function-url>/",
-      "headers": { "Authorization": "Bearer op_live_..." }
+      "headers": { "Authorization": "Bearer <your-api-key>" }
     }
   }
 }
 ```
 
-Replace `<your-mcp-function-url>` with your self-hosted MCP endpoint and `op_live_...` with a valid API key.
+Replace `<your-mcp-function-url>` with your self-hosted MCP endpoint and `<your-api-key>` with a valid API key.
 
 <Tip>
   Scope the toolset your agent can see by appending `?tools=` or `?groups=` query parameters to the URL. For example, `?groups=read,translations` exposes only read tools and translation-management tools — useful for restricting a reviewer agent to the capabilities it actually needs.

@@ -1,7 +1,7 @@
 ---
 title: "Sync locale files with the Kalem CLI"
 sidebarTitle: "Sync with CLI"
-description: "Use the kalem CLI to pull translated locale files into your repo and push source strings to Kalem — for local development and CI pipelines."
+description: "Use the turjuman CLI to pull translated locale files into your repo and push source strings to Kalem — for local development and CI pipelines."
 ---
 
 The CLI handles the file work you shouldn't hand to an LLM: exporting translated locale files into your repo and importing source strings back into Kalem. Use it locally during development and in CI to keep your repository and Kalem in sync.
@@ -9,13 +9,13 @@ The CLI handles the file work you shouldn't hand to an LLM: exporting translated
 ## Typical workflow
 
 ```bash
-kalem login --url https://<api-url>/ --key op_live_...
-kalem init --project proj_123 --format json-nested --path "locales/{locale}.json"
-kalem pull   # download translations into repo
-kalem push   # upload source strings + any local translations
+turjuman login --url https://<api-url>/ --key <your-api-key>
+turjuman init --project proj_123 --format json-nested --path "locales/{locale}.json"
+turjuman pull   # download translations into repo
+turjuman push   # upload source strings + any local translations
 ```
 
-`kalem init` writes a `.kalem.json` config file to your working directory. Commit this file — it records the project ID, file format, and path pattern so you don't have to repeat the flags.
+`turjuman init` writes a `turjuman.config.json` config file to your working directory. Commit this file — it records the project ID, file format, and path pattern so you don't have to repeat the flags.
 
 ## `push` semantics
 
@@ -35,14 +35,14 @@ Three flags modify this behavior:
 
 ## `pull` semantics
 
-`pull` downloads the current state of each locale from Kalem and writes locale files to the paths defined in `.kalem.json`.
+`pull` downloads the current state of each locale from Kalem and writes locale files to the paths defined in `turjuman.config.json`.
 
 By default, `pull` writes only **approved values** — translations that have passed review. In-progress and draft work stays in Kalem and doesn't ship to your repository.
 
 Pass `--working` to include draft translations that haven't been approved yet:
 
 ```bash
-kalem pull --working   # includes unapproved in-progress translations
+turjuman pull --working   # includes unapproved in-progress translations
 ```
 
 <Warning>
@@ -51,17 +51,17 @@ kalem pull --working   # includes unapproved in-progress translations
 
 ## Using the CLI in CI
 
-In CI environments, skip `kalem login` and use environment variables instead of a stored `auth.json` file:
+In CI environments, skip `turjuman login` and use environment variables instead of a stored `auth.json` file:
 
 | Variable | Purpose |
 |---|---|
-| `KALEM_API_URL` | Your Kalem API base URL |
-| `KALEM_API_KEY` | API key with appropriate scopes |
+| `TURJUMAN_API_URL` | Your Kalem API base URL |
+| `TURJUMAN_API_KEY` | API key with appropriate scopes |
 
 A typical CI gate that validates your source strings and checks translation quality before merging:
 
 ```bash
-kalem push --dry-run --check
+turjuman push --dry-run --check
 ```
 
 This pushes nothing but reports what would change and exits non-zero if QA checks find errors — making it safe to run on every pull request.
@@ -82,5 +82,5 @@ A GitHub Actions example is available at [`examples/translations-sync.yml`](http
 Pass `--json` to any command to receive structured JSON output on stdout. This is useful when you want to parse results in a script or forward them to another tool:
 
 ```bash
-kalem push --dry-run --check --json
+turjuman push --dry-run --check --json
 ```

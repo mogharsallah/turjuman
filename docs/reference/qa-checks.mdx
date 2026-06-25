@@ -1,7 +1,7 @@
 ---
-title: "QA checks reference for Kalem translations"
+title: "Kalem translation QA checks — all 12 checks and severities"
 sidebarTitle: "QA Checks"
-description: "All 12 Kalem QA checks with default severities, findings report format, per-project config, ignore rules, and how to invoke checks via MCP, CLI, or REST."
+description: "All 12 Kalem QA checks — ICU syntax, placeholders, plural forms, glossary, length, and more — with severities, report format, and config."
 ---
 
 Kalem's QA engine validates translations deterministically and reports findings without making any changes to your data. It never auto-approves a translation or modifies statuses — every finding is advisory, and your team decides how to act on the results.
@@ -34,10 +34,10 @@ You can run QA checks from three surfaces:
 | Surface | How |
 |---|---|
 | MCP | Call `run_qa_checks` with `{ projectId, locale?, checks?, slot? }` |
-| CLI | Run `kalem check [--locale <code>] [--check <id...>] [--approved]` |
+| CLI | Run `turjuman check [--locale <code>] [--check <id...>] [--approved]` |
 | REST API | `POST /api/projects/{projectId}/qa` |
 
-The CLI exits with code `1` when any error-severity findings are present, making it easy to fail a CI step on quality regressions. You can also pass `--check` to `kalem push` to run QA automatically after uploading.
+The CLI exits with code `1` when any error-severity findings are present, making it easy to fail a CI step on quality regressions. You can also pass `--check` to `turjuman push` to run QA automatically after uploading.
 
 ---
 
