@@ -94,7 +94,21 @@ required, the grant-less-Lambda hardening variant.
 - **Phase 1 — Extract `@turjuman/sdk` + refactor MCP to a projection.** Done. The
   operation registry lives in `@turjuman/sdk`; the MCP server's hardcoded
   `ToolDef` arrays are deleted and classic mode is generated from `OPERATIONS`.
-- **Phase 2 — `@turjuman/sandbox` engine.** Pending.
+- **Phase 2 — `@turjuman/sandbox` engine.** Done. `runCode({ code, ctx, limits })`
+  runs untrusted code in a per-run QuickJS-WASM isolate; `turjuman.<operation>(args)`
+  stubs are generated from `OPERATIONS` and bridge in-process to
+  `op.handler(args, ctx)` via `createOpDispatcher`. CPU (wall-clock), memory,
+  output size, and bridge-call count are bounded. Engine note: QuickJS-emscripten
+  *asyncify* proved too fragile for our bridge (a host function must never
+  throw/reject, and many sequential asyncified calls corrupt the runtime), so the
+  engine uses the **synchronous QuickJS context + deferred-promise** pattern
+  instead — the bridge returns a guest promise and the host drives
+  `executePendingJobs` to settlement. Each run also gets a **fresh WASM module**
+  so a timed-out/OOM run can be abandoned (GC reclaims it) with no shared state to
+  corrupt. Security crux covered by unit tests (no `fetch`/`process`/`require`/
+  timers in the guest; host `ctx`/token unreachable; infinite loop hits the time
+  cap; oversized output truncated; bridge routes to the right handler with the
+  request actor; errors masked at the boundary).
 - **Phase 3 — Code-mode MCP tools (`search_sdk` + `run_code`).** Pending.
 - **Phase 4 — Refactor the REST API to a projection + coverage tracker + `$ref`
   guard.** Pending.
