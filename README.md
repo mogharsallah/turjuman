@@ -159,6 +159,24 @@ pnpm run localstack:up && pnpm run test:integration && pnpm run localstack:down
 pnpm run test:e2e
 ```
 
+### Formatting & linting
+
+Formatting and linting are handled by [Biome](https://biomejs.dev) (a single, fast
+Rust-based replacement for Prettier + ESLint), configured in `biome.json`:
+
+```bash
+pnpm run check         # format + lint, report only
+pnpm run check:write   # apply formatting + safe lint fixes
+pnpm run format        # format only
+pnpm run lint          # lint only
+```
+
+You rarely run these by hand. A `pre-commit` hook auto-formats staged files, CI
+runs `biome ci .`, and — since this repo is developed primarily with Claude Code —
+a `PostToolUse` hook (`.claude/hooks/biome-format.sh`) auto-formats each file as
+the agent edits it. The generated `docs/api-reference/openapi.json` snapshot is
+owned by `gen:openapi` and excluded from Biome.
+
 See [Contributing](docs/contributing.mdx) for the full testing guide (unit,
 LocalStack integration, and deployed end-to-end), which also runs in CI.
 

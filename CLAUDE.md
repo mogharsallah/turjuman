@@ -17,6 +17,7 @@ pnpm run build          # builds every workspace in dependency order (core first
 pnpm run typecheck      # tsc --noEmit across workspaces
 pnpm run test           # == test:unit — hermetic unit tests (integration/e2e self-skip)
 pnpm run clean
+pnpm run check          # Biome format + lint (report); check:write applies safe fixes
 ```
 
 Run one package's tests, or one file/case (workspaces use plain `vitest run`):
@@ -163,6 +164,12 @@ validates its own keys (no API Gateway, no Cognito).
   checks on the PR.
 - **Node ≥ 24**, Lambda runtime `nodejs24.x`, default arch `arm64` (the e2e deploy overrides to match
   the host so functions run natively under LocalStack).
+- **Biome owns formatting + linting** (`biome.json`, Biome defaults: tabs, double quotes, 80-col). A
+  `.claude/hooks/biome-format.sh` `PostToolUse` hook auto-formats every file you edit, so don't hand-fix
+  style — let it run. CI's `biome ci .` fails only on errors; the linter is `recommended` with a few
+  `suspicious` rules set to `warn` and `a11y` off (no web UI). The generated
+  `docs/api-reference/openapi.json` is **excluded** from Biome (it's owned by `gen:openapi`); never
+  reformat it by hand.
 - Keep the MCP-first / developer-first scope: no web UI, no MT engine, no vendor marketplace (see
   ROADMAP "Explicitly out of scope").
 - **When checking PR / GitHub Actions status, treat any Mintlify check failure (e.g. the preview
