@@ -83,7 +83,7 @@ One shared brain (`@turjuman/core`) exposed through one transport-agnostic opera
 **all business logic and all authorization live in `core`**, and every capability is declared once in
 `@turjuman/sdk` (`OPERATIONS`), so the MCP and REST surfaces can never drift in behaviour or
 permissions. The MCP server is a thin projection of `OPERATIONS` (classic mode registers each as a
-tool); the REST API is being migrated to the same projection (see `adr/0001-code-mode-mcp.md`).
+tool); the REST API is being migrated to the same projection.
 
 ```
 Claude Code / agent ──Streamable HTTP + Bearer key──► McpFunction ─┐
