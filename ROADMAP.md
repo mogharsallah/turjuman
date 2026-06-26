@@ -219,18 +219,6 @@ a concrete adoption blocker.
 - *Build.* New key fields + image storage + MCP tools to set/read them; the context then feeds the
   translate and review tools. Medium effort. *(Promoted from Phase 3.)*
 
-#### 🚧 Richer key filtering / search
-
-- *What it is.* First-class query patterns over keys: filter by **status** (e.g. "everything still
-  awaiting review"), **tag**, and **namespace**, plus full-text search across names/descriptions.
-  Namespace/tag filters, cursor pagination, and the `list_stale` "what changed" query already shipped
-  with Phase 4; **status filtering** and **full-text search** are what remain.
-- *Why it matters.* Past a few thousand strings, "show me exactly what needs my attention right now"
-  becomes the core daily workflow — the difference between usable-at-scale and not. Quality-of-life, but
-  it compounds.
-- *Build.* Extends the existing `list_keys` / `search_keys` service methods and their GSI access
-  patterns. Low–medium effort. *(Promoted from Phase 3.)*
-
 #### ⬜ GitLab + Bitbucket sync + richer PR-back CI
 
 - *What it is.* Turjuman already syncs with **GitHub** via the CLI in CI. This extends that to the two
