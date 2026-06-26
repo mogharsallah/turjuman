@@ -8,23 +8,29 @@ import { fileURLToPath } from "node:url";
  * hardcoding Function URLs (which LocalStack mints per stack).
  */
 export interface E2EEnv {
-  mcpUrl: string;
-  apiUrl: string;
-  tableName: string;
-  /** API key for the bootstrap owner of the primary org. */
-  apiKey: string;
-  /** API key for the owner of a SECOND org, for tenant-isolation checks. */
-  apiKeyOrgB?: string;
-  endpoint?: string;
-  region?: string;
+	mcpUrl: string;
+	apiUrl: string;
+	tableName: string;
+	/** API key for the bootstrap owner of the primary org. */
+	apiKey: string;
+	/** API key for the owner of a SECOND org, for tenant-isolation checks. */
+	apiKeyOrgB?: string;
+	endpoint?: string;
+	region?: string;
 }
 
 /** Load `.e2e/env.json`, or null when the deploy step hasn't run (specs self-skip). */
 export function loadEnv(): E2EEnv | null {
-  try {
-    const path = join(dirname(fileURLToPath(import.meta.url)), "..", "..", ".e2e", "env.json");
-    return JSON.parse(readFileSync(path, "utf8")) as E2EEnv;
-  } catch {
-    return null;
-  }
+	try {
+		const path = join(
+			dirname(fileURLToPath(import.meta.url)),
+			"..",
+			"..",
+			".e2e",
+			"env.json",
+		);
+		return JSON.parse(readFileSync(path, "utf8")) as E2EEnv;
+	} catch {
+		return null;
+	}
 }

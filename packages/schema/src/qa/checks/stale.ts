@@ -8,11 +8,19 @@ import { finding } from "./util.js";
  * single quality view. Info severity: the last approved value still ships.
  */
 export const staleCheck: QaCheck = {
-  id: "stale",
-  description: "Flag translations whose source (base value) has changed since they were written.",
-  severity: "info",
-  run(ctx) {
-    if (!ctx.stale) return [];
-    return [finding(ctx, this.id, this.severity, "Source value changed since this translation was written.")];
-  },
+	id: "stale",
+	description:
+		"Flag translations whose source (base value) has changed since they were written.",
+	severity: "info",
+	run(ctx) {
+		if (!ctx.stale) return [];
+		return [
+			finding(
+				ctx,
+				this.id,
+				this.severity,
+				"Source value changed since this translation was written.",
+			),
+		];
+	},
 };

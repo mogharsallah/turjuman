@@ -1,4 +1,8 @@
-import { DeleteTableCommand, DynamoDBClient, UpdateTableCommand } from "@aws-sdk/client-dynamodb";
+import {
+	DeleteTableCommand,
+	type DynamoDBClient,
+	UpdateTableCommand,
+} from "@aws-sdk/client-dynamodb";
 
 /**
  * Enable deletion protection on a table. Used by `teardown --keep-table`: the
@@ -7,12 +11,15 @@ import { DeleteTableCommand, DynamoDBClient, UpdateTableCommand } from "@aws-sdk
  * against an accidental later delete.
  */
 export async function enableTableDeletionProtection(
-  client: DynamoDBClient,
-  tableName: string,
+	client: DynamoDBClient,
+	tableName: string,
 ): Promise<void> {
-  await client.send(
-    new UpdateTableCommand({ TableName: tableName, DeletionProtectionEnabled: true }),
-  );
+	await client.send(
+		new UpdateTableCommand({
+			TableName: tableName,
+			DeletionProtectionEnabled: true,
+		}),
+	);
 }
 
 /**
@@ -20,6 +27,9 @@ export async function enableTableDeletionProtection(
  * retained on stack delete (RemovalPolicy.RETAIN), removing the install
  * completely means deleting the orphaned table explicitly.
  */
-export async function deleteTable(client: DynamoDBClient, tableName: string): Promise<void> {
-  await client.send(new DeleteTableCommand({ TableName: tableName }));
+export async function deleteTable(
+	client: DynamoDBClient,
+	tableName: string,
+): Promise<void> {
+	await client.send(new DeleteTableCommand({ TableName: tableName }));
 }

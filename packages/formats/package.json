@@ -1,63 +1,63 @@
 {
-  "name": "@turjuman/formats",
-  "version": "0.2.0",
-  "description": "Turjuman localization file-format adapters (JSON, YAML, .properties, ARB, CSV, Android XML, iOS .strings/.stringsdict, gettext PO, XLIFF 1.2/2.0) over a canonical ICU representation.",
-  "license": "MIT",
-  "author": "Turjuman contributors",
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": "./dist/index.js",
-    "./package.json": "./package.json"
-  },
-  "files": [
-    "dist"
-  ],
-  "publishConfig": {
-    "access": "public"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/mogharsallah/turjuman.git",
-    "directory": "packages/formats"
-  },
-  "homepage": "https://github.com/mogharsallah/turjuman#readme",
-  "bugs": "https://github.com/mogharsallah/turjuman/issues",
-  "keywords": [
-    "turjuman",
-    "i18n",
-    "l10n",
-    "localization",
-    "translation",
-    "file-format",
-    "icu",
-    "arb",
-    "android",
-    "ios"
-  ],
-  "engines": {
-    "node": ">=24"
-  },
-  "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
-    "clean": "rm -rf dist"
-  },
-  "dependencies": {
-    "@turjuman/schema": "workspace:*",
-    "csv-parse": "^5.6.0",
-    "csv-stringify": "^6.5.2",
-    "fast-xml-parser": "^4.5.1",
-    "gettext-parser": "^8.0.0",
-    "js-yaml": "^4.1.0",
-    "plist": "^3.1.0"
-  },
-  "devDependencies": {
-    "@types/gettext-parser": "^8.0.0",
-    "@types/js-yaml": "^4.0.9",
-    "@types/plist": "^3.0.5",
-    "fast-check": "^3.23.1"
-  }
+	"name": "@turjuman/formats",
+	"version": "0.2.0",
+	"description": "Turjuman localization file-format adapters (JSON, YAML, .properties, ARB, CSV, Android XML, iOS .strings/.stringsdict, gettext PO, XLIFF 1.2/2.0) over a canonical ICU representation.",
+	"license": "MIT",
+	"author": "Turjuman contributors",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": "./dist/index.js",
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist"
+	],
+	"publishConfig": {
+		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/mogharsallah/turjuman.git",
+		"directory": "packages/formats"
+	},
+	"homepage": "https://github.com/mogharsallah/turjuman#readme",
+	"bugs": "https://github.com/mogharsallah/turjuman/issues",
+	"keywords": [
+		"turjuman",
+		"i18n",
+		"l10n",
+		"localization",
+		"translation",
+		"file-format",
+		"icu",
+		"arb",
+		"android",
+		"ios"
+	],
+	"engines": {
+		"node": ">=24"
+	},
+	"scripts": {
+		"build": "tsc -p tsconfig.json",
+		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"test": "vitest run",
+		"clean": "rm -rf dist"
+	},
+	"dependencies": {
+		"@turjuman/schema": "workspace:*",
+		"csv-parse": "^5.6.0",
+		"csv-stringify": "^6.5.2",
+		"fast-xml-parser": "^4.5.1",
+		"gettext-parser": "^8.0.0",
+		"js-yaml": "^4.1.0",
+		"plist": "^3.1.0"
+	},
+	"devDependencies": {
+		"@types/gettext-parser": "^8.0.0",
+		"@types/js-yaml": "^4.0.9",
+		"@types/plist": "^3.0.5",
+		"fast-check": "^3.23.1"
+	}
 }

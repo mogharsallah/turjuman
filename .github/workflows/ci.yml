@@ -42,6 +42,22 @@ jobs:
       - run: pnpm run typecheck
       - run: pnpm run test:unit # hermetic — integration/e2e suites self-skip
 
+  format:
+    name: format + lint (Biome)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # `biome ci` is read-only (no --write) and emits GitHub annotations on
+      # any formatting/lint drift. No build needed — Biome reads source directly.
+      - run: pnpm exec biome ci .
+
   docs:
     name: docs link check (Mintlify)
     runs-on: ubuntu-latest

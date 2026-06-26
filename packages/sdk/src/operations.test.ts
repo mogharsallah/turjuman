@@ -1,79 +1,94 @@
 import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
 import {
-  GROUP_BY_OPERATION,
-  OPERATIONS,
-  OPERATIONS_BY_NAME,
-  OPERATION_GROUPS,
-  effectiveAnnotations,
-  isReadOnly,
-  operationsMissingHttp,
+	effectiveAnnotations,
+	GROUP_BY_OPERATION,
+	isReadOnly,
+	OPERATION_GROUPS,
+	OPERATIONS,
+	OPERATIONS_BY_NAME,
+	operationsMissingHttp,
 } from "./index.js";
 
 describe("operation registry", () => {
-  it("declares a well-formed, uniquely-named operation set", () => {
-    expect(OPERATIONS.length).toBeGreaterThan(0);
-    const names = OPERATIONS.map((o) => o.name);
-    expect(new Set(names).size).toBe(names.length); // no duplicate names
-    for (const op of OPERATIONS) {
-      expect(typeof op.name).toBe("string");
-      expect(op.description.length).toBeGreaterThan(0);
-      expect(op.input).toBeDefined();
-      expect(typeof op.handler).toBe("function");
-    }
-  });
+	it("declares a well-formed, uniquely-named operation set", () => {
+		expect(OPERATIONS.length).toBeGreaterThan(0);
+		const names = OPERATIONS.map((o) => o.name);
+		expect(new Set(names).size).toBe(names.length); // no duplicate names
+		for (const op of OPERATIONS) {
+			expect(typeof op.name).toBe("string");
+			expect(op.description.length).toBeGreaterThan(0);
+			expect(op.input).toBeDefined();
+			expect(typeof op.handler).toBe("function");
+		}
+	});
 
-  it("keeps OPERATIONS_BY_NAME in lockstep with OPERATIONS", () => {
-    expect(OPERATIONS_BY_NAME.size).toBe(OPERATIONS.length);
-    for (const op of OPERATIONS) expect(OPERATIONS_BY_NAME.get(op.name)).toBe(op);
-  });
+	it("keeps OPERATIONS_BY_NAME in lockstep with OPERATIONS", () => {
+		expect(OPERATIONS_BY_NAME.size).toBe(OPERATIONS.length);
+		for (const op of OPERATIONS)
+			expect(OPERATIONS_BY_NAME.get(op.name)).toBe(op);
+	});
 
-  it("assigns every operation to exactly one group", () => {
-    const grouped = Object.values(OPERATION_GROUPS).flat();
-    // Every operation appears in a group, and no group references a stranger.
-    expect(new Set(grouped.map((o) => o.name))).toEqual(new Set(OPERATIONS.map((o) => o.name)));
-    for (const op of OPERATIONS) expect(GROUP_BY_OPERATION.get(op.name)).toBeDefined();
-    // delete_project is presented under `projects`, not a "lifecycle" group.
-    expect(GROUP_BY_OPERATION.get("delete_project")).toBe("projects");
-  });
+	it("assigns every operation to exactly one group", () => {
+		const grouped = Object.values(OPERATION_GROUPS).flat();
+		// Every operation appears in a group, and no group references a stranger.
+		expect(new Set(grouped.map((o) => o.name))).toEqual(
+			new Set(OPERATIONS.map((o) => o.name)),
+		);
+		for (const op of OPERATIONS)
+			expect(GROUP_BY_OPERATION.get(op.name)).toBeDefined();
+		// delete_project is presented under `projects`, not a "lifecycle" group.
+		expect(GROUP_BY_OPERATION.get("delete_project")).toBe("projects");
+	});
 });
 
 describe("effectiveAnnotations", () => {
-  it("derives read-only / destructive / idempotent hints from the verb", () => {
-    expect(effectiveAnnotations(OPERATIONS_BY_NAME.get("list_projects")!).readOnlyHint).toBe(true);
-    expect(effectiveAnnotations(OPERATIONS_BY_NAME.get("delete_project")!).destructiveHint).toBe(true);
-    expect(effectiveAnnotations(OPERATIONS_BY_NAME.get("revoke_api_key")!).destructiveHint).toBe(true);
-    const setTranslation = effectiveAnnotations(OPERATIONS_BY_NAME.get("set_translation")!);
-    expect(setTranslation.readOnlyHint).toBe(false);
-    expect(setTranslation.idempotentHint).toBe(true);
-    // An explicit annotation wins over the name-based derivation.
-    expect(isReadOnly(OPERATIONS_BY_NAME.get("run_qa_checks")!)).toBe(true);
-  });
+	it("derives read-only / destructive / idempotent hints from the verb", () => {
+		expect(
+			effectiveAnnotations(OPERATIONS_BY_NAME.get("list_projects")!)
+				.readOnlyHint,
+		).toBe(true);
+		expect(
+			effectiveAnnotations(OPERATIONS_BY_NAME.get("delete_project")!)
+				.destructiveHint,
+		).toBe(true);
+		expect(
+			effectiveAnnotations(OPERATIONS_BY_NAME.get("revoke_api_key")!)
+				.destructiveHint,
+		).toBe(true);
+		const setTranslation = effectiveAnnotations(
+			OPERATIONS_BY_NAME.get("set_translation")!,
+		);
+		expect(setTranslation.readOnlyHint).toBe(false);
+		expect(setTranslation.idempotentHint).toBe(true);
+		// An explicit annotation wins over the name-based derivation.
+		expect(isReadOnly(OPERATIONS_BY_NAME.get("run_qa_checks")!)).toBe(true);
+	});
 });
 
 describe("coverage tracker", () => {
-  it("reports which operations still lack an HTTP route (the REST gap vs MCP)", () => {
-    const missing = new Set(operationsMissingHttp());
-    // Operations migrated to the REST projection carry an http binding and so are
-    // NOT in the gap; every other operation is still MCP-only.
-    const withHttp = OPERATIONS.filter((o) => o.http).map((o) => o.name);
-    expect(withHttp.length).toBeGreaterThan(0);
-    for (const name of withHttp) expect(missing.has(name)).toBe(false);
-    expect(missing.size).toBe(OPERATIONS.length - withHttp.length);
-    // A spot check of the currently-migrated set and a still-missing example.
-    expect(missing.has("get_project")).toBe(false);
-    expect(missing.has("create_project")).toBe(true);
-  });
+	it("reports which operations still lack an HTTP route (the REST gap vs MCP)", () => {
+		const missing = new Set(operationsMissingHttp());
+		// Operations migrated to the REST projection carry an http binding and so are
+		// NOT in the gap; every other operation is still MCP-only.
+		const withHttp = OPERATIONS.filter((o) => o.http).map((o) => o.name);
+		expect(withHttp.length).toBeGreaterThan(0);
+		for (const name of withHttp) expect(missing.has(name)).toBe(false);
+		expect(missing.size).toBe(OPERATIONS.length - withHttp.length);
+		// A spot check of the currently-migrated set and a still-missing example.
+		expect(missing.has("get_project")).toBe(false);
+		expect(missing.has("create_project")).toBe(true);
+	});
 });
 
 describe("transport agnosticism", () => {
-  it("does not depend on @modelcontextprotocol/sdk", () => {
-    const require = createRequire(import.meta.url);
-    const pkg = require("../package.json") as {
-      dependencies?: Record<string, string>;
-      devDependencies?: Record<string, string>;
-    };
-    const all = { ...pkg.dependencies, ...pkg.devDependencies };
-    expect(all["@modelcontextprotocol/sdk"]).toBeUndefined();
-  });
+	it("does not depend on @modelcontextprotocol/sdk", () => {
+		const require = createRequire(import.meta.url);
+		const pkg = require("../package.json") as {
+			dependencies?: Record<string, string>;
+			devDependencies?: Record<string, string>;
+		};
+		const all = { ...pkg.dependencies, ...pkg.devDependencies };
+		expect(all["@modelcontextprotocol/sdk"]).toBeUndefined();
+	});
 });

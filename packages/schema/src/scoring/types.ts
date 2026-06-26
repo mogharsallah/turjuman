@@ -21,16 +21,16 @@ export type { ScorePromptMessage };
  * verbatim. The v2 per-category MQM breakdown (`errors[]`) slots in here.
  */
 export const scoreResultSchema = z.object({
-  score: z.number().int().min(0).max(100),
-  comment: z.string(),
+	score: z.number().int().min(0).max(100),
+	comment: z.string(),
 });
 export type ScoreResult = z.infer<typeof scoreResultSchema>;
 
 /** One glossary entry as the prompt needs it (the renderer ignores per-locale casing). */
 export interface ScoreGlossaryTerm {
-  term: string;
-  translations: Record<string, string>;
-  doNotTranslate: boolean;
+	term: string;
+	translations: Record<string, string>;
+	doNotTranslate: boolean;
 }
 
 /**
@@ -38,28 +38,28 @@ export interface ScoreGlossaryTerm {
  * the data model; the renderer here is pure over it.
  */
 export interface ScoreContext {
-  baseLocale: string;
-  targetLocale: string;
-  key: {
-    namespace: string;
-    name: string;
-    description?: string;
-    maxLength?: number;
-    plural: boolean;
-  };
-  /** Source-locale value — the reference the target is graded against. */
-  baseValue: string;
-  /** The target value under review. */
-  targetValue: string;
-  /** Project glossary, surfaced so the model can penalise term violations. */
-  glossary: readonly ScoreGlossaryTerm[];
-  /** The project's auto-approve threshold, so the model knows the bar. */
-  threshold: number;
-  /** Optional per-project evaluation guidance, merged into the prompt. */
-  guidance?: string;
+	baseLocale: string;
+	targetLocale: string;
+	key: {
+		namespace: string;
+		name: string;
+		description?: string;
+		maxLength?: number;
+		plural: boolean;
+	};
+	/** Source-locale value — the reference the target is graded against. */
+	baseValue: string;
+	/** The target value under review. */
+	targetValue: string;
+	/** Project glossary, surfaced so the model can penalise term violations. */
+	glossary: readonly ScoreGlossaryTerm[];
+	/** The project's auto-approve threshold, so the model knows the bar. */
+	threshold: number;
+	/** Optional per-project evaluation guidance, merged into the prompt. */
+	guidance?: string;
 }
 
 /** A rendered prompt: the messages only. The service stamps `promptVersion`. */
 export interface RenderedPrompt {
-  messages: ScorePromptMessage[];
+	messages: ScorePromptMessage[];
 }

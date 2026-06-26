@@ -11,18 +11,18 @@ import { Turjuman } from "./turjuman.js";
  * deployer reads back; ApiUrl is omitted when the REST API surface is disabled.
  */
 export class TurjumanStack extends Stack {
-  readonly turjuman: Turjuman;
+	readonly turjuman: Turjuman;
 
-  constructor(scope: Construct, id: string, props: TurjumanStackProps = {}) {
-    super(scope, id, { stackName: props.stackName });
+	constructor(scope: Construct, id: string, props: TurjumanStackProps = {}) {
+		super(scope, id, { stackName: props.stackName });
 
-    const turjuman = new Turjuman(this, "Turjuman", props);
-    this.turjuman = turjuman;
+		const turjuman = new Turjuman(this, "Turjuman", props);
+		this.turjuman = turjuman;
 
-    new CfnOutput(this, "McpUrl", { value: turjuman.mcpUrl.url });
-    if (turjuman.apiUrl) {
-      new CfnOutput(this, "ApiUrl", { value: turjuman.apiUrl.url });
-    }
-    new CfnOutput(this, "TableName", { value: turjuman.table.tableName });
-  }
+		new CfnOutput(this, "McpUrl", { value: turjuman.mcpUrl.url });
+		if (turjuman.apiUrl) {
+			new CfnOutput(this, "ApiUrl", { value: turjuman.apiUrl.url });
+		}
+		new CfnOutput(this, "TableName", { value: turjuman.table.tableName });
+	}
 }

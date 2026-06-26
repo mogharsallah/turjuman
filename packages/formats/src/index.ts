@@ -11,35 +11,45 @@ import type { FormatAdapter } from "./types.js";
 import { xliff12Adapter, xliff20Adapter } from "./xliff.js";
 import { yamlAdapter } from "./yaml.js";
 
-export * from "./types.js";
 export { flatten, unflatten } from "./nesting.js";
+export * from "./types.js";
 
 /** All supported formats. */
 export const ADAPTERS: FormatAdapter[] = [
-  nestedJsonAdapter,
-  flatJsonAdapter,
-  yamlAdapter,
-  arbAdapter,
-  propertiesAdapter,
-  csvAdapter,
-  androidAdapter,
-  iosStringsAdapter,
-  iosStringsdictAdapter,
-  poAdapter,
-  xliff12Adapter,
-  xliff20Adapter,
+	nestedJsonAdapter,
+	flatJsonAdapter,
+	yamlAdapter,
+	arbAdapter,
+	propertiesAdapter,
+	csvAdapter,
+	androidAdapter,
+	iosStringsAdapter,
+	iosStringsdictAdapter,
+	poAdapter,
+	xliff12Adapter,
+	xliff20Adapter,
 ];
 
 const BY_ID = new Map(ADAPTERS.map((a) => [a.id, a]));
 
 export function getAdapter(id: string): FormatAdapter {
-  const adapter = BY_ID.get(id);
-  if (!adapter) {
-    throw validation(`Unknown format "${id}". Available: ${[...BY_ID.keys()].join(", ")}`);
-  }
-  return adapter;
+	const adapter = BY_ID.get(id);
+	if (!adapter) {
+		throw validation(
+			`Unknown format "${id}". Available: ${[...BY_ID.keys()].join(", ")}`,
+		);
+	}
+	return adapter;
 }
 
-export function listFormats(): { id: string; label: string; extensions: string[] }[] {
-  return ADAPTERS.map(({ id, label, extensions }) => ({ id, label, extensions }));
+export function listFormats(): {
+	id: string;
+	label: string;
+	extensions: string[];
+}[] {
+	return ADAPTERS.map(({ id, label, extensions }) => ({
+		id,
+		label,
+		extensions,
+	}));
 }

@@ -1,51 +1,51 @@
 {
-  "name": "@turjuman/knowledge",
-  "version": "0.2.0",
-  "description": "Turjuman's transport-agnostic knowledge layer: one searchable index over the SDK operations (typed signatures) and the docs corpus (guides, concepts, reference), powering the code-mode `search`/`get` tools.",
-  "license": "MIT",
-  "author": "Turjuman contributors",
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": "./dist/index.js",
-    "./package.json": "./package.json"
-  },
-  "files": [
-    "dist"
-  ],
-  "publishConfig": {
-    "access": "public"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/mogharsallah/turjuman.git",
-    "directory": "packages/knowledge"
-  },
-  "homepage": "https://github.com/mogharsallah/turjuman#readme",
-  "bugs": "https://github.com/mogharsallah/turjuman/issues",
-  "keywords": [
-    "turjuman",
-    "i18n",
-    "localization",
-    "translation",
-    "search",
-    "mcp",
-    "rag"
-  ],
-  "engines": {
-    "node": ">=24"
-  },
-  "scripts": {
-    "build": "node scripts/build-corpus.mjs && tsc -p tsconfig.build.json && node -e \"require('node:fs').cpSync('src/generated','dist/generated',{recursive:true})\"",
-    "typecheck": "node scripts/build-corpus.mjs && tsc -p tsconfig.json --noEmit",
-    "test": "node scripts/build-corpus.mjs && vitest run",
-    "clean": "rm -rf dist src/generated/corpus.json",
-    "prepublishOnly": "pnpm run build"
-  },
-  "dependencies": {
-    "@orama/orama": "3.1.18",
-    "@turjuman/sdk": "workspace:*",
-    "zod": "^3.24.1"
-  }
+	"name": "@turjuman/knowledge",
+	"version": "0.2.0",
+	"description": "Turjuman's transport-agnostic knowledge layer: one searchable index over the SDK operations (typed signatures) and the docs corpus (guides, concepts, reference), powering the code-mode `search`/`get` tools.",
+	"license": "MIT",
+	"author": "Turjuman contributors",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": "./dist/index.js",
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist"
+	],
+	"publishConfig": {
+		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/mogharsallah/turjuman.git",
+		"directory": "packages/knowledge"
+	},
+	"homepage": "https://github.com/mogharsallah/turjuman#readme",
+	"bugs": "https://github.com/mogharsallah/turjuman/issues",
+	"keywords": [
+		"turjuman",
+		"i18n",
+		"localization",
+		"translation",
+		"search",
+		"mcp",
+		"rag"
+	],
+	"engines": {
+		"node": ">=24"
+	},
+	"scripts": {
+		"build": "node scripts/build-corpus.mjs && tsc -p tsconfig.build.json && node -e \"require('node:fs').cpSync('src/generated','dist/generated',{recursive:true})\"",
+		"typecheck": "node scripts/build-corpus.mjs && tsc -p tsconfig.json --noEmit",
+		"test": "node scripts/build-corpus.mjs && vitest run",
+		"clean": "rm -rf dist src/generated/corpus.json",
+		"prepublishOnly": "pnpm run build"
+	},
+	"dependencies": {
+		"@orama/orama": "3.1.18",
+		"@turjuman/sdk": "workspace:*",
+		"zod": "^3.24.1"
+	}
 }

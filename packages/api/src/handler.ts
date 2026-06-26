@@ -1,4 +1,8 @@
-import { TurjumanService, Repository, repositoryFromEnv } from "@turjuman/core";
+import {
+	type Repository,
+	repositoryFromEnv,
+	TurjumanService,
+} from "@turjuman/core";
 import { handle } from "hono/aws-lambda";
 import { createApp } from "./router.js";
 

@@ -5,6 +5,19 @@
 # output and staged into the commit. Skip with `git commit --no-verify`.
 set -e
 
+# Auto-format staged files with Biome (formatting + safe lint fixes) and re-stage
+# the result, so commits land already-clean and CI's `biome ci` stays green. The
+# generated OpenAPI snapshot is excluded in biome.json (it's generator-owned, see
+# below). Best-effort: never block a commit on a Biome hiccup. Skip with --no-verify.
+if [ -x ./node_modules/.bin/biome ]; then
+  staged="$(git diff --cached --name-only --diff-filter=ACMR)"
+  if [ -n "$staged" ]; then
+    ./node_modules/.bin/biome check --staged --write \
+      --no-errors-on-unmatched --files-ignore-unknown=true >/dev/null 2>&1 || true
+    printf '%s\n' "$staged" | xargs -r git add --
+  fi
+fi
+
 if git diff --cached --name-only \
   | grep -qE '^(packages/api/src/|packages/core/src/|packages/schema/src/|scripts/gen-openapi\.mjs$)'; then
   echo "[pre-commit] API/core/schema changed — refreshing OpenAPI snapshot..."

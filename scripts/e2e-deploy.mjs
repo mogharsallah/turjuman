@@ -53,40 +53,46 @@ const { deployStack } = await import("../packages/aws-deploy/dist/toolkit.js");
 //    toolkit self-bootstraps LocalStack and talks to it via AWS_ENDPOINT_URL.
 console.log("Deploying CDK stack with the toolkit...");
 const outputs = await deployStack({
-  props: {
-    stackName: STACK,
-    functionDefaults: { architecture: ARCH },
-    // Read the change stream from the shard horizon rather than LATEST. The stack
-    // is freshly deployed per run, so there is no history to replay; reading from
-    // the horizon removes the flaky race where a webhook-triggering write lands
-    // before LocalStack's stream poller is actually live and is silently missed.
-    webhook: { streamStartingPosition: "TRIM_HORIZON" },
-  },
-  region: REGION,
-  skipBootstrap: process.env.TURJUMAN_E2E_SKIP_BOOTSTRAP === "1",
+	props: {
+		stackName: STACK,
+		functionDefaults: { architecture: ARCH },
+		// Read the change stream from the shard horizon rather than LATEST. The stack
+		// is freshly deployed per run, so there is no history to replay; reading from
+		// the horizon removes the flaky race where a webhook-triggering write lands
+		// before LocalStack's stream poller is actually live and is silently missed.
+		webhook: { streamStartingPosition: "TRIM_HORIZON" },
+	},
+	region: REGION,
+	skipBootstrap: process.env.TURJUMAN_E2E_SKIP_BOOTSTRAP === "1",
 });
 const { McpUrl: mcpUrl, ApiUrl: apiUrl, TableName: tableName } = outputs;
 if (!mcpUrl || !apiUrl || !tableName) {
-  throw new Error(`Stack outputs missing McpUrl/ApiUrl/TableName: ${JSON.stringify(outputs)}`);
+	throw new Error(
+		`Stack outputs missing McpUrl/ApiUrl/TableName: ${JSON.stringify(outputs)}`,
+	);
 }
 
 // 2. Seed a bootstrap owner directly against the deployed table and capture the
 //    one-time API key. force:true keeps re-runs idempotent.
-const ddb = new DynamoDBClient({ endpoint: ENDPOINT, region: REGION, credentials: CREDS });
+const ddb = new DynamoDBClient({
+	endpoint: ENDPOINT,
+	region: REGION,
+	credentials: CREDS,
+});
 const repo = new Repository({ tableName, client: ddb });
 const { secret: apiKey } = await bootstrapOwner(repo, {
-  email: "e2e-owner@turjuman.test",
-  name: "E2E Owner",
-  force: true,
+	email: "e2e-owner@turjuman.test",
+	name: "E2E Owner",
+	force: true,
 });
 
 // 2b. Seed a SECOND org's owner so tenant-isolation scenarios have a key from a
 //     different org. Same table, distinct orgId — exactly how multi-tenancy works.
 const { secret: apiKeyOrgB } = await bootstrapOwner(repo, {
-  email: "e2e-owner-b@turjuman.test",
-  name: "E2E Owner B",
-  orgId: "tenant-b",
-  force: true,
+	email: "e2e-owner-b@turjuman.test",
+	name: "E2E Owner B",
+	orgId: "tenant-b",
+	force: true,
 });
 
 // 3. Persist for the vitest e2e spec.
@@ -94,12 +100,20 @@ const outDir = join(root, "packages", "e2e", ".e2e");
 mkdirSync(outDir, { recursive: true });
 const envFile = join(outDir, "env.json");
 writeFileSync(
-  envFile,
-  JSON.stringify(
-    { mcpUrl, apiUrl, tableName, apiKey, apiKeyOrgB, endpoint: ENDPOINT, region: REGION },
-    null,
-    2,
-  ),
+	envFile,
+	JSON.stringify(
+		{
+			mcpUrl,
+			apiUrl,
+			tableName,
+			apiKey,
+			apiKeyOrgB,
+			endpoint: ENDPOINT,
+			region: REGION,
+		},
+		null,
+		2,
+	),
 );
 
 console.log(`\nDeployed stack "${STACK}" (arch ${ARCH}). Wrote ${envFile}`);

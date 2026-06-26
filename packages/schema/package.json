@@ -1,56 +1,56 @@
 {
-  "name": "@turjuman/schema",
-  "version": "0.2.0",
-  "description": "Turjuman shared domain model, zod schemas, RBAC policy, QA checks and ICU plural helpers — the pure, AWS-free core shared by the CLI, services and transports.",
-  "license": "MIT",
-  "author": "Turjuman contributors",
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": "./dist/index.js",
-    "./qa": "./dist/qa/index.js",
-    "./scoring": "./dist/scoring/index.js",
-    "./package.json": "./package.json"
-  },
-  "files": [
-    "dist"
-  ],
-  "publishConfig": {
-    "access": "public"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/mogharsallah/turjuman.git",
-    "directory": "packages/schema"
-  },
-  "homepage": "https://github.com/mogharsallah/turjuman#readme",
-  "bugs": "https://github.com/mogharsallah/turjuman/issues",
-  "keywords": [
-    "turjuman",
-    "i18n",
-    "l10n",
-    "localization",
-    "translation",
-    "icu",
-    "zod",
-    "schema"
-  ],
-  "engines": {
-    "node": ">=24"
-  },
-  "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
-    "clean": "rm -rf dist"
-  },
-  "dependencies": {
-    "@formatjs/icu-messageformat-parser": "^2.11.4",
-    "zod": "^3.24.1",
-    "zod-openapi": "^4.2.4"
-  },
-  "devDependencies": {
-    "fast-check": "^3.23.1"
-  }
+	"name": "@turjuman/schema",
+	"version": "0.2.0",
+	"description": "Turjuman shared domain model, zod schemas, RBAC policy, QA checks and ICU plural helpers — the pure, AWS-free core shared by the CLI, services and transports.",
+	"license": "MIT",
+	"author": "Turjuman contributors",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": "./dist/index.js",
+		"./qa": "./dist/qa/index.js",
+		"./scoring": "./dist/scoring/index.js",
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist"
+	],
+	"publishConfig": {
+		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/mogharsallah/turjuman.git",
+		"directory": "packages/schema"
+	},
+	"homepage": "https://github.com/mogharsallah/turjuman#readme",
+	"bugs": "https://github.com/mogharsallah/turjuman/issues",
+	"keywords": [
+		"turjuman",
+		"i18n",
+		"l10n",
+		"localization",
+		"translation",
+		"icu",
+		"zod",
+		"schema"
+	],
+	"engines": {
+		"node": ">=24"
+	},
+	"scripts": {
+		"build": "tsc -p tsconfig.json",
+		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"test": "vitest run",
+		"clean": "rm -rf dist"
+	},
+	"dependencies": {
+		"@formatjs/icu-messageformat-parser": "^2.11.4",
+		"zod": "^3.24.1",
+		"zod-openapi": "^4.2.4"
+	},
+	"devDependencies": {
+		"fast-check": "^3.23.1"
+	}
 }

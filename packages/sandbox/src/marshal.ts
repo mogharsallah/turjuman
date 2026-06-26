@@ -8,14 +8,22 @@ import type { QuickJSContext, QuickJSHandle } from "quickjs-emscripten-core";
  * subset of JS literals). `undefined` and non-serializable values become the
  * guest `undefined`.
  */
-export function hostToHandle(ctx: QuickJSContext, value: unknown): QuickJSHandle {
-  const json = value === undefined ? undefined : JSON.stringify(value);
-  if (json === undefined) return ctx.undefined;
-  return ctx.unwrapResult(ctx.evalCode(`(${json})`));
+export function hostToHandle(
+	ctx: QuickJSContext,
+	value: unknown,
+): QuickJSHandle {
+	const json = value === undefined ? undefined : JSON.stringify(value);
+	if (json === undefined) return ctx.undefined;
+	return ctx.unwrapResult(ctx.evalCode(`(${json})`));
 }
 
 /** Build a guest `Error` handle carrying `message`, so a rejected bridge call is
  * a real `Error` the guest can `catch` and read `.message` from. */
-export function errorHandle(ctx: QuickJSContext, message: string): QuickJSHandle {
-  return ctx.unwrapResult(ctx.evalCode(`new Error(${JSON.stringify(message)})`));
+export function errorHandle(
+	ctx: QuickJSContext,
+	message: string,
+): QuickJSHandle {
+	return ctx.unwrapResult(
+		ctx.evalCode(`new Error(${JSON.stringify(message)})`),
+	);
 }

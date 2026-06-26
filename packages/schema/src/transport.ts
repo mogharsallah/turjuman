@@ -7,8 +7,8 @@
 
 /** Extract the token from an `Authorization: Bearer <token>` header. */
 export function parseBearer(header: string | undefined): string | undefined {
-  if (!header) return undefined;
-  return /^Bearer\s+(.+)$/i.exec(header.trim())?.[1];
+	if (!header) return undefined;
+	return /^Bearer\s+(.+)$/i.exec(header.trim())?.[1];
 }
 
 /**
@@ -16,17 +16,21 @@ export function parseBearer(header: string | undefined): string | undefined {
  * is inconsistent, so handlers normalize before lookups (`headers.authorization`).
  */
 export function lowerHeaderKeys(
-  headers: Record<string, string | undefined>,
+	headers: Record<string, string | undefined>,
 ): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(headers)) if (v !== undefined) out[k.toLowerCase()] = v;
-  return out;
+	const out: Record<string, string> = {};
+	for (const [k, v] of Object.entries(headers))
+		if (v !== undefined) out[k.toLowerCase()] = v;
+	return out;
 }
 
 /** Decode a Lambda HTTP request body, honoring base64 transfer encoding. */
-export function decodeBody(body: string | null | undefined, isBase64?: boolean): string {
-  if (!body) return "";
-  return isBase64 ? Buffer.from(body, "base64").toString("utf8") : body;
+export function decodeBody(
+	body: string | null | undefined,
+	isBase64?: boolean,
+): string {
+	if (!body) return "";
+	return isBase64 ? Buffer.from(body, "base64").toString("utf8") : body;
 }
 
 /** The `WWW-Authenticate` challenge value sent on a 401. */
@@ -38,17 +42,17 @@ export const BEARER_CHALLENGE = 'Bearer realm="Turjuman"';
  * content-type and challenge always win.
  */
 export function unauthorized(extraHeaders: Record<string, string> = {}): {
-  statusCode: 401;
-  headers: Record<string, string>;
-  body: string;
+	statusCode: 401;
+	headers: Record<string, string>;
+	body: string;
 } {
-  return {
-    statusCode: 401,
-    headers: {
-      ...extraHeaders,
-      "content-type": "application/json",
-      "www-authenticate": BEARER_CHALLENGE,
-    },
-    body: JSON.stringify({ error: "Invalid or missing API key" }),
-  };
+	return {
+		statusCode: 401,
+		headers: {
+			...extraHeaders,
+			"content-type": "application/json",
+			"www-authenticate": BEARER_CHALLENGE,
+		},
+		body: JSON.stringify({ error: "Invalid or missing API key" }),
+	};
 }

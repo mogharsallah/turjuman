@@ -16,8 +16,10 @@ const CREDS = { accessKeyId: "test", secretAccessKey: "test" };
 
 const STACK = devStackName();
 if (!STACK) {
-  console.log("No dev stack for this working copy (no .turjuman-dev marker). Nothing to tear down.");
-  process.exit(0);
+	console.log(
+		"No dev stack for this working copy (no .turjuman-dev marker). Nothing to tear down.",
+	);
+	process.exit(0);
 }
 
 process.env.AWS_REGION = REGION;
@@ -27,16 +29,28 @@ process.env.AWS_SECRET_ACCESS_KEY ??= "test";
 process.env.AWS_ENDPOINT_URL ??= ENDPOINT;
 
 const { CloudFormationClient } = await import("@aws-sdk/client-cloudformation");
-const { DynamoDBClient, DeleteTableCommand } = await import("@aws-sdk/client-dynamodb");
-const { deleteStack, describeStack } = await import("../packages/aws-deploy/dist/stack.js");
+const { DynamoDBClient, DeleteTableCommand } = await import(
+	"@aws-sdk/client-dynamodb"
+);
+const { deleteStack, describeStack } = await import(
+	"../packages/aws-deploy/dist/stack.js"
+);
 
-const cfn = new CloudFormationClient({ endpoint: ENDPOINT, region: REGION, credentials: CREDS });
-const ddb = new DynamoDBClient({ endpoint: ENDPOINT, region: REGION, credentials: CREDS });
+const cfn = new CloudFormationClient({
+	endpoint: ENDPOINT,
+	region: REGION,
+	credentials: CREDS,
+});
+const ddb = new DynamoDBClient({
+	endpoint: ENDPOINT,
+	region: REGION,
+	credentials: CREDS,
+});
 
 const stack = await describeStack(cfn, STACK);
 if (!stack) {
-  console.log(`Dev stack "${STACK}" is not deployed. Nothing to tear down.`);
-  process.exit(0);
+	console.log(`Dev stack "${STACK}" is not deployed. Nothing to tear down.`);
+	process.exit(0);
 }
 
 // The table has RemovalPolicy.RETAIN, so the stack delete leaves it orphaned —
@@ -45,6 +59,11 @@ const tableName = stack.outputs?.TableName;
 
 console.log(`Tearing down dev stack "${STACK}"...`);
 await deleteStack(cfn, STACK, { onStatus: (msg) => console.log(`  ${msg}`) });
-if (tableName) await ddb.send(new DeleteTableCommand({ TableName: tableName })).catch(() => {});
+if (tableName)
+	await ddb
+		.send(new DeleteTableCommand({ TableName: tableName }))
+		.catch(() => {});
 
-console.log(`\nTore down "${STACK}". The shared LocalStack and other sessions are untouched.`);
+console.log(
+	`\nTore down "${STACK}". The shared LocalStack and other sessions are untouched.`,
+);

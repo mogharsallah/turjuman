@@ -1,29 +1,31 @@
 {
-  "name": "Turjuman",
-  "image": "mcr.microsoft.com/devcontainers/typescript-node:24",
-  "features": {
-    // docker-outside-of-docker: use the host daemon so LocalStack can spawn sibling
-    // Lambda containers (dind would need --privileged, which Codespaces denies).
-    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": { "moby": true }
-  },
-  "forwardPorts": [3000, 4000, 4566],
-  "portsAttributes": {
-    "3000": { "label": "MCP server" },
-    "4000": { "label": "REST API" },
-    "4566": { "label": "LocalStack" }
-  },
-  // Enable Corepack so the pnpm version pinned in package.json is used. Build
-  // after deps so dependents see core's dist; seed .env. Start LocalStack
-  // yourself with `pnpm run localstack:up`.
-  "onCreateCommand": "corepack enable && pnpm install --frozen-lockfile",
-  "postCreateCommand": "pnpm run build && cp -n .env.example .env",
-  "customizations": {
-    "vscode": {
-      "extensions": [
-        "ms-vscode-remote.remote-containers",
-        "ms-azuretools.vscode-docker",
-        "redhat.vscode-yaml"
-      ]
-    }
-  }
+	"name": "Turjuman",
+	"image": "mcr.microsoft.com/devcontainers/typescript-node:24",
+	"features": {
+		// docker-outside-of-docker: use the host daemon so LocalStack can spawn sibling
+		// Lambda containers (dind would need --privileged, which Codespaces denies).
+		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+			"moby": true
+		}
+	},
+	"forwardPorts": [3000, 4000, 4566],
+	"portsAttributes": {
+		"3000": { "label": "MCP server" },
+		"4000": { "label": "REST API" },
+		"4566": { "label": "LocalStack" }
+	},
+	// Enable Corepack so the pnpm version pinned in package.json is used. Build
+	// after deps so dependents see core's dist; seed .env. Start LocalStack
+	// yourself with `pnpm run localstack:up`.
+	"onCreateCommand": "corepack enable && pnpm install --frozen-lockfile",
+	"postCreateCommand": "pnpm run build && cp -n .env.example .env",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-vscode-remote.remote-containers",
+				"ms-azuretools.vscode-docker",
+				"redhat.vscode-yaml"
+			]
+		}
+	}
 }
