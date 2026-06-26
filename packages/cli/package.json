@@ -1,52 +1,52 @@
 {
-  "name": "@turjuman/cli",
-  "version": "0.2.0",
-  "description": "Turjuman developer CLI: pull, push and build translation files in your repo and CI.",
-  "license": "MIT",
-  "author": "Turjuman contributors",
-  "type": "module",
-  "bin": {
-    "turjuman": "./dist/index.js"
-  },
-  "exports": {
-    "./auth": "./dist/auth.js",
-    "./package.json": "./package.json"
-  },
-  "files": [
-    "dist"
-  ],
-  "publishConfig": {
-    "access": "public"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/mogharsallah/turjuman.git",
-    "directory": "packages/cli"
-  },
-  "homepage": "https://github.com/mogharsallah/turjuman#readme",
-  "bugs": "https://github.com/mogharsallah/turjuman/issues",
-  "keywords": [
-    "turjuman",
-    "i18n",
-    "l10n",
-    "localization",
-    "translation",
-    "cli",
-    "mcp"
-  ],
-  "engines": {
-    "node": ">=24"
-  },
-  "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
-    "clean": "rm -rf dist"
-  },
-  "dependencies": {
-    "@turjuman/formats": "workspace:*",
-    "@turjuman/schema": "workspace:*",
-    "commander": "^12.1.0",
-    "zod": "^3.24.1"
-  }
+	"name": "@turjuman/cli",
+	"version": "0.2.0",
+	"description": "Turjuman developer CLI: pull, push and build translation files in your repo and CI.",
+	"license": "MIT",
+	"author": "Turjuman contributors",
+	"type": "module",
+	"bin": {
+		"turjuman": "./dist/index.js"
+	},
+	"exports": {
+		"./auth": "./dist/auth.js",
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist"
+	],
+	"publishConfig": {
+		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/mogharsallah/turjuman.git",
+		"directory": "packages/cli"
+	},
+	"homepage": "https://github.com/mogharsallah/turjuman#readme",
+	"bugs": "https://github.com/mogharsallah/turjuman/issues",
+	"keywords": [
+		"turjuman",
+		"i18n",
+		"l10n",
+		"localization",
+		"translation",
+		"cli",
+		"mcp"
+	],
+	"engines": {
+		"node": ">=24"
+	},
+	"scripts": {
+		"build": "tsc -p tsconfig.json",
+		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"test": "vitest run",
+		"clean": "rm -rf dist"
+	},
+	"dependencies": {
+		"@turjuman/formats": "workspace:*",
+		"@turjuman/schema": "workspace:*",
+		"commander": "^12.1.0",
+		"zod": "^3.24.1"
+	}
 }

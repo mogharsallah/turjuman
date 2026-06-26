@@ -2,8 +2,8 @@
  * typed `code` and a per-request `requestId` (echoed in the X-Request-Id
  * header) — both are surfaced so a failure can be tied to a server-side log. */
 export interface ErrorDetails {
-  code?: string;
-  requestId?: string;
+	code?: string;
+	requestId?: string;
 }
 
 /**
@@ -15,26 +15,29 @@ export interface ErrorDetails {
  *   3  API / network error
  */
 export class CliError extends Error {
-  readonly code?: string;
-  readonly requestId?: string;
-  constructor(
-    message: string,
-    readonly exitCode: number = 1,
-    details: ErrorDetails = {},
-  ) {
-    super(message);
-    this.name = "CliError";
-    this.code = details.code;
-    this.requestId = details.requestId;
-  }
+	readonly code?: string;
+	readonly requestId?: string;
+	constructor(
+		message: string,
+		readonly exitCode: number = 1,
+		details: ErrorDetails = {},
+	) {
+		super(message);
+		this.name = "CliError";
+		this.code = details.code;
+		this.requestId = details.requestId;
+	}
 }
 
 /** A misconfiguration / bad-usage error (missing config, not logged in, …). */
 export function usageError(message: string): CliError {
-  return new CliError(message, 2);
+	return new CliError(message, 2);
 }
 
 /** An error talking to the API (non-OK response or transport failure). */
-export function apiError(message: string, details: ErrorDetails = {}): CliError {
-  return new CliError(message, 3, details);
+export function apiError(
+	message: string,
+	details: ErrorDetails = {},
+): CliError {
+	return new CliError(message, 3, details);
 }

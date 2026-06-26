@@ -16,22 +16,22 @@ import { OPERATIONS } from "./operations/index.js";
  * the operation, not of any transport, so it lives here; the MCP projection maps
  * the result onto MCP's `ToolAnnotations` unchanged. */
 export function effectiveAnnotations(op: Operation): OpAnnotations {
-  if (op.annotations) return op.annotations;
-  const name = op.name;
-  if (/^(list|get|search|lookup)_/.test(name)) return { readOnlyHint: true };
-  if (/^(delete|revoke|remove)_/.test(name)) {
-    return { readOnlyHint: false, destructiveHint: true };
-  }
-  return {
-    readOnlyHint: false,
-    destructiveHint: false,
-    ...(/^(set|update)_/.test(name) ? { idempotentHint: true } : {}),
-  };
+	if (op.annotations) return op.annotations;
+	const name = op.name;
+	if (/^(list|get|search|lookup)_/.test(name)) return { readOnlyHint: true };
+	if (/^(delete|revoke|remove)_/.test(name)) {
+		return { readOnlyHint: false, destructiveHint: true };
+	}
+	return {
+		readOnlyHint: false,
+		destructiveHint: false,
+		...(/^(set|update)_/.test(name) ? { idempotentHint: true } : {}),
+	};
 }
 
 /** Whether an operation only reads (its effective `readOnlyHint`). */
 export function isReadOnly(op: Operation): boolean {
-  return effectiveAnnotations(op).readOnlyHint === true;
+	return effectiveAnnotations(op).readOnlyHint === true;
 }
 
 /** Operations that are not yet projected onto an HTTP route (no `http` binding) —
@@ -39,5 +39,5 @@ export function isReadOnly(op: Operation): boolean {
  * Every operation is reachable over MCP and the sandbox; this names the gap in
  * the REST surface. */
 export function operationsMissingHttp(): string[] {
-  return OPERATIONS.filter((o) => !o.http).map((o) => o.name);
+	return OPERATIONS.filter((o) => !o.http).map((o) => o.name);
 }

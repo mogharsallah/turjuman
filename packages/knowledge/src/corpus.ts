@@ -20,34 +20,34 @@ let allCache: KnowledgeDoc[] | null = null;
  * mention any of them; the `signature` is what the model actually needs to write
  * `run_code`. */
 export function operationDocs(): KnowledgeDoc[] {
-  if (opCache) return opCache;
-  opCache = OPERATIONS.map((op) => {
-    const group = GROUP_BY_OPERATION.get(op.name) ?? "other";
-    const fields = inputFields(op)
-      .map((f) => f.name)
-      .join(" ");
-    return {
-      id: `op:${op.name}`,
-      kind: "operation",
-      title: op.name,
-      group,
-      signature: operationSignature(op),
-      description: op.description,
-      text: `${op.name} ${group} ${op.description} ${fields}`,
-    };
-  });
-  return opCache;
+	if (opCache) return opCache;
+	opCache = OPERATIONS.map((op) => {
+		const group = GROUP_BY_OPERATION.get(op.name) ?? "other";
+		const fields = inputFields(op)
+			.map((f) => f.name)
+			.join(" ");
+		return {
+			id: `op:${op.name}`,
+			kind: "operation",
+			title: op.name,
+			group,
+			signature: operationSignature(op),
+			description: op.description,
+			text: `${op.name} ${group} ${op.description} ${fields}`,
+		};
+	});
+	return opCache;
 }
 
 /** The build-time docs chunks (guides / concepts / reference / overview). The
  * imported JSON is treated as immutable and returned as-is (callers never mutate
  * it), so there is no per-call clone. */
 export function docDocs(): KnowledgeDoc[] {
-  return rawDocs as KnowledgeDoc[];
+	return rawDocs as KnowledgeDoc[];
 }
 
 /** The full corpus: operations first, then docs chunks. */
 export function allDocs(): KnowledgeDoc[] {
-  if (!allCache) allCache = [...operationDocs(), ...docDocs()];
-  return allCache;
+	if (!allCache) allCache = [...operationDocs(), ...docDocs()];
+	return allCache;
 }

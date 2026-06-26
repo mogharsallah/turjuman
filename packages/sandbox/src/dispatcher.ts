@@ -20,25 +20,33 @@ export type OpDispatcher = (name: string, args: unknown) => Promise<unknown>;
  * internal can leak into guest-visible code.
  */
 export function createOpDispatcher(ctx: OpContext): OpDispatcher {
-  return async (name, args) => {
-    const op = OPERATIONS_BY_NAME.get(name);
-    if (!op) throw new Error(`Unknown operation: ${name}`);
-    let parsed: unknown;
-    try {
-      parsed = op.input.parse(args ?? {});
-    } catch (e) {
-      // Schema validation failure is model-actionable: surface it plainly.
-      const message = e instanceof Error ? e.message : String(e);
-      throw new Error(`VALIDATION: ${name}: ${message}`);
-    }
-    try {
-      return await op.handler(parsed, ctx);
-    } catch (e) {
-      // Same masking policy as every other transport boundary (see core's
-      // `maskError`): an AppError surfaces its code + message; anything else is
-      // logged server-side and replaced with a correlation-id reference.
-      const masked = maskError(e, { msg: "sandbox_op_error", requestId: ctx.requestId, operation: name });
-      throw new Error(masked.isAppError ? `${masked.code}: ${masked.message}` : masked.message);
-    }
-  };
+	return async (name, args) => {
+		const op = OPERATIONS_BY_NAME.get(name);
+		if (!op) throw new Error(`Unknown operation: ${name}`);
+		let parsed: unknown;
+		try {
+			parsed = op.input.parse(args ?? {});
+		} catch (e) {
+			// Schema validation failure is model-actionable: surface it plainly.
+			const message = e instanceof Error ? e.message : String(e);
+			throw new Error(`VALIDATION: ${name}: ${message}`);
+		}
+		try {
+			return await op.handler(parsed, ctx);
+		} catch (e) {
+			// Same masking policy as every other transport boundary (see core's
+			// `maskError`): an AppError surfaces its code + message; anything else is
+			// logged server-side and replaced with a correlation-id reference.
+			const masked = maskError(e, {
+				msg: "sandbox_op_error",
+				requestId: ctx.requestId,
+				operation: name,
+			});
+			throw new Error(
+				masked.isAppError
+					? `${masked.code}: ${masked.message}`
+					: masked.message,
+			);
+		}
+	};
 }

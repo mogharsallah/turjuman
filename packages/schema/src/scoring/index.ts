@@ -5,6 +5,7 @@
  * no I/O: `core/services/scoring.ts` loads the data and calls these, the single
  * seam between the methodology and the data model (mirrors `qa/` ↔ `services/qa.ts`).
  */
-export * from "./types.js";
-export * from "./rubric.js";
+
 export * from "./prompt.js";
+export * from "./rubric.js";
+export * from "./types.js";

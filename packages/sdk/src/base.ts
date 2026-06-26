@@ -1,34 +1,34 @@
-import { z } from "zod";
 import {
-  type Actor,
-  TurjumanService,
-  type User,
-  apiKeyCreatedSchema,
-  bulkSetResultSchema,
-  emailSchema,
-  globalRoleSchema,
-  glossaryTermSchema,
-  keyPageSchema,
-  keyWithTranslationsSchema,
-  localeCodeSchema,
-  localeSchema,
-  membershipSchema,
-  namespaceSchema,
-  projectRoleSchema,
-  projectSchema,
-  qaConfigSchema,
-  qaReportSchema,
-  qaSeveritySchema,
-  reviewResultSchema,
-  scoreConfigSchema,
-  scoreValueSchema,
-  settableStatusSchema,
-  translationKeySchema,
-  translationSchema,
-  translationStatusSchema,
-  userSchema,
-  webhookSchema,
+	type Actor,
+	apiKeyCreatedSchema,
+	bulkSetResultSchema,
+	emailSchema,
+	globalRoleSchema,
+	glossaryTermSchema,
+	keyPageSchema,
+	keyWithTranslationsSchema,
+	localeCodeSchema,
+	localeSchema,
+	membershipSchema,
+	namespaceSchema,
+	projectRoleSchema,
+	projectSchema,
+	qaConfigSchema,
+	qaReportSchema,
+	qaSeveritySchema,
+	reviewResultSchema,
+	scoreConfigSchema,
+	scoreValueSchema,
+	settableStatusSchema,
+	type TurjumanService,
+	translationKeySchema,
+	translationSchema,
+	translationStatusSchema,
+	type User,
+	userSchema,
+	webhookSchema,
 } from "@turjuman/core";
+import { z } from "zod";
 
 /** Re-exported so each operation group imports everything it needs from this one
  * module. Output schemas come straight from core (the canonical entity/wire
@@ -38,33 +38,33 @@ import {
  * an operation's input validation can't drift from the entity definitions
  * either. */
 export {
-  z,
-  apiKeyCreatedSchema,
-  bulkSetResultSchema,
-  emailSchema,
-  glossaryTermSchema,
-  keyPageSchema,
-  keyWithTranslationsSchema,
-  localeCodeSchema,
-  localeSchema,
-  membershipSchema,
-  namespaceSchema,
-  projectSchema,
-  qaConfigSchema,
-  qaReportSchema,
-  qaSeveritySchema,
-  reviewResultSchema,
-  scoreConfigSchema,
-  scoreValueSchema,
-  settableStatusSchema,
-  translationKeySchema,
-  translationSchema,
-  translationStatusSchema,
-  userSchema,
-  webhookSchema,
-  // The role field helpers used by admin operations are core's canonical enums.
-  projectRoleSchema as projectRole,
-  globalRoleSchema as globalRole,
+	apiKeyCreatedSchema,
+	bulkSetResultSchema,
+	emailSchema,
+	globalRoleSchema as globalRole,
+	glossaryTermSchema,
+	keyPageSchema,
+	keyWithTranslationsSchema,
+	localeCodeSchema,
+	localeSchema,
+	membershipSchema,
+	namespaceSchema,
+	// The role field helpers used by admin operations are core's canonical enums.
+	projectRoleSchema as projectRole,
+	projectSchema,
+	qaConfigSchema,
+	qaReportSchema,
+	qaSeveritySchema,
+	reviewResultSchema,
+	scoreConfigSchema,
+	scoreValueSchema,
+	settableStatusSchema,
+	translationKeySchema,
+	translationSchema,
+	translationStatusSchema,
+	userSchema,
+	webhookSchema,
+	z,
 };
 
 /**
@@ -76,22 +76,22 @@ export {
  * `annotationsFor`).
  */
 export interface OpAnnotations {
-  title?: string;
-  readOnlyHint?: boolean;
-  destructiveHint?: boolean;
-  idempotentHint?: boolean;
-  openWorldHint?: boolean;
+	title?: string;
+	readOnlyHint?: boolean;
+	destructiveHint?: boolean;
+	idempotentHint?: boolean;
+	openWorldHint?: boolean;
 }
 
 /** Everything an operation handler needs: the service and the authenticated
  * caller. The single execution context shared by every transport (MCP tool call,
  * REST route, code-mode sandbox bridge). */
 export interface OpContext {
-  service: TurjumanService;
-  actor: Actor;
-  user: User;
-  /** Per-request correlation id, surfaced to the client on a masked error. */
-  requestId: string;
+	service: TurjumanService;
+	actor: Actor;
+	user: User;
+	/** Per-request correlation id, surfaced to the client on a masked error. */
+	requestId: string;
 }
 
 /**
@@ -107,12 +107,12 @@ export interface OpContext {
  * document a correct request `$ref` distinct from the flat tool input.
  */
 export interface HttpBinding {
-  method: "get" | "post" | "put" | "patch" | "delete";
-  /** Route path with `:name` placeholders, e.g. "/v1/projects/:id/locales". */
-  path: string;
-  /** Map of URL path-param name → operation input field (e.g. `{ id: "projectId" }`).
-   * The remaining input fields form the JSON request body (write methods). */
-  params?: Record<string, string>;
+	method: "get" | "post" | "put" | "patch" | "delete";
+	/** Route path with `:name` placeholders, e.g. "/v1/projects/:id/locales". */
+	path: string;
+	/** Map of URL path-param name → operation input field (e.g. `{ id: "projectId" }`).
+	 * The remaining input fields form the JSON request body (write methods). */
+	params?: Record<string, string>;
 }
 
 /**
@@ -131,30 +131,30 @@ export interface HttpBinding {
  * schemas can live in one array. {@link op} preserves authoring-time type
  * safety. */
 export interface Operation {
-  name: string;
-  description: string;
-  input: z.ZodTypeAny;
-  /** Optional object schema for the operation's structured result. When present,
-   * transports validate the emitted structured content against it. */
-  output?: z.ZodTypeAny;
-  /** Behaviour hints. When omitted, the transport derives them from the name. */
-  annotations?: OpAnnotations;
-  /** Optional REST projection (method/path/param split). Absent ⇒ MCP-only. */
-  http?: HttpBinding;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handler: (args: any, ctx: OpContext) => Promise<unknown>;
+	name: string;
+	description: string;
+	input: z.ZodTypeAny;
+	/** Optional object schema for the operation's structured result. When present,
+	 * transports validate the emitted structured content against it. */
+	output?: z.ZodTypeAny;
+	/** Behaviour hints. When omitted, the transport derives them from the name. */
+	annotations?: OpAnnotations;
+	/** Optional REST projection (method/path/param split). Absent ⇒ MCP-only. */
+	http?: HttpBinding;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	handler: (args: any, ctx: OpContext) => Promise<unknown>;
 }
 
 export function op<S extends z.ZodTypeAny>(def: {
-  name: string;
-  description: string;
-  input: S;
-  output?: z.ZodTypeAny;
-  annotations?: OpAnnotations;
-  http?: HttpBinding;
-  handler: (args: z.infer<S>, ctx: OpContext) => Promise<unknown>;
+	name: string;
+	description: string;
+	input: S;
+	output?: z.ZodTypeAny;
+	annotations?: OpAnnotations;
+	http?: HttpBinding;
+	handler: (args: z.infer<S>, ctx: OpContext) => Promise<unknown>;
 }): Operation {
-  return def as Operation;
+	return def as Operation;
 }
 
 // ---- shared field schemas used across operation groups ----------------------
@@ -165,30 +165,35 @@ export const projectId = z.string().describe("Project id, e.g. proj_xxx");
 // Reuse the shared field schemas (core's validation) so every boundary validates
 // locale/namespace/email exactly as the service does.
 export const namespace = namespaceSchema
-  .optional()
-  .describe('Key namespace (logical group). Defaults to "default".');
-export const localeCode = localeCodeSchema.describe('Locale code, e.g. "fr" or "es-MX"');
+	.optional()
+	.describe('Key namespace (logical group). Defaults to "default".');
+export const localeCode = localeCodeSchema.describe(
+	'Locale code, e.g. "fr" or "es-MX"',
+);
 
 // Shared pagination inputs and the locale-scoped key-list output, used by the
 // paged growth/queue operations across groups (translations + scoring). Defined
 // once here so the page wording and list shape can't drift between files.
 export const pageLimit = z
-  .number()
-  .int()
-  .positive()
-  .max(200)
-  .optional()
-  .describe("Page size (default 100, max 200)");
-export const pageCursor = z.string().optional().describe("nextCursor from a previous page");
+	.number()
+	.int()
+	.positive()
+	.max(200)
+	.optional()
+	.describe("Page size (default 100, max 200)");
+export const pageCursor = z
+	.string()
+	.optional()
+	.describe("nextCursor from a previous page");
 
 /** The keys plus the locale and a page count, so a client gets context without a
  * second call. `count` is this page's size; `nextCursor` (when present) fetches
  * the next page. */
 export const localeKeyList = z.object({
-  locale: z.string(),
-  count: z.number().int(),
-  keys: z.array(translationKeySchema),
-  nextCursor: z.string().optional(),
+	locale: z.string(),
+	count: z.number().int(),
+	keys: z.array(translationKeySchema),
+	nextCursor: z.string().optional(),
 });
 
 // Output schemas for structured content are the canonical core schemas

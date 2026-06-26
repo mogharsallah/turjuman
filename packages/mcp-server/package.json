@@ -1,60 +1,60 @@
 {
-  "name": "@turjuman/mcp-server",
-  "version": "0.2.0",
-  "description": "Turjuman MCP server (stateless Streamable HTTP) for AWS Lambda.",
-  "license": "MIT",
-  "author": "Turjuman contributors",
-  "type": "module",
-  "main": "./dist/handler.js",
-  "types": "./dist/handler.d.ts",
-  "exports": {
-    ".": "./dist/handler.js",
-    "./lambda/handler.mjs": "./lambda/handler.mjs",
-    "./lambda/package.json": "./lambda/package.json",
-    "./package.json": "./package.json"
-  },
-  "files": [
-    "dist",
-    "lambda"
-  ],
-  "publishConfig": {
-    "access": "public"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/mogharsallah/turjuman.git",
-    "directory": "packages/mcp-server"
-  },
-  "homepage": "https://github.com/mogharsallah/turjuman#readme",
-  "bugs": "https://github.com/mogharsallah/turjuman/issues",
-  "keywords": [
-    "turjuman",
-    "mcp",
-    "model-context-protocol",
-    "i18n",
-    "translation",
-    "aws-lambda"
-  ],
-  "engines": {
-    "node": ">=24"
-  },
-  "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/build-lambda.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
-    "clean": "rm -rf dist lambda",
-    "prepublishOnly": "pnpm run build"
-  },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "@turjuman/core": "workspace:*",
-    "@turjuman/knowledge": "workspace:*",
-    "@turjuman/sandbox": "workspace:*",
-    "@turjuman/sdk": "workspace:*",
-    "zod": "^3.24.1"
-  },
-  "devDependencies": {
-    "@types/aws-lambda": "^8.10.146",
-    "esbuild": "^0.24.0"
-  }
+	"name": "@turjuman/mcp-server",
+	"version": "0.2.0",
+	"description": "Turjuman MCP server (stateless Streamable HTTP) for AWS Lambda.",
+	"license": "MIT",
+	"author": "Turjuman contributors",
+	"type": "module",
+	"main": "./dist/handler.js",
+	"types": "./dist/handler.d.ts",
+	"exports": {
+		".": "./dist/handler.js",
+		"./lambda/handler.mjs": "./lambda/handler.mjs",
+		"./lambda/package.json": "./lambda/package.json",
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist",
+		"lambda"
+	],
+	"publishConfig": {
+		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/mogharsallah/turjuman.git",
+		"directory": "packages/mcp-server"
+	},
+	"homepage": "https://github.com/mogharsallah/turjuman#readme",
+	"bugs": "https://github.com/mogharsallah/turjuman/issues",
+	"keywords": [
+		"turjuman",
+		"mcp",
+		"model-context-protocol",
+		"i18n",
+		"translation",
+		"aws-lambda"
+	],
+	"engines": {
+		"node": ">=24"
+	},
+	"scripts": {
+		"build": "tsc -p tsconfig.json && node scripts/build-lambda.mjs",
+		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"test": "vitest run",
+		"clean": "rm -rf dist lambda",
+		"prepublishOnly": "pnpm run build"
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.29.0",
+		"@turjuman/core": "workspace:*",
+		"@turjuman/knowledge": "workspace:*",
+		"@turjuman/sandbox": "workspace:*",
+		"@turjuman/sdk": "workspace:*",
+		"zod": "^3.24.1"
+	},
+	"devDependencies": {
+		"@types/aws-lambda": "^8.10.146",
+		"esbuild": "^0.24.0"
+	}
 }

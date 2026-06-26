@@ -6,16 +6,21 @@
  * `describe` are thin projections of this layer; it has no
  * `@modelcontextprotocol/sdk` and no AWS dependency, mirroring `@turjuman/sdk`.
  */
-export { searchKnowledge, describeKnowledge, DEFAULT_LIMIT, type SearchOptions } from "./search.js";
-export { KINDS, DOC_KINDS } from "./types.js";
+export {
+	DEFAULT_LIMIT,
+	describeKnowledge,
+	type SearchOptions,
+	searchKnowledge,
+} from "./search.js";
 export type {
-  Kind,
-  KnowledgeDoc,
-  SearchResult,
-  SearchResponse,
-  GroupSummary,
-  FieldInfo,
-  OperationDetail,
-  DocDetail,
-  DescribeResult,
+	DescribeResult,
+	DocDetail,
+	FieldInfo,
+	GroupSummary,
+	Kind,
+	KnowledgeDoc,
+	OperationDetail,
+	SearchResponse,
+	SearchResult,
 } from "./types.js";
+export { DOC_KINDS, KINDS } from "./types.js";

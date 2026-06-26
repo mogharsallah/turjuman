@@ -1,85 +1,79 @@
 {
-  "$schema": "https://mintlify.com/docs.json",
-  "theme": "luma",
-  "name": "Turjuman",
-  "description": "Open-source, self-hosted translation management driven by AI agents over MCP, with a developer CLI for deterministic locale-file sync.",
-  "logo": {
-    "light": "https://media.brand.dev/1ec7fa9c-3b46-4da7-92c7-b9caf7baf99b.svg",
-    "dark": "https://media.brand.dev/1ec7fa9c-3b46-4da7-92c7-b9caf7baf99b.svg"
-  },
-  "favicon": "https://media.brand.dev/086d5cb0-9929-48e2-8259-7d23cd55d1b9.png",
-  "colors": {
-    "primary": "#040404",
-    "light": "#244455"
-  },
-  "navbar": {
-    "primary": {
-      "type": "github",
-      "href": "https://github.com/mogharsallah/turjuman"
-    }
-  },
-  "navigation": {
-    "tabs": [
-      {
-        "tab": "Documentation",
-        "groups": [
-          {
-            "group": "Get Started",
-            "pages": [
-              "introduction",
-              "quickstart",
-              "self-hosting"
-            ]
-          },
-          {
-            "group": "Concepts",
-            "pages": [
-              "concepts/architecture",
-              "concepts/lifecycle",
-              "concepts/roles-and-permissions"
-            ]
-          },
-          {
-            "group": "Guides",
-            "pages": [
-              "guides/translate-with-mcp",
-              "guides/code-mode",
-              "guides/sync-with-cli",
-              "guides/quality-checks",
-              "guides/webhooks"
-            ]
-          },
-          {
-            "group": "Reference",
-            "pages": [
-              "reference/mcp-tools",
-              "reference/cli-commands",
-              "reference/file-formats",
-              "reference/qa-checks"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "API Reference",
-        "groups": [
-          {
-            "group": "REST API",
-            "pages": [
-              "api-reference/overview"
-            ]
-          },
-          {
-            "group": "Endpoints",
-            "openapi": "api-reference/openapi.json"
-          }
-        ]
-      }
-    ]
-  },
-  "footer": {
-    "socials": {
-      "github": "https://github.com/mogharsallah/turjuman"
-    }
-  }
+	"$schema": "https://mintlify.com/docs.json",
+	"theme": "luma",
+	"name": "Turjuman",
+	"description": "Open-source, self-hosted translation management driven by AI agents over MCP, with a developer CLI for deterministic locale-file sync.",
+	"logo": {
+		"light": "https://media.brand.dev/1ec7fa9c-3b46-4da7-92c7-b9caf7baf99b.svg",
+		"dark": "https://media.brand.dev/1ec7fa9c-3b46-4da7-92c7-b9caf7baf99b.svg"
+	},
+	"favicon": "https://media.brand.dev/086d5cb0-9929-48e2-8259-7d23cd55d1b9.png",
+	"colors": {
+		"primary": "#040404",
+		"light": "#244455"
+	},
+	"navbar": {
+		"primary": {
+			"type": "github",
+			"href": "https://github.com/mogharsallah/turjuman"
+		}
+	},
+	"navigation": {
+		"tabs": [
+			{
+				"tab": "Documentation",
+				"groups": [
+					{
+						"group": "Get Started",
+						"pages": ["introduction", "quickstart", "self-hosting"]
+					},
+					{
+						"group": "Concepts",
+						"pages": [
+							"concepts/architecture",
+							"concepts/lifecycle",
+							"concepts/roles-and-permissions"
+						]
+					},
+					{
+						"group": "Guides",
+						"pages": [
+							"guides/translate-with-mcp",
+							"guides/code-mode",
+							"guides/sync-with-cli",
+							"guides/quality-checks",
+							"guides/webhooks"
+						]
+					},
+					{
+						"group": "Reference",
+						"pages": [
+							"reference/mcp-tools",
+							"reference/cli-commands",
+							"reference/file-formats",
+							"reference/qa-checks"
+						]
+					}
+				]
+			},
+			{
+				"tab": "API Reference",
+				"groups": [
+					{
+						"group": "REST API",
+						"pages": ["api-reference/overview"]
+					},
+					{
+						"group": "Endpoints",
+						"openapi": "api-reference/openapi.json"
+					}
+				]
+			}
+		]
+	},
+	"footer": {
+		"socials": {
+			"github": "https://github.com/mogharsallah/turjuman"
+		}
+	}
 }

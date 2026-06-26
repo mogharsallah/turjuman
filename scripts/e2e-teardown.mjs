@@ -29,48 +29,67 @@ process.env.AWS_ENDPOINT_URL ??= ENDPOINT; // routes the CDK toolkit at LocalSta
 process.env.AWS_ENDPOINT_URL_S3 ??= "http://s3.localhost.localstack.cloud:4566";
 
 const { CloudFormationClient } = await import("@aws-sdk/client-cloudformation");
-const { DynamoDBClient, DeleteTableCommand } = await import("@aws-sdk/client-dynamodb");
+const { DynamoDBClient, DeleteTableCommand } = await import(
+	"@aws-sdk/client-dynamodb"
+);
 const { deployStack } = await import("../packages/aws-deploy/dist/toolkit.js");
 const { deleteStack, describeStack, findManagedStacks } = await import(
-  "../packages/aws-deploy/dist/stack.js"
+	"../packages/aws-deploy/dist/stack.js"
 );
 
-const cfn = new CloudFormationClient({ endpoint: ENDPOINT, region: REGION, credentials: CREDS });
-const ddb = new DynamoDBClient({ endpoint: ENDPOINT, region: REGION, credentials: CREDS });
+const cfn = new CloudFormationClient({
+	endpoint: ENDPOINT,
+	region: REGION,
+	credentials: CREDS,
+});
+const ddb = new DynamoDBClient({
+	endpoint: ENDPOINT,
+	region: REGION,
+	credentials: CREDS,
+});
 
 const assert = (cond, msg) => {
-  if (!cond) throw new Error(`ASSERT FAILED: ${msg}`);
-  console.log(`  ✓ ${msg}`);
+	if (!cond) throw new Error(`ASSERT FAILED: ${msg}`);
+	console.log(`  ✓ ${msg}`);
 };
 
 // 1. Deploy a throwaway, tagged stack (self-bootstraps LocalStack unless skipped).
 console.log(`Deploying "${STACK}" with the CDK toolkit...`);
 const outputs = await deployStack({
-  props: { stackName: STACK, functionDefaults: { architecture: ARCH } },
-  region: REGION,
-  skipBootstrap: process.env.TURJUMAN_E2E_SKIP_BOOTSTRAP === "1",
+	props: { stackName: STACK, functionDefaults: { architecture: ARCH } },
+	region: REGION,
+	skipBootstrap: process.env.TURJUMAN_E2E_SKIP_BOOTSTRAP === "1",
 });
 const tableName = outputs.TableName;
 
 // 2. Detection: the managed-tag scan should discover it.
 console.log("Detecting installs by tag...");
 let managed = await findManagedStacks(cfn);
-assert(managed.some((m) => m.stackName === STACK), `findManagedStacks discovers "${STACK}"`);
+assert(
+	managed.some((m) => m.stackName === STACK),
+	`findManagedStacks discovers "${STACK}"`,
+);
 
 // 3. Teardown: delete the stack. The table has RemovalPolicy.RETAIN, so the
 //    stack delete leaves it orphaned — delete it explicitly to fully clean up
 //    (this mirrors a non --keep-table teardown).
 console.log("Tearing down...");
 await deleteStack(cfn, STACK, { onStatus: (msg) => console.log(`  ${msg}`) });
-if (tableName) await ddb.send(new DeleteTableCommand({ TableName: tableName })).catch(() => {});
+if (tableName)
+	await ddb
+		.send(new DeleteTableCommand({ TableName: tableName }))
+		.catch(() => {});
 
 // 4. Verify it's gone and teardown is idempotent.
 assert(
-  (await describeStack(cfn, STACK)) === undefined,
-  `describeStack("${STACK}") is undefined after teardown`,
+	(await describeStack(cfn, STACK)) === undefined,
+	`describeStack("${STACK}") is undefined after teardown`,
 );
 managed = await findManagedStacks(cfn);
-assert(!managed.some((m) => m.stackName === STACK), `findManagedStacks no longer lists "${STACK}"`);
+assert(
+	!managed.some((m) => m.stackName === STACK),
+	`findManagedStacks no longer lists "${STACK}"`,
+);
 await deleteStack(cfn, STACK); // no-op
 assert(true, "re-running teardown is a no-op (idempotent)");
 

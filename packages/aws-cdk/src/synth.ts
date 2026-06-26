@@ -15,14 +15,19 @@ import { TurjumanStack } from "./stack.js";
  * — otherwise the default code resolves the published @turjuman/mcp-server /
  * @turjuman/api Lambda assets, which must have been built.
  */
-export function synthTemplate(props: TurjumanStackProps = {}): Record<string, unknown> {
-  const outdir = mkdtempSync(join(tmpdir(), "turjuman-cdk-"));
-  try {
-    const app = new App({ outdir, analyticsReporting: false });
-    const stack = new TurjumanStack(app, props.stackName ?? "turjuman", props);
-    const assembly = app.synth();
-    return assembly.getStackArtifact(stack.artifactId).template as Record<string, unknown>;
-  } finally {
-    rmSync(outdir, { recursive: true, force: true });
-  }
+export function synthTemplate(
+	props: TurjumanStackProps = {},
+): Record<string, unknown> {
+	const outdir = mkdtempSync(join(tmpdir(), "turjuman-cdk-"));
+	try {
+		const app = new App({ outdir, analyticsReporting: false });
+		const stack = new TurjumanStack(app, props.stackName ?? "turjuman", props);
+		const assembly = app.synth();
+		return assembly.getStackArtifact(stack.artifactId).template as Record<
+			string,
+			unknown
+		>;
+	} finally {
+		rmSync(outdir, { recursive: true, force: true });
+	}
 }

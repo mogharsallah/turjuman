@@ -7,12 +7,12 @@
  * form; simpler adapters (JSON/YAML) ignore the optional fields.
  */
 export interface TranslationEntry {
-  key: string;
-  value: string;
-  /** Comment/context, for formats that can carry it (ARB, CSV, .properties, XML). */
-  description?: string;
-  /** True when `value` is an ICU plural message. */
-  plural?: boolean;
+	key: string;
+	value: string;
+	/** Comment/context, for formats that can carry it (ARB, CSV, .properties, XML). */
+	description?: string;
+	/** True when `value` is an ICU plural message. */
+	plural?: boolean;
 }
 
 /**
@@ -23,8 +23,8 @@ export interface TranslationEntry {
  * with locale-independent plurals (everything else) ignore it.
  */
 export interface FormatContext {
-  /** BCP-47 locale of the file being read/written, e.g. "pl" or "ar". */
-  locale?: string;
+	/** BCP-47 locale of the file being read/written, e.g. "pl" or "ar". */
+	locale?: string;
 }
 
 /**
@@ -37,12 +37,12 @@ export interface FormatContext {
  * gettext PO adapter reads `ctx.locale`.
  */
 export interface FormatAdapter {
-  /** Stable id used in config, e.g. "json-nested". */
-  id: string;
-  /** Human label for help/listing. */
-  label: string;
-  /** File extensions this format typically uses (no leading dot). */
-  extensions: string[];
-  serialize(entries: TranslationEntry[], ctx?: FormatContext): string;
-  parse(content: string, ctx?: FormatContext): TranslationEntry[];
+	/** Stable id used in config, e.g. "json-nested". */
+	id: string;
+	/** Human label for help/listing. */
+	label: string;
+	/** File extensions this format typically uses (no leading dot). */
+	extensions: string[];
+	serialize(entries: TranslationEntry[], ctx?: FormatContext): string;
+	parse(content: string, ctx?: FormatContext): TranslationEntry[];
 }

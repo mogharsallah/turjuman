@@ -1,17 +1,17 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type {
-  CallToolResult,
-  GetPromptResult,
-  JSONRPCMessage,
-  ToolAnnotations,
+	CallToolResult,
+	GetPromptResult,
+	JSONRPCMessage,
+	ToolAnnotations,
 } from "@modelcontextprotocol/sdk/types.js";
 import { maskError } from "@turjuman/core";
 import {
-  OPERATIONS,
-  type OpContext,
-  type Operation,
-  effectiveAnnotations,
+	effectiveAnnotations,
+	OPERATIONS,
+	type OpContext,
+	type Operation,
 } from "@turjuman/sdk";
 import pkg from "../package.json" with { type: "json" };
 import { codemodeTools } from "./codemode.js";
@@ -34,29 +34,37 @@ import { PROMPTS, type PromptDef } from "./prompts/index.js";
 const SERVER_INFO = { name: "turjuman", version: pkg.version };
 
 const INSTRUCTIONS =
-  "Turjuman translation management. Use list_projects to start. To translate: " +
-  "list_untranslated(locale) -> translate the values yourself -> bulk_set_translations. " +
-  "Always write a clear description on create_key so future translations have context.";
+	"Turjuman translation management. Use list_projects to start. To translate: " +
+	"list_untranslated(locale) -> translate the values yourself -> bulk_set_translations. " +
+	"Always write a clear description on create_key so future translations have context.";
 
 interface JsonRpcMessage {
-  jsonrpc?: string;
-  id?: string | number | null;
-  method?: string;
-  params?: Record<string, unknown>;
+	jsonrpc?: string;
+	id?: string | number | null;
+	method?: string;
+	params?: Record<string, unknown>;
 }
 
 type JsonRpcResponse =
-  | { jsonrpc: "2.0"; id: string | number | null; result: unknown }
-  | { jsonrpc: "2.0"; id: string | number | null; error: { code: number; message: string } };
+	| { jsonrpc: "2.0"; id: string | number | null; result: unknown }
+	| {
+			jsonrpc: "2.0";
+			id: string | number | null;
+			error: { code: number; message: string };
+	  };
 
-function err(id: string | number | null, code: number, message: string): JsonRpcResponse {
-  return { jsonrpc: "2.0", id, error: { code, message } };
+function err(
+	id: string | number | null,
+	code: number,
+	message: string,
+): JsonRpcResponse {
+	return { jsonrpc: "2.0", id, error: { code, message } };
 }
 
 function toText(data: unknown): string {
-  if (data === undefined || data === null) return "ok";
-  if (typeof data === "string") return data;
-  return JSON.stringify(data, null, 2);
+	if (data === undefined || data === null) return "ok";
+	if (typeof data === "string") return data;
+	return JSON.stringify(data, null, 2);
 }
 
 /** Object (non-array) results are also emitted as MCP `structuredContent`, which
@@ -64,32 +72,40 @@ function toText(data: unknown): string {
  * too, for clients that only read text. Arrays and scalars carry text only
  * (structured content must be a JSON object per the MCP spec). */
 function asStructured(data: unknown): Record<string, unknown> | undefined {
-  return typeof data === "object" && data !== null && !Array.isArray(data)
-    ? (data as Record<string, unknown>)
-    : undefined;
+	return typeof data === "object" && data !== null && !Array.isArray(data)
+		? (data as Record<string, unknown>)
+		: undefined;
 }
 
 /** Adapt one of our type-erased {@link Operation}s to an SDK tool callback. Tool
  * execution errors are surfaced as `isError` content (per MCP guidance) so the
  * agent can react, rather than as JSON-RPC protocol errors. */
 function toolCallback(def: Operation, ctx: OpContext) {
-  return async (args: unknown): Promise<CallToolResult> => {
-    try {
-      const data = await def.handler(args, ctx);
-      const result: CallToolResult = { content: [{ type: "text", text: toText(data) }] };
-      const structured = asStructured(data);
-      if (structured) result.structuredContent = structured;
-      return result;
-    } catch (e) {
-      // One masking policy across every boundary (core's `maskError`): an
-      // AppError is intentional and model-actionable, so surface its code +
-      // message; anything else is logged server-side and replaced with a generic
-      // message + correlation id, so nothing internal leaks into model context.
-      const masked = maskError(e, { msg: "tool_handler_error", requestId: ctx.requestId, tool: def.name });
-      const text = masked.isAppError ? `Error: ${masked.code}: ${masked.message}` : `Error: ${masked.message}`;
-      return { content: [{ type: "text", text }], isError: true };
-    }
-  };
+	return async (args: unknown): Promise<CallToolResult> => {
+		try {
+			const data = await def.handler(args, ctx);
+			const result: CallToolResult = {
+				content: [{ type: "text", text: toText(data) }],
+			};
+			const structured = asStructured(data);
+			if (structured) result.structuredContent = structured;
+			return result;
+		} catch (e) {
+			// One masking policy across every boundary (core's `maskError`): an
+			// AppError is intentional and model-actionable, so surface its code +
+			// message; anything else is logged server-side and replaced with a generic
+			// message + correlation id, so nothing internal leaks into model context.
+			const masked = maskError(e, {
+				msg: "tool_handler_error",
+				requestId: ctx.requestId,
+				tool: def.name,
+			});
+			const text = masked.isAppError
+				? `Error: ${masked.code}: ${masked.message}`
+				: `Error: ${masked.message}`;
+			return { content: [{ type: "text", text }], isError: true };
+		}
+	};
 }
 
 /** Adapt one of our {@link PromptDef}s to an SDK prompt callback. The service
@@ -98,21 +114,31 @@ function toolCallback(def: Operation, ctx: OpContext) {
  * unexpected fault is logged server-side and masked behind the request id, so
  * nothing internal leaks into the model context. */
 function promptCallback(def: PromptDef, ctx: OpContext) {
-  return async (args: Record<string, string | undefined>): Promise<GetPromptResult> => {
-    try {
-      const prompt = await def.handler(args, ctx);
-      return {
-        description: `Turjuman scoring prompt (${prompt.promptVersion})`,
-        messages: prompt.messages.map((m) => ({
-          role: m.role,
-          content: { type: "text" as const, text: m.text },
-        })),
-      };
-    } catch (e) {
-      const masked = maskError(e, { msg: "prompt_handler_error", requestId: ctx.requestId, prompt: def.name });
-      throw new Error(masked.isAppError ? `${masked.code}: ${masked.message}` : masked.message);
-    }
-  };
+	return async (
+		args: Record<string, string | undefined>,
+	): Promise<GetPromptResult> => {
+		try {
+			const prompt = await def.handler(args, ctx);
+			return {
+				description: `Turjuman scoring prompt (${prompt.promptVersion})`,
+				messages: prompt.messages.map((m) => ({
+					role: m.role,
+					content: { type: "text" as const, text: m.text },
+				})),
+			};
+		} catch (e) {
+			const masked = maskError(e, {
+				msg: "prompt_handler_error",
+				requestId: ctx.requestId,
+				prompt: def.name,
+			});
+			throw new Error(
+				masked.isAppError
+					? `${masked.code}: ${masked.message}`
+					: masked.message,
+			);
+		}
+	};
 }
 
 /** Behaviour hints for a tool, as MCP `ToolAnnotations`. The classification
@@ -120,20 +146,20 @@ function promptCallback(def: PromptDef, ctx: OpContext) {
  * lives in `@turjuman/sdk` (`effectiveAnnotations`); here we only adapt the
  * SDK's transport-free `OpAnnotations` onto MCP's structurally-identical type. */
 export function annotationsFor(def: Operation): ToolAnnotations {
-  return effectiveAnnotations(def);
+	return effectiveAnnotations(def);
 }
 
 /** Build the static MCP registration config for one operation. */
 function registrationFor(def: Operation) {
-  return {
-    def,
-    config: {
-      description: def.description,
-      inputSchema: def.input,
-      annotations: annotationsFor(def),
-      ...(def.output ? { outputSchema: def.output } : {}),
-    },
-  };
+	return {
+		def,
+		config: {
+			description: def.description,
+			inputSchema: def.input,
+			annotations: annotationsFor(def),
+			...(def.output ? { outputSchema: def.output } : {}),
+		},
+	};
 }
 
 /** The static registrations for each mode, assembled once at module scope. Only
@@ -148,8 +174,8 @@ const CODEMODE_REGISTRATIONS = codemodeTools.map(registrationFor);
 /** Which toolset to advertise for a request. Classic mode may be narrowed by a
  * client-requested allowlist (URL tool-scoping); code mode is the fixed pair. */
 export type ToolSelection =
-  | { mode: "classic"; allowed?: ReadonlySet<string> }
-  | { mode: "code" };
+	| { mode: "classic"; allowed?: ReadonlySet<string> }
+	| { mode: "code" };
 
 const DEFAULT_SELECTION: ToolSelection = { mode: "classic" };
 
@@ -162,21 +188,25 @@ const DEFAULT_SELECTION: ToolSelection = { mode: "classic" };
  * scoping both `tools/list` and `tools/call` from the one seam. This is a
  * presentation filter only; RBAC in core still authorizes every call. */
 function buildServer(ctx: OpContext, selection: ToolSelection): McpServer {
-  const server = new McpServer(SERVER_INFO, { instructions: INSTRUCTIONS });
-  const registrations =
-    selection.mode === "code" ? CODEMODE_REGISTRATIONS : CLASSIC_REGISTRATIONS;
-  const allowed = selection.mode === "classic" ? selection.allowed : undefined;
-  for (const { def, config } of registrations) {
-    if (allowed && !allowed.has(def.name)) continue;
-    server.registerTool(def.name, config, toolCallback(def, ctx));
-  }
-  // Prompts are a separate capability from tools (the `?tools=`/`?groups=` filter
-  // scopes tools only), so they register unconditionally — registering any one
-  // makes the server advertise `prompts`.
-  for (const def of PROMPTS) {
-    server.registerPrompt(def.name, { description: def.description, argsSchema: def.argsSchema }, promptCallback(def, ctx));
-  }
-  return server;
+	const server = new McpServer(SERVER_INFO, { instructions: INSTRUCTIONS });
+	const registrations =
+		selection.mode === "code" ? CODEMODE_REGISTRATIONS : CLASSIC_REGISTRATIONS;
+	const allowed = selection.mode === "classic" ? selection.allowed : undefined;
+	for (const { def, config } of registrations) {
+		if (allowed && !allowed.has(def.name)) continue;
+		server.registerTool(def.name, config, toolCallback(def, ctx));
+	}
+	// Prompts are a separate capability from tools (the `?tools=`/`?groups=` filter
+	// scopes tools only), so they register unconditionally — registering any one
+	// makes the server advertise `prompts`.
+	for (const def of PROMPTS) {
+		server.registerPrompt(
+			def.name,
+			{ description: def.description, argsSchema: def.argsSchema },
+			promptCallback(def, ctx),
+		);
+	}
+	return server;
 }
 
 /**
@@ -185,27 +215,27 @@ function buildServer(ctx: OpContext, selection: ToolSelection): McpServer {
  * per request and discarded.
  */
 class PumpTransport implements Transport {
-  onmessage?: (message: JSONRPCMessage) => void;
-  onclose?: () => void;
-  onerror?: (error: Error) => void;
-  private settle?: (message: JSONRPCMessage) => void;
+	onmessage?: (message: JSONRPCMessage) => void;
+	onclose?: () => void;
+	onerror?: (error: Error) => void;
+	private settle?: (message: JSONRPCMessage) => void;
 
-  async start(): Promise<void> {}
-  async close(): Promise<void> {
-    this.onclose?.();
-  }
-  async send(message: JSONRPCMessage): Promise<void> {
-    this.settle?.(message);
-  }
+	async start(): Promise<void> {}
+	async close(): Promise<void> {
+		this.onclose?.();
+	}
+	async send(message: JSONRPCMessage): Promise<void> {
+		this.settle?.(message);
+	}
 
-  /** Deliver one request; resolves when the server replies (always, for a
-   * request with an id — the SDK answers even unknown methods/tools). */
-  exchange(message: JSONRPCMessage): Promise<JSONRPCMessage> {
-    return new Promise<JSONRPCMessage>((resolve) => {
-      this.settle = resolve;
-      this.onmessage?.(message);
-    });
-  }
+	/** Deliver one request; resolves when the server replies (always, for a
+	 * request with an id — the SDK answers even unknown methods/tools). */
+	exchange(message: JSONRPCMessage): Promise<JSONRPCMessage> {
+		return new Promise<JSONRPCMessage>((resolve) => {
+			this.settle = resolve;
+			this.onmessage?.(message);
+		});
+	}
 }
 
 /**
@@ -214,22 +244,22 @@ class PumpTransport implements Transport {
  * treated as notifications, per JSON-RPC.
  */
 export async function handleMessage(
-  message: JsonRpcMessage,
-  ctx: OpContext,
-  selection: ToolSelection = DEFAULT_SELECTION,
+	message: JsonRpcMessage,
+	ctx: OpContext,
+	selection: ToolSelection = DEFAULT_SELECTION,
 ): Promise<JsonRpcResponse | null> {
-  const method = message.method;
-  const id = message.id ?? null;
-  if (!method) return err(id, -32600, "Invalid request: missing method");
-  if (method.startsWith("notifications/") || id === null) return null;
+	const method = message.method;
+	const id = message.id ?? null;
+	if (!method) return err(id, -32600, "Invalid request: missing method");
+	if (method.startsWith("notifications/") || id === null) return null;
 
-  const server = buildServer(ctx, selection);
-  const transport = new PumpTransport();
-  await server.connect(transport);
-  try {
-    const response = await transport.exchange(message as JSONRPCMessage);
-    return response as JsonRpcResponse;
-  } finally {
-    await server.close();
-  }
+	const server = buildServer(ctx, selection);
+	const transport = new PumpTransport();
+	await server.connect(transport);
+	try {
+		const response = await transport.exchange(message as JSONRPCMessage);
+		return response as JsonRpcResponse;
+	} finally {
+		await server.close();
+	}
 }

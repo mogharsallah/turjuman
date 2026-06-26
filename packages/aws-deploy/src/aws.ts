@@ -6,11 +6,11 @@
  * read/write are exercisable locally without a live account.
  */
 export interface ClientConfig {
-  region: string;
-  endpoint?: string;
+	region: string;
+	endpoint?: string;
 }
 
 export function clientConfig(region: string): ClientConfig {
-  const endpoint = process.env.AWS_ENDPOINT_URL;
-  return endpoint ? { region, endpoint } : { region };
+	const endpoint = process.env.AWS_ENDPOINT_URL;
+	return endpoint ? { region, endpoint } : { region };
 }

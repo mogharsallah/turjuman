@@ -1,58 +1,58 @@
 {
-  "name": "@turjuman/aws-cdk",
-  "version": "0.2.0",
-  "description": "Turjuman AWS CDK construct: a composable serverless stack (single-table DynamoDB + Lambda Function URLs) with pre-bundled handlers.",
-  "license": "MIT",
-  "author": "Turjuman contributors",
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": "./dist/index.js",
-    "./package.json": "./package.json"
-  },
-  "files": [
-    "dist"
-  ],
-  "publishConfig": {
-    "access": "public"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/mogharsallah/turjuman.git",
-    "directory": "packages/aws-cdk"
-  },
-  "homepage": "https://github.com/mogharsallah/turjuman#readme",
-  "bugs": "https://github.com/mogharsallah/turjuman/issues",
-  "keywords": [
-    "turjuman",
-    "aws",
-    "cdk",
-    "construct",
-    "dynamodb",
-    "lambda",
-    "i18n",
-    "translation"
-  ],
-  "engines": {
-    "node": ">=24"
-  },
-  "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
-    "clean": "rm -rf dist"
-  },
-  "peerDependencies": {
-    "aws-cdk-lib": "^2.259.0",
-    "constructs": "^10.6.0"
-  },
-  "dependencies": {
-    "@turjuman/api": "workspace:*",
-    "@turjuman/mcp-server": "workspace:*"
-  },
-  "devDependencies": {
-    "aws-cdk-lib": "^2.259.0",
-    "constructs": "^10.6.0"
-  }
+	"name": "@turjuman/aws-cdk",
+	"version": "0.2.0",
+	"description": "Turjuman AWS CDK construct: a composable serverless stack (single-table DynamoDB + Lambda Function URLs) with pre-bundled handlers.",
+	"license": "MIT",
+	"author": "Turjuman contributors",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": "./dist/index.js",
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist"
+	],
+	"publishConfig": {
+		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/mogharsallah/turjuman.git",
+		"directory": "packages/aws-cdk"
+	},
+	"homepage": "https://github.com/mogharsallah/turjuman#readme",
+	"bugs": "https://github.com/mogharsallah/turjuman/issues",
+	"keywords": [
+		"turjuman",
+		"aws",
+		"cdk",
+		"construct",
+		"dynamodb",
+		"lambda",
+		"i18n",
+		"translation"
+	],
+	"engines": {
+		"node": ">=24"
+	},
+	"scripts": {
+		"build": "tsc -p tsconfig.json",
+		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"test": "vitest run",
+		"clean": "rm -rf dist"
+	},
+	"peerDependencies": {
+		"aws-cdk-lib": "^2.259.0",
+		"constructs": "^10.6.0"
+	},
+	"dependencies": {
+		"@turjuman/api": "workspace:*",
+		"@turjuman/mcp-server": "workspace:*"
+	},
+	"devDependencies": {
+		"aws-cdk-lib": "^2.259.0",
+		"constructs": "^10.6.0"
+	}
 }

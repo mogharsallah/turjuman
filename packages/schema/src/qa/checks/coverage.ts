@@ -8,13 +8,16 @@ import { finding } from "./util.js";
  * it to track completeness.
  */
 export const coverageCheck: QaCheck = {
-  id: "coverage",
-  description: "Flag keys that have no value for the locale (untranslated coverage gap).",
-  severity: "info",
-  run(ctx) {
-    const value = ctx.targetValue;
-    if (value !== undefined && value.trim() !== "") return [];
-    if (ctx.expectsValue) return []; // a non-blank-expected empty is the `empty` check's job
-    return [finding(ctx, this.id, this.severity, "No translation for this locale.")];
-  },
+	id: "coverage",
+	description:
+		"Flag keys that have no value for the locale (untranslated coverage gap).",
+	severity: "info",
+	run(ctx) {
+		const value = ctx.targetValue;
+		if (value !== undefined && value.trim() !== "") return [];
+		if (ctx.expectsValue) return []; // a non-blank-expected empty is the `empty` check's job
+		return [
+			finding(ctx, this.id, this.severity, "No translation for this locale."),
+		];
+	},
 };

@@ -1,5 +1,5 @@
-import { TYPE, parse } from "@formatjs/icu-messageformat-parser";
 import type { MessageFormatElement } from "@formatjs/icu-messageformat-parser";
+import { parse, TYPE } from "@formatjs/icu-messageformat-parser";
 import { parseIcuPlural } from "../plural.js";
 
 /**
@@ -16,34 +16,34 @@ export type IcuParseResult = { ok: true } | { ok: false; error: string };
 
 /** Validate that `value` is parseable ICU MessageFormat. */
 export function parseIcuSafe(value: string): IcuParseResult {
-  try {
-    parse(value, PARSE_OPTS);
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: (e as Error).message };
-  }
+	try {
+		parse(value, PARSE_OPTS);
+		return { ok: true };
+	} catch (e) {
+		return { ok: false, error: (e as Error).message };
+	}
 }
 
 function walk(els: MessageFormatElement[], out: Set<string>): void {
-  for (const el of els) {
-    switch (el.type) {
-      case TYPE.argument:
-      case TYPE.number:
-      case TYPE.date:
-      case TYPE.time:
-        out.add(el.value);
-        break;
-      case TYPE.select:
-      case TYPE.plural:
-        out.add(el.value);
-        for (const opt of Object.values(el.options)) walk(opt.value, out);
-        break;
-      case TYPE.tag:
-        walk(el.children, out);
-        break;
-      // literal and pound (`#`) carry no argument name.
-    }
-  }
+	for (const el of els) {
+		switch (el.type) {
+			case TYPE.argument:
+			case TYPE.number:
+			case TYPE.date:
+			case TYPE.time:
+				out.add(el.value);
+				break;
+			case TYPE.select:
+			case TYPE.plural:
+				out.add(el.value);
+				for (const opt of Object.values(el.options)) walk(opt.value, out);
+				break;
+			case TYPE.tag:
+				walk(el.children, out);
+				break;
+			// literal and pound (`#`) carry no argument name.
+		}
+	}
 }
 
 /**
@@ -52,21 +52,23 @@ function walk(els: MessageFormatElement[], out: Set<string>): void {
  * so it is never included. Returns `null` when the value is unparseable.
  */
 export function collectArgNames(value: string): Set<string> | null {
-  let ast: MessageFormatElement[];
-  try {
-    ast = parse(value, PARSE_OPTS);
-  } catch {
-    return null;
-  }
-  const names = new Set<string>();
-  walk(ast, names);
-  return names;
+	let ast: MessageFormatElement[];
+	try {
+		ast = parse(value, PARSE_OPTS);
+	} catch {
+		return null;
+	}
+	const names = new Set<string>();
+	walk(ast, names);
+	return names;
 }
 
 /**
  * The inner messages of an ICU plural, in CLDR order, or `null` when `value`
  * isn't a single plural message. Reuses the canonical plural parser.
  */
-export function pluralForms(value: string): { varName: string; forms: Record<string, string> } | null {
-  return parseIcuPlural(value);
+export function pluralForms(
+	value: string,
+): { varName: string; forms: Record<string, string> } | null {
+	return parseIcuPlural(value);
 }

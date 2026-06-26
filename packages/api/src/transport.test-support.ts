@@ -1,11 +1,11 @@
 import {
-  type Actor,
-  type Repository,
-  type TurjumanService,
-  type User,
-  hashApiKey,
+	type Actor,
+	hashApiKey,
+	type Repository,
+	type TurjumanService,
+	type User,
 } from "@turjuman/core";
-import { type RouterDeps, createApp } from "./router.js";
+import { createApp, type RouterDeps } from "./router.js";
 
 /**
  * Shared hermetic scaffolding for the REST router suites (`router-authz`,
@@ -25,31 +25,56 @@ import { type RouterDeps, createApp } from "./router.js";
 export const SECRET = "test-secret";
 
 /** The single authenticated caller these suites resolve the bearer key to. */
-export const AUTH_USER: Actor = { userId: "user_1", orgId: "default", globalRole: "OWNER" };
+export const AUTH_USER: Actor = {
+	userId: "user_1",
+	orgId: "default",
+	globalRole: "OWNER",
+};
 
 /** Bearer header for a GET; `jsonHeaders` adds the JSON content-type for writes. */
 export const auth = { headers: { authorization: `Bearer ${SECRET}` } };
-export const jsonHeaders = { ...auth.headers, "content-type": "application/json" };
+export const jsonHeaders = {
+	...auth.headers,
+	"content-type": "application/json",
+};
 
 /** A repo that authenticates exactly one bearer secret and nothing else — only the
  * methods `authenticate()` touches. Not the data-layer fake (see file header). */
 export function fakeRepo(): Repository {
-  return {
-    getApiKeyByHash: async (hash: string) =>
-      hash === hashApiKey(SECRET)
-        ? { id: "key_1", orgId: "default", userId: AUTH_USER.userId, name: "t", hash, prefix: "op_live_t", createdAt: "now" }
-        : undefined,
-    getUser: async (id: string) =>
-      id === AUTH_USER.userId
-        ? ({ ...AUTH_USER, id: AUTH_USER.userId, email: "t@t.com", name: "T", createdAt: "now", updatedAt: "now" } as User)
-        : undefined,
-    touchApiKey: async () => {},
-  } as unknown as Repository;
+	return {
+		getApiKeyByHash: async (hash: string) =>
+			hash === hashApiKey(SECRET)
+				? {
+						id: "key_1",
+						orgId: "default",
+						userId: AUTH_USER.userId,
+						name: "t",
+						hash,
+						prefix: "op_live_t",
+						createdAt: "now",
+					}
+				: undefined,
+		getUser: async (id: string) =>
+			id === AUTH_USER.userId
+				? ({
+						...AUTH_USER,
+						id: AUTH_USER.userId,
+						email: "t@t.com",
+						name: "T",
+						createdAt: "now",
+						updatedAt: "now",
+					} as User)
+				: undefined,
+		touchApiKey: async () => {},
+	} as unknown as Repository;
 }
 
 /** Build an app whose service sub-objects are the given stubs/spy. */
 export function appWith(service: unknown) {
-  return createApp({ repo: fakeRepo(), service: service as TurjumanService } as RouterDeps);
+	return createApp({
+		repo: fakeRepo(),
+		service: service as TurjumanService,
+	} as RouterDeps);
 }
 
 /**
@@ -60,29 +85,29 @@ export function appWith(service: unknown) {
  * recorders so the wiring assertion is identical.
  */
 export function spyService(canned: unknown): {
-  service: TurjumanService;
-  calls: { method: string; args: unknown[] }[];
+	service: TurjumanService;
+	calls: { method: string; args: unknown[] }[];
 } {
-  const calls: { method: string; args: unknown[] }[] = [];
-  const service = new Proxy(
-    {},
-    {
-      get(_t, sub) {
-        if (typeof sub !== "string") return undefined;
-        return new Proxy(
-          {},
-          {
-            get(_t2, method) {
-              if (typeof method !== "string") return undefined;
-              return (...args: unknown[]) => {
-                calls.push({ method: `${sub}.${method}`, args });
-                return Promise.resolve(canned);
-              };
-            },
-          },
-        );
-      },
-    },
-  ) as unknown as TurjumanService;
-  return { service, calls };
+	const calls: { method: string; args: unknown[] }[] = [];
+	const service = new Proxy(
+		{},
+		{
+			get(_t, sub) {
+				if (typeof sub !== "string") return undefined;
+				return new Proxy(
+					{},
+					{
+						get(_t2, method) {
+							if (typeof method !== "string") return undefined;
+							return (...args: unknown[]) => {
+								calls.push({ method: `${sub}.${method}`, args });
+								return Promise.resolve(canned);
+							};
+						},
+					},
+				);
+			},
+		},
+	) as unknown as TurjumanService;
+	return { service, calls };
 }

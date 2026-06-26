@@ -21,18 +21,18 @@ export * from "./types.js";
  * stable sort the service applies).
  */
 export const CHECKS: QaCheck[] = [
-  icuSyntaxCheck,
-  placeholdersCheck,
-  pluralFormsCheck,
-  markupCheck,
-  lengthCheck,
-  whitespaceCheck,
-  punctuationCheck,
-  emptyCheck,
-  glossaryCheck,
-  duplicateCheck,
-  staleCheck,
-  coverageCheck,
+	icuSyntaxCheck,
+	placeholdersCheck,
+	pluralFormsCheck,
+	markupCheck,
+	lengthCheck,
+	whitespaceCheck,
+	punctuationCheck,
+	emptyCheck,
+	glossaryCheck,
+	duplicateCheck,
+	staleCheck,
+	coverageCheck,
 ];
 
 /**
@@ -45,21 +45,29 @@ export const DEFAULT_DISABLED_CHECKS: readonly string[] = ["coverage"];
 const BY_ID = new Map(CHECKS.map((c) => [c.id, c]));
 
 export function getCheck(id: string): QaCheck | undefined {
-  return BY_ID.get(id);
+	return BY_ID.get(id);
 }
 
-export function listChecks(): { id: string; description: string; severity: QaCheck["severity"] }[] {
-  return CHECKS.map(({ id, description, severity }) => ({ id, description, severity }));
+export function listChecks(): {
+	id: string;
+	description: string;
+	severity: QaCheck["severity"];
+}[] {
+	return CHECKS.map(({ id, description, severity }) => ({
+		id,
+		description,
+		severity,
+	}));
 }
 
 /** Validate check ids against the registry, throwing on any unknown id. */
 export function assertCheckIds(ids: readonly string[]): void {
-  const unknown = ids.filter((id) => !BY_ID.has(id));
-  if (unknown.length > 0) {
-    throw validation(
-      `Unknown QA check(s): ${unknown.join(", ")}. Available: ${[...BY_ID.keys()].join(", ")}`,
-    );
-  }
+	const unknown = ids.filter((id) => !BY_ID.has(id));
+	if (unknown.length > 0) {
+		throw validation(
+			`Unknown QA check(s): ${unknown.join(", ")}. Available: ${[...BY_ID.keys()].join(", ")}`,
+		);
+	}
 }
 
 /**
@@ -67,16 +75,19 @@ export function assertCheckIds(ids: readonly string[]): void {
  * rules, counting, and sorting are the service's job. `checkIds` selects which
  * checks run (validated against the registry); omit to run them all.
  */
-export function runChecks(contexts: QaContext[], opts: { checkIds?: readonly string[] } = {}): QaFinding[] {
-  let checks = CHECKS;
-  if (opts.checkIds) {
-    assertCheckIds(opts.checkIds);
-    const wanted = new Set(opts.checkIds);
-    checks = CHECKS.filter((c) => wanted.has(c.id));
-  }
-  const findings: QaFinding[] = [];
-  for (const ctx of contexts) {
-    for (const check of checks) findings.push(...check.run(ctx));
-  }
-  return findings;
+export function runChecks(
+	contexts: QaContext[],
+	opts: { checkIds?: readonly string[] } = {},
+): QaFinding[] {
+	let checks = CHECKS;
+	if (opts.checkIds) {
+		assertCheckIds(opts.checkIds);
+		const wanted = new Set(opts.checkIds);
+		checks = CHECKS.filter((c) => wanted.has(c.id));
+	}
+	const findings: QaFinding[] = [];
+	for (const ctx of contexts) {
+		for (const check of checks) findings.push(...check.run(ctx));
+	}
+	return findings;
 }

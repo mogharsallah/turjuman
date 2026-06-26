@@ -5,4 +5,5 @@ import { randomUUID } from "node:crypto";
  * project/user/email name must be unique to keep specs independent and
  * order-insensitive.
  */
-export const uniq = (prefix: string): string => `${prefix}-${randomUUID().slice(0, 8)}`;
+export const uniq = (prefix: string): string =>
+	`${prefix}-${randomUUID().slice(0, 8)}`;

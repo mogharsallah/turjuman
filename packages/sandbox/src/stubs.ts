@@ -20,10 +20,13 @@ import { OPERATIONS } from "@turjuman/sdk";
  * asyncified — see the engine).
  */
 export function generateStubSource(operations = OPERATIONS): string {
-  const entries = operations
-    .map((o) => `  ${JSON.stringify(o.name)}: (args) => __c(${JSON.stringify(o.name)}, args),`)
-    .join("\n");
-  return `(() => {
+	const entries = operations
+		.map(
+			(o) =>
+				`  ${JSON.stringify(o.name)}: (args) => __c(${JSON.stringify(o.name)}, args),`,
+		)
+		.join("\n");
+	return `(() => {
   const __c = globalThis.__callOp;
   const __l = globalThis.__log;
   globalThis.turjuman = Object.freeze({

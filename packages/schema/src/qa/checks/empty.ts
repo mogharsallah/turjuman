@@ -8,15 +8,21 @@ import { finding } from "./util.js";
  * this check. Untranslated blanks are expected and skipped.
  */
 export const emptyCheck: QaCheck = {
-  id: "empty",
-  description: "Translated/approved values must not be empty or whitespace-only.",
-  severity: "error",
-  run(ctx) {
-    if (!ctx.expectsValue) return [];
-    const value = ctx.targetValue;
-    if (value !== undefined && value.trim() !== "") return [];
-    return [
-      finding(ctx, this.id, this.severity, `Status is "${ctx.targetStatus}" but the value is empty.`),
-    ];
-  },
+	id: "empty",
+	description:
+		"Translated/approved values must not be empty or whitespace-only.",
+	severity: "error",
+	run(ctx) {
+		if (!ctx.expectsValue) return [];
+		const value = ctx.targetValue;
+		if (value !== undefined && value.trim() !== "") return [];
+		return [
+			finding(
+				ctx,
+				this.id,
+				this.severity,
+				`Status is "${ctx.targetStatus}" but the value is empty.`,
+			),
+		];
+	},
 };

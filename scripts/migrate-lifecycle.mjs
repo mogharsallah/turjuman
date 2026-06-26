@@ -16,41 +16,45 @@
 // which is exactly the desired "nothing stale on day one" behaviour.
 
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, ScanCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import {
+	DynamoDBDocumentClient,
+	ScanCommand,
+	UpdateCommand,
+} from "@aws-sdk/lib-dynamodb";
 
 const TABLE = process.env.TURJUMAN_TABLE ?? "Turjuman";
 const endpoint = process.env.AWS_ENDPOINT_URL_DYNAMODB;
 const apply = process.argv.includes("--apply");
 
 const base = new DynamoDBClient(
-  endpoint
-    ? {
-        endpoint,
-        region: process.env.AWS_REGION ?? "us-east-1",
-        credentials: { accessKeyId: "local", secretAccessKey: "local" },
-      }
-    : {},
+	endpoint
+		? {
+				endpoint,
+				region: process.env.AWS_REGION ?? "us-east-1",
+				credentials: { accessKeyId: "local", secretAccessKey: "local" },
+			}
+		: {},
 );
 const doc = DynamoDBDocumentClient.from(base, {
-  marshallOptions: { removeUndefinedValues: true },
+	marshallOptions: { removeUndefinedValues: true },
 });
 
 /** Compute the attributes to backfill for one item (empty = nothing to do). */
 function plan(item) {
-  const updates = {};
-  if (item.entityType === "TranslationKey") {
-    if (item.state === undefined) updates.state = "active";
-    if (item.lastSeenAt === undefined) {
-      updates.lastSeenAt = item.updatedAt ?? new Date().toISOString();
-    }
-  } else if (item.entityType === "Translation") {
-    if (item.status === "reviewed") {
-      updates.status = "approved";
-      if (item.approvedValue === undefined) updates.approvedValue = item.value;
-    }
-    if (item.origin === undefined) updates.origin = "import";
-  }
-  return updates;
+	const updates = {};
+	if (item.entityType === "TranslationKey") {
+		if (item.state === undefined) updates.state = "active";
+		if (item.lastSeenAt === undefined) {
+			updates.lastSeenAt = item.updatedAt ?? new Date().toISOString();
+		}
+	} else if (item.entityType === "Translation") {
+		if (item.status === "reviewed") {
+			updates.status = "approved";
+			if (item.approvedValue === undefined) updates.approvedValue = item.value;
+		}
+		if (item.origin === undefined) updates.origin = "import";
+	}
+	return updates;
 }
 
 let scanned = 0;
@@ -58,38 +62,40 @@ let keysFixed = 0;
 let transFixed = 0;
 let ExclusiveStartKey;
 do {
-  const page = await doc.send(new ScanCommand({ TableName: TABLE, ExclusiveStartKey }));
-  for (const item of page.Items ?? []) {
-    scanned++;
-    const updates = plan(item);
-    const fields = Object.keys(updates);
-    if (fields.length === 0) continue;
-    if (item.entityType === "TranslationKey") keysFixed++;
-    else transFixed++;
-    if (apply) {
-      const names = {};
-      const values = {};
-      const sets = fields.map((f, i) => {
-        names[`#f${i}`] = f;
-        values[`:v${i}`] = updates[f];
-        return `#f${i} = :v${i}`;
-      });
-      await doc.send(
-        new UpdateCommand({
-          TableName: TABLE,
-          Key: { PK: item.PK, SK: item.SK },
-          UpdateExpression: `SET ${sets.join(", ")}`,
-          ExpressionAttributeNames: names,
-          ExpressionAttributeValues: values,
-        }),
-      );
-    }
-  }
-  ExclusiveStartKey = page.LastEvaluatedKey;
+	const page = await doc.send(
+		new ScanCommand({ TableName: TABLE, ExclusiveStartKey }),
+	);
+	for (const item of page.Items ?? []) {
+		scanned++;
+		const updates = plan(item);
+		const fields = Object.keys(updates);
+		if (fields.length === 0) continue;
+		if (item.entityType === "TranslationKey") keysFixed++;
+		else transFixed++;
+		if (apply) {
+			const names = {};
+			const values = {};
+			const sets = fields.map((f, i) => {
+				names[`#f${i}`] = f;
+				values[`:v${i}`] = updates[f];
+				return `#f${i} = :v${i}`;
+			});
+			await doc.send(
+				new UpdateCommand({
+					TableName: TABLE,
+					Key: { PK: item.PK, SK: item.SK },
+					UpdateExpression: `SET ${sets.join(", ")}`,
+					ExpressionAttributeNames: names,
+					ExpressionAttributeValues: values,
+				}),
+			);
+		}
+	}
+	ExclusiveStartKey = page.LastEvaluatedKey;
 } while (ExclusiveStartKey);
 
 console.log(
-  `${apply ? "Applied" : "Would update"}: ${keysFixed} keys, ${transFixed} translations ` +
-    `(scanned ${scanned} items in ${TABLE}).`,
+	`${apply ? "Applied" : "Would update"}: ${keysFixed} keys, ${transFixed} translations ` +
+		`(scanned ${scanned} items in ${TABLE}).`,
 );
 if (!apply) console.log("Re-run with --apply to write the changes.");

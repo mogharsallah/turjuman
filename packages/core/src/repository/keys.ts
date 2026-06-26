@@ -11,9 +11,10 @@ export const projectPK = (id: string) => `PROJECT#${id}`;
 export const memberSK = (userId: string) => `MEMBER#${userId}`;
 export const localeSK = (code: string) => `LOCALE#${code}`;
 export const keySK = (ns: string, name: string) => `KEY#${ns}#${name}`;
-export const transPK = (projectId: string, code: string) => `PROJ#${projectId}#LOC#${code}`;
+export const transPK = (projectId: string, code: string) =>
+	`PROJ#${projectId}#LOC#${code}`;
 export const keyGSI3PK = (projectId: string, ns: string, name: string) =>
-  `PROJ#${projectId}#KEY#${ns}#${name}`;
+	`PROJ#${projectId}#KEY#${ns}#${name}`;
 export const locGSI3SK = (code: string) => `LOC#${code}`;
 export const glossarySK = (termId: string) => `GLOSSARY#${termId}`;
 export const webhookSK = (id: string) => `WEBHOOK#${id}`;
