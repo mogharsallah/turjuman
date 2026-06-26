@@ -39,7 +39,9 @@ against independent data.
 |---|---|---|
 | **L0 hermetic — contract** | Handler arg-mapping, registry structure; in-memory fakes only | Fast, always runs |
 | **L1 hermetic — pure logic** | RBAC matrix, adapter round-trips, QA checks, plurals; property tests live here | Fast, always runs |
+| **L2 hermetic — sandbox adversarial** | QuickJS engine traps (byte-truncation / use-after-free / multibyte split) + marshal edges | Fast, always runs |
 | **L3 integration** | Real DynamoDB single-table invariants + REST-projection wiring | Slow; `describe.skipIf(!env)` |
+| **L4 hermetic — service-RBAC seam** | Read-only-key universal deny probe over the real service + fake repo | Fast, always runs |
 | **L5 e2e** | Deployed black-box over Function URLs, classic *and* code mode | Slowest; `describe.skipIf(!env)`; keep tiny |
 
 Anything that boots a transport stack or a real datastore is integration/e2e — not L0/L1. Don't
