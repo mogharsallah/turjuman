@@ -7,6 +7,9 @@
       }
     }
   },
+  "enabledPlugins": {
+    "ponytail@ponytail": true
+  },
   "hooks": {
     "SessionStart": [
       {
