@@ -1,19 +1,19 @@
 import {
-  type ToolDef,
+  type Operation,
   localeCode,
   localeCodeSchema,
   namespaceSchema,
+  op,
   projectId,
   qaConfigSchema,
   qaReportSchema,
   qaSeveritySchema,
-  tool,
   z,
-} from "./base.js";
+} from "../base.js";
 
 /** Automated QA checks and per-project QA configuration. */
-export const qaTools: ToolDef[] = [
-  tool({
+export const qaOps: Operation[] = [
+  op({
     name: "run_qa_checks",
     description:
       "Run deterministic QA checks on translations (ICU/placeholder/plural/markup/length/whitespace/punctuation/empty/glossary/duplicate/stale). Advisory — run this before approving, then fix any errors. Returns findings grouped by locale with error/warning/info counts. Prefer passing a single `locale`.",
@@ -30,17 +30,19 @@ export const qaTools: ToolDef[] = [
     // Advisory only: computes findings, never mutates. The name doesn't match the
     // read-verb convention, so the hint is set explicitly.
     annotations: { readOnlyHint: true },
+    http: { method: "post", path: "/v1/projects/:id/checks", params: { id: "projectId" } },
     handler: (a, { service, actor }) =>
       service.qa.run(actor, a.projectId, { locale: a.locale, checkIds: a.checks, slot: a.slot }),
   }),
-  tool({
+  op({
     name: "get_qa_config",
     description: "Get the project's QA configuration (per-check enable/severity overrides and ignore rules).",
     input: z.object({ projectId }),
     output: qaConfigSchema,
+    http: { method: "get", path: "/v1/projects/:id/qa-config", params: { id: "projectId" } },
     handler: (a, { service, actor }) => service.qa.getConfig(actor, a.projectId),
   }),
-  tool({
+  op({
     name: "set_qa_config",
     description:
       "Set the project's QA configuration. `checks` maps a check id to { enabled, severity } overrides; `ignore` mutes findings matching all listed fields. Requires a project-management role.",
@@ -64,6 +66,7 @@ export const qaTools: ToolDef[] = [
         .describe("Mute rules; each must specify at least one field."),
     }),
     output: qaConfigSchema,
+    http: { method: "put", path: "/v1/projects/:id/qa-config", params: { id: "projectId" } },
     handler: ({ projectId: id, ...input }, { service, actor }) => service.qa.setConfig(actor, id, input),
   }),
 ];

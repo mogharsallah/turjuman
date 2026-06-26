@@ -1,1 +1,1 @@
-export { Repository, type RepositoryOptions } from "./repository.js";
+export { Repository, type RepositoryOptions, type RepositoryApi } from "./repository.js";

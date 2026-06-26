@@ -1,41 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  type TurjumanService,
-  type Repository,
-  forbidden,
-  hashApiKey,
-  notFound,
-} from "@turjuman/core";
-import { type RouterDeps, createApp } from "./router.js";
+import { forbidden, notFound } from "@turjuman/core";
+import { appWith, auth, jsonHeaders } from "./transport.test-support.js";
 
 /**
  * Hermetic HTTP-layer tests for the error, authz, validation and pagination
  * paths. The router only touches `deps.repo` to authenticate and `deps.service`
- * to do work, so a tiny fake of each exercises the full request → response shape
+ * to do work, so a tiny fake of each (in `./transport.test-support.ts`, shared
+ * with the other router suites) exercises the full request → response shape
  * without DynamoDB.
  */
-
-const SECRET = "test-secret";
-const user = { id: "user_1", orgId: "default", globalRole: "OWNER" as const };
-
-/** A repo that authenticates exactly one bearer secret. */
-function fakeRepo(): Repository {
-  return {
-    getApiKeyByHash: async (hash: string) =>
-      hash === hashApiKey(SECRET)
-        ? { id: "key_1", orgId: "default", userId: user.id, name: "t", hash, prefix: "op_live_t", createdAt: "now" }
-        : undefined,
-    getUser: async (id: string) => (id === user.id ? { ...user, email: "t@t.com", name: "T", createdAt: "now", updatedAt: "now" } : undefined),
-    touchApiKey: async () => {},
-  } as unknown as Repository;
-}
-
-/** Build an app whose service sub-objects are the given stubs. */
-function appWith(service: Record<string, unknown>) {
-  return createApp({ repo: fakeRepo(), service: service as unknown as TurjumanService } as RouterDeps);
-}
-
-const auth = { headers: { authorization: `Bearer ${SECRET}` } };
 
 describe("REST router — error, authz, validation & pagination", () => {
   it("maps a service FORBIDDEN to 403 with the typed envelope", async () => {
@@ -58,7 +31,7 @@ describe("REST router — error, authz, validation & pagination", () => {
     // addLocaleBodySchema requires `code`; an empty body must fail validation.
     const res = await app.request("/v1/projects/p1/locales", {
       method: "POST",
-      headers: { ...auth.headers, "content-type": "application/json" },
+      headers: jsonHeaders,
       body: JSON.stringify({}),
     });
     expect(res.status).toBe(400);
@@ -112,5 +85,22 @@ describe("REST router — error, authz, validation & pagination", () => {
     const res = await app.request("/v1/projects/p1/translations", auth);
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ code: "VALIDATION" });
+  });
+
+  it("enforces the operation's OWN input schema on a projected route (no transport drift)", async () => {
+    // set_qa_config's op input caps `ignore` at .max(500); the REST body schema
+    // doesn't. The projection re-validates against op.input, so an over-cap array
+    // is rejected with 400 before the service is touched — exactly as over MCP.
+    const setConfig = vi.fn();
+    const app = appWith({ qa: { setConfig } });
+    const ignore = Array.from({ length: 501 }, () => ({ checkId: "icu" }));
+    const res = await app.request("/v1/projects/p1/qa-config", {
+      method: "PUT",
+      headers: jsonHeaders,
+      body: JSON.stringify({ ignore }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ code: "VALIDATION" });
+    expect(setConfig).not.toHaveBeenCalled();
   });
 });

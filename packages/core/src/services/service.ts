@@ -1,4 +1,4 @@
-import type { Repository } from "../repository/index.js";
+import type { RepositoryApi } from "../repository/index.js";
 import { ApiKeysService } from "./api-keys.js";
 import { GlossaryService } from "./glossary.js";
 import { KeysService } from "./keys.js";
@@ -34,7 +34,7 @@ export class TurjumanService {
   readonly users: UsersService;
   readonly apiKeys: ApiKeysService;
 
-  constructor(repo: Repository) {
+  constructor(repo: RepositoryApi) {
     this.projects = new ProjectsService(repo);
     this.locales = new LocalesService(repo);
     this.keys = new KeysService(repo);

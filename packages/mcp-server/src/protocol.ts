@@ -6,10 +6,16 @@ import type {
   JSONRPCMessage,
   ToolAnnotations,
 } from "@modelcontextprotocol/sdk/types.js";
-import { AppError, errorInfo, logError } from "@turjuman/core";
+import { maskError } from "@turjuman/core";
+import {
+  OPERATIONS,
+  type OpContext,
+  type Operation,
+  effectiveAnnotations,
+} from "@turjuman/sdk";
 import pkg from "../package.json" with { type: "json" };
+import { codemodeTools } from "./codemode.js";
 import { PROMPTS, type PromptDef } from "./prompts/index.js";
-import { TOOLS, type ToolContext, type ToolDef } from "./tools/index.js";
 
 /**
  * Stateless MCP over Streamable HTTP, backed by the official SDK.
@@ -63,10 +69,10 @@ function asStructured(data: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-/** Adapt one of our type-erased {@link ToolDef}s to an SDK tool callback. Tool
+/** Adapt one of our type-erased {@link Operation}s to an SDK tool callback. Tool
  * execution errors are surfaced as `isError` content (per MCP guidance) so the
  * agent can react, rather than as JSON-RPC protocol errors. */
-function toolCallback(def: ToolDef, ctx: ToolContext) {
+function toolCallback(def: Operation, ctx: OpContext) {
   return async (args: unknown): Promise<CallToolResult> => {
     try {
       const data = await def.handler(args, ctx);
@@ -75,24 +81,13 @@ function toolCallback(def: ToolDef, ctx: ToolContext) {
       if (structured) result.structuredContent = structured;
       return result;
     } catch (e) {
-      // AppErrors are intentional, model-actionable failures (bad input, a
-      // permission denial) — surface their code + message so the agent can
-      // adjust. Anything else (a raw DynamoDB/AWS SDK error) is an internal
-      // fault: log it server-side and return a generic message plus the
-      // correlation id, so nothing internal leaks into the model context.
-      if (e instanceof AppError) {
-        return { content: [{ type: "text", text: `Error: ${e.code}: ${e.message}` }], isError: true };
-      }
-      logError({
-        msg: "tool_handler_error",
-        requestId: ctx.requestId,
-        tool: def.name,
-        error: errorInfo(e),
-      });
-      return {
-        content: [{ type: "text", text: `Error: Internal error (ref: ${ctx.requestId})` }],
-        isError: true,
-      };
+      // One masking policy across every boundary (core's `maskError`): an
+      // AppError is intentional and model-actionable, so surface its code +
+      // message; anything else is logged server-side and replaced with a generic
+      // message + correlation id, so nothing internal leaks into model context.
+      const masked = maskError(e, { msg: "tool_handler_error", requestId: ctx.requestId, tool: def.name });
+      const text = masked.isAppError ? `Error: ${masked.code}: ${masked.message}` : `Error: ${masked.message}`;
+      return { content: [{ type: "text", text }], isError: true };
     }
   };
 }
@@ -102,7 +97,7 @@ function toolCallback(def: ToolDef, ctx: ToolContext) {
  * surface as thrown (JSON-RPC) errors — an AppError keeps its code/message; an
  * unexpected fault is logged server-side and masked behind the request id, so
  * nothing internal leaks into the model context. */
-function promptCallback(def: PromptDef, ctx: ToolContext) {
+function promptCallback(def: PromptDef, ctx: OpContext) {
   return async (args: Record<string, string | undefined>): Promise<GetPromptResult> => {
     try {
       const prompt = await def.handler(args, ctx);
@@ -114,54 +109,64 @@ function promptCallback(def: PromptDef, ctx: ToolContext) {
         })),
       };
     } catch (e) {
-      if (e instanceof AppError) throw new Error(`${e.code}: ${e.message}`);
-      logError({ msg: "prompt_handler_error", requestId: ctx.requestId, prompt: def.name, error: errorInfo(e) });
-      throw new Error(`Internal error (ref: ${ctx.requestId})`);
+      const masked = maskError(e, { msg: "prompt_handler_error", requestId: ctx.requestId, prompt: def.name });
+      throw new Error(masked.isAppError ? `${masked.code}: ${masked.message}` : masked.message);
     }
   };
 }
 
-/** Behaviour hints for a tool. An explicit `def.annotations` wins; otherwise we
- * derive them from the verb in the tool name — read tools are read-only, the
- * delete/revoke/remove family is destructive, and the rest are non-destructive
- * writes (set_/update_ are also idempotent). */
-export function annotationsFor(def: ToolDef): ToolAnnotations {
-  if (def.annotations) return def.annotations;
-  const name = def.name;
-  if (/^(list|get|search|lookup)_/.test(name)) return { readOnlyHint: true };
-  if (/^(delete|revoke|remove)_/.test(name)) {
-    return { readOnlyHint: false, destructiveHint: true };
-  }
+/** Behaviour hints for a tool, as MCP `ToolAnnotations`. The classification
+ * (read-only / destructive / idempotent) is a property of the operation, so it
+ * lives in `@turjuman/sdk` (`effectiveAnnotations`); here we only adapt the
+ * SDK's transport-free `OpAnnotations` onto MCP's structurally-identical type. */
+export function annotationsFor(def: Operation): ToolAnnotations {
+  return effectiveAnnotations(def);
+}
+
+/** Build the static MCP registration config for one operation. */
+function registrationFor(def: Operation) {
   return {
-    readOnlyHint: false,
-    destructiveHint: false,
-    ...(/^(set|update)_/.test(name) ? { idempotentHint: true } : {}),
+    def,
+    config: {
+      description: def.description,
+      inputSchema: def.input,
+      annotations: annotationsFor(def),
+      ...(def.output ? { outputSchema: def.output } : {}),
+    },
   };
 }
 
-/** The static SDK registration for every tool, assembled once at module scope.
- * Only the authenticated {@link ToolContext} is injected per request (via the
- * tool callback), so this work is not repeated on every invocation. */
-const REGISTRATIONS = TOOLS.map((def) => ({
-  def,
-  config: {
-    description: def.description,
-    inputSchema: def.input,
-    annotations: annotationsFor(def),
-    ...(def.output ? { outputSchema: def.output } : {}),
-  },
-}));
+/** The static registrations for each mode, assembled once at module scope. Only
+ * the authenticated {@link OpContext} is injected per request (via the tool
+ * callback), so this work is not repeated on every invocation.
+ *  - classic: every business operation as its own tool;
+ *  - code:    just `search` + `describe` + `run_code` (the model writes code instead).
+ * The two are mutually exclusive — a connection is in one mode or the other. */
+const CLASSIC_REGISTRATIONS = OPERATIONS.map(registrationFor);
+const CODEMODE_REGISTRATIONS = codemodeTools.map(registrationFor);
+
+/** Which toolset to advertise for a request. Classic mode may be narrowed by a
+ * client-requested allowlist (URL tool-scoping); code mode is the fixed pair. */
+export type ToolSelection =
+  | { mode: "classic"; allowed?: ReadonlySet<string> }
+  | { mode: "code" };
+
+const DEFAULT_SELECTION: ToolSelection = { mode: "classic" };
 
 /** A fresh server per request so each tool callback closes over this request's
- * authenticated {@link ToolContext}, keeping the server a pure, stateless
- * function. Registration reuses the module-scope {@link REGISTRATIONS} configs,
- * so only the per-request callbacks are built here. When `allowed` is given
- * (client-requested URL tool-scoping), only those tools are registered — which
- * scopes both `tools/list` and `tools/call` from the one seam. This is a
+ * authenticated {@link OpContext}, keeping the server a pure, stateless
+ * function. Registration reuses the module-scope registration configs, so only
+ * the per-request callbacks are built here. The {@link ToolSelection} picks the
+ * mode (classic toolset vs the code-mode pair); in classic mode an `allowed`
+ * allowlist (client-requested URL tool-scoping) further narrows the toolset,
+ * scoping both `tools/list` and `tools/call` from the one seam. This is a
  * presentation filter only; RBAC in core still authorizes every call. */
-function buildServer(ctx: ToolContext, allowed?: ReadonlySet<string>): McpServer {
+function buildServer(ctx: OpContext, selection: ToolSelection): McpServer {
   const server = new McpServer(SERVER_INFO, { instructions: INSTRUCTIONS });
-  for (const { def, config } of REGISTRATIONS) {
+  const registrations =
+    selection.mode === "code" ? CODEMODE_REGISTRATIONS : CLASSIC_REGISTRATIONS;
+  const allowed = selection.mode === "classic" ? selection.allowed : undefined;
+  for (const { def, config } of registrations) {
     if (allowed && !allowed.has(def.name)) continue;
     server.registerTool(def.name, config, toolCallback(def, ctx));
   }
@@ -210,15 +215,15 @@ class PumpTransport implements Transport {
  */
 export async function handleMessage(
   message: JsonRpcMessage,
-  ctx: ToolContext,
-  allowed?: ReadonlySet<string>,
+  ctx: OpContext,
+  selection: ToolSelection = DEFAULT_SELECTION,
 ): Promise<JsonRpcResponse | null> {
   const method = message.method;
   const id = message.id ?? null;
   if (!method) return err(id, -32600, "Invalid request: missing method");
   if (method.startsWith("notifications/") || id === null) return null;
 
-  const server = buildServer(ctx, allowed);
+  const server = buildServer(ctx, selection);
   const transport = new PumpTransport();
   await server.connect(transport);
   try {

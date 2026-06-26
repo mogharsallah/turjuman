@@ -1,22 +1,22 @@
 import {
-  type ToolDef,
+  type Operation,
   bulkSetResultSchema,
   localeCode,
   localeKeyList,
   namespace,
+  op,
   pageCursor,
   pageLimit,
   projectId,
   settableStatusSchema,
-  tool,
   translationSchema,
   translationStatusSchema,
   z,
-} from "./base.js";
+} from "../base.js";
 
 /** Reading and writing translation values. */
-export const translationTools: ToolDef[] = [
-  tool({
+export const translationOps: Operation[] = [
+  op({
     name: "get_translations",
     description:
       "Get translations either for one key across locales (pass name) or for an entire locale (pass locale). " +
@@ -40,7 +40,7 @@ export const translationTools: ToolDef[] = [
       throw new Error("Provide either 'name' (for a key) or 'locale'.");
     },
   }),
-  tool({
+  op({
     name: "list_untranslated",
     description:
       "List keys that have no value yet for a locale. Use this to find what the LLM should translate. " +
@@ -55,7 +55,7 @@ export const translationTools: ToolDef[] = [
       return { locale: a.locale, count: page.keys.length, keys: page.keys, nextCursor: page.nextCursor };
     },
   }),
-  tool({
+  op({
     name: "list_stale",
     description:
       "List keys whose translation for a locale is stale — its source (base) value changed since it was written. " +
@@ -71,7 +71,7 @@ export const translationTools: ToolDef[] = [
       return { locale: a.locale, count: page.keys.length, keys: page.keys, nextCursor: page.nextCursor };
     },
   }),
-  tool({
+  op({
     name: "set_translation",
     description:
       "Write (create or replace) a single translation value for an existing key in a locale. Edits the value, not the key's metadata (use update_key for that).",
@@ -87,7 +87,7 @@ export const translationTools: ToolDef[] = [
     handler: ({ projectId: id, locale, ...input }, { service, actor }) =>
       service.translations.set(actor, id, locale, { ...input, origin: "llm" }),
   }),
-  tool({
+  op({
     name: "bulk_set_translations",
     description:
       "Set many translations for one locale in a single call. Ideal after the LLM translates a batch. Unknown keys are skipped and reported.",
@@ -117,7 +117,7 @@ export const translationTools: ToolDef[] = [
         a.entries.map((e) => ({ ...e, origin: "llm" as const })),
       ),
   }),
-  tool({
+  op({
     name: "set_translation_status",
     description: 'Change a translation\'s status (e.g. mark it "approved").',
     input: z.object({

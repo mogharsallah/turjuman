@@ -43,6 +43,7 @@
             "group": "Guides",
             "pages": [
               "guides/translate-with-mcp",
+              "guides/code-mode",
               "guides/sync-with-cli",
               "guides/quality-checks",
               "guides/webhooks"

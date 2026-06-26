@@ -57,6 +57,7 @@
   "devDependencies": {
     "@types/gettext-parser": "^8.0.0",
     "@types/js-yaml": "^4.0.9",
-    "@types/plist": "^3.0.5"
+    "@types/plist": "^3.0.5",
+    "fast-check": "^3.23.1"
   }
 }

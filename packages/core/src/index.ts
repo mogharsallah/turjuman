@@ -3,8 +3,8 @@
 // deploy) keep importing everything from @turjuman/core unchanged.
 export * from "@turjuman/schema";
 export * from "./auth.js";
-export { logInfo, logError, errorInfo } from "./logging.js";
-export { Repository, type RepositoryOptions } from "./repository/index.js";
+export { logInfo, logError, errorInfo, maskError, type MaskedError } from "./logging.js";
+export { Repository, type RepositoryOptions, type RepositoryApi } from "./repository/index.js";
 export {
   TurjumanService,
   ProjectsService,

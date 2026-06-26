@@ -1,15 +1,15 @@
-import { type ToolDef, glossaryTermSchema, localeCode, projectId, tool, z } from "./base.js";
+import { type Operation, glossaryTermSchema, localeCode, op, projectId, z } from "../base.js";
 
 /** Glossary terms and translation-memory lookups. */
-export const glossaryTools: ToolDef[] = [
-  tool({
+export const glossaryOps: Operation[] = [
+  op({
     name: "list_glossary",
     description:
       "List the project's glossary terms. Read this BEFORE translating: honor doNotTranslate terms verbatim and prefer the given per-locale translations for consistency.",
     input: z.object({ projectId }),
     handler: (a, { service, actor }) => service.glossary.list(actor, a.projectId),
   }),
-  tool({
+  op({
     name: "add_glossary_term",
     description:
       "Add a glossary term. Use doNotTranslate for brand/product names that must stay verbatim, and translations for preferred per-locale renderings.",
@@ -25,7 +25,7 @@ export const glossaryTools: ToolDef[] = [
     handler: ({ projectId: id, ...input }, { service, actor }) =>
       service.glossary.add(actor, id, input),
   }),
-  tool({
+  op({
     name: "update_glossary_term",
     description: "Update a glossary term's translations, flags, or notes.",
     input: z.object({
@@ -41,7 +41,7 @@ export const glossaryTools: ToolDef[] = [
     handler: ({ projectId: id, termId, ...patch }, { service, actor }) =>
       service.glossary.update(actor, id, termId, patch),
   }),
-  tool({
+  op({
     name: "remove_glossary_term",
     description: "Delete a glossary term.",
     input: z.object({ projectId, termId: z.string() }),
@@ -50,7 +50,7 @@ export const glossaryTools: ToolDef[] = [
       return { removed: a.termId };
     },
   }),
-  tool({
+  op({
     name: "lookup_translation_memory",
     description:
       "Find prior translations for a source string in a locale (exact, normalized and fuzzy matches), so you can reuse existing phrasing for consistency before translating.",

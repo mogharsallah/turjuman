@@ -1,6 +1,11 @@
 import { type Actor, type OrgAction, canOnOrg } from "@turjuman/core";
-import { annotationsFor } from "./protocol.js";
-import { TOOLS, TOOLS_BY_NAME, TOOL_GROUPS, type ToolDef } from "./tools/index.js";
+import {
+  OPERATIONS,
+  OPERATIONS_BY_NAME,
+  OPERATION_GROUPS,
+  type Operation,
+  isReadOnly,
+} from "@turjuman/sdk";
 
 /**
  * Client-requested URL tool-scoping. An MCP client can narrow the advertised
@@ -18,7 +23,8 @@ import { TOOLS, TOOLS_BY_NAME, TOOL_GROUPS, type ToolDef } from "./tools/index.j
  */
 
 /** Synthetic group: every tool advertised as read-only. Computed from the same
- * `annotationsFor` the SDK advertises, so it can't drift from the hints. */
+ * `isReadOnly` classification the SDK advertises, so it can't drift from the
+ * hints the MCP server publishes. */
 const READ_GROUP = "read";
 
 /**
@@ -46,8 +52,8 @@ const ORG_GATED_TOOLS: Record<string, OrgAction> = {
  */
 export function allowedToolsForActor(actor: Actor): Set<string> {
   const allowed = new Set<string>();
-  for (const def of TOOLS) {
-    if (actor.readOnly === true && annotationsFor(def).readOnlyHint !== true) continue;
+  for (const def of OPERATIONS) {
+    if (actor.readOnly === true && !isReadOnly(def)) continue;
     const orgAction = ORG_GATED_TOOLS[def.name];
     if (orgAction && !canOnOrg(actor, orgAction)) continue;
     allowed.add(def.name);
@@ -56,6 +62,23 @@ export function allowedToolsForActor(actor: Actor): Set<string> {
 }
 
 export type ToolScope = { allowed: Set<string> } | { error: string };
+
+/**
+ * The connection mode, from `?mode=`:
+ *  - `classic` (default) — every operation is its own MCP tool;
+ *  - `code` — only `search` + `describe` + `run_code` (the model writes code).
+ * The two are mutually exclusive. An unknown value fails loud (caller → 400).
+ */
+export type Mode = "classic" | "code";
+
+export function resolveMode(
+  query: Record<string, string | undefined> | undefined,
+): Mode | { error: string } {
+  const raw = query?.mode;
+  if (raw === undefined || raw === "" || raw === "classic") return "classic";
+  if (raw === "code") return "code";
+  return { error: `Unknown mode: ${raw}. Valid modes: classic, code.` };
+}
 
 function splitCsv(value: string | undefined): string[] {
   if (!value) return [];
@@ -66,13 +89,13 @@ function splitCsv(value: string | undefined): string[] {
 }
 
 /** The tools in a named group, or `undefined` if the group name is unknown. */
-function toolsInGroup(group: string): ToolDef[] | undefined {
-  if (group === READ_GROUP) return TOOLS.filter((t) => annotationsFor(t).readOnlyHint === true);
-  return TOOL_GROUPS[group];
+function toolsInGroup(group: string): Operation[] | undefined {
+  if (group === READ_GROUP) return OPERATIONS.filter((t) => isReadOnly(t));
+  return OPERATION_GROUPS[group];
 }
 
 function validGroupNames(): string[] {
-  return [...Object.keys(TOOL_GROUPS), READ_GROUP];
+  return [...Object.keys(OPERATION_GROUPS), READ_GROUP];
 }
 
 /**
@@ -89,7 +112,7 @@ export function resolveToolScope(
   const requestedGroups = splitCsv(query.groups);
   if (requestedTools.length === 0 && requestedGroups.length === 0) return undefined;
 
-  const unknownTools = requestedTools.filter((name) => !TOOLS_BY_NAME.has(name));
+  const unknownTools = requestedTools.filter((name) => !OPERATIONS_BY_NAME.has(name));
   if (unknownTools.length > 0) {
     return { error: `Unknown tool(s): ${unknownTools.join(", ")}.` };
   }

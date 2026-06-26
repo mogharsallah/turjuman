@@ -6,7 +6,7 @@ import {
 } from "@aws-sdk/client-dynamodb";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { authenticate, bootstrapOwner } from "./auth.js";
-import { AppError } from "@turjuman/schema";
+import { AppError, type Actor } from "@turjuman/schema";
 import { Repository } from "./repository/index.js";
 import { TurjumanService } from "./services/index.js";
 
@@ -263,4 +263,98 @@ describe.skipIf(!endpoint)("end-to-end against DynamoDB", () => {
     expect(await svc.projects.list(otherActor)).toHaveLength(0);
     await expect(svc.projects.get(otherActor, project.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
   }, 60_000);
+});
+
+/**
+ * Focused single-table invariants against real DynamoDB — the properties that the
+ * in-memory fake can only approximate: the transacted email-uniqueness companion
+ * item, GSI partitioning (org isolation on GSI1, by-key fan-out on GSI3), and
+ * cursor continuity (no duplicates, no gaps) on a real paginated Query. Each runs
+ * on its own freshly-created table so it doesn't depend on the lifecycle test
+ * above. Skipped with the same env guard, so the default unit run stays hermetic.
+ */
+describe.skipIf(!endpoint)("single-table invariants (DynamoDB)", () => {
+  let owner: Actor;
+  beforeAll(async () => {
+    await createTable();
+    const boot = await bootstrapOwner(repo, { email: "inv-owner@acme.com", name: "Inv Owner" });
+    owner = (await authenticate(repo, boot.secret))!.actor;
+  }, 60_000);
+  afterAll(async () => {
+    await client.send(new DeleteTableCommand({ TableName: TABLE })).catch(() => undefined);
+  });
+
+  it("enforces email uniqueness atomically via the transacted companion item", async () => {
+    const a = await svc.users.create(owner, { email: "dup@acme.com", name: "A" });
+    // The second create fails the companion item's attribute_not_exists condition,
+    // so the whole TransactWrite rolls back — no orphan user, no second email item.
+    await expect(svc.users.create(owner, { email: "dup@acme.com", name: "B" })).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    // A case variant collides too: the email index key is lower-cased.
+    await expect(svc.users.create(owner, { email: "DUP@acme.com", name: "C" })).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    // Exactly one user holds the email, and it is the first one (no partial write).
+    expect((await repo.getUserByEmail("dup@acme.com"))?.id).toBe(a.id);
+    expect(
+      (await repo.listUsersByOrg(owner.orgId)).filter((u) => u.email === "dup@acme.com"),
+    ).toHaveLength(1);
+  });
+
+  it("partitions GSI1 by org and fans out GSI3 by key", async () => {
+    // GSI1 ("by org"): a project created in another org never appears in this org's
+    // query, and vice-versa — the GSI1PK is the org, so the partitions are disjoint.
+    const mine = await svc.projects.create(owner, { name: "Mine", baseLocale: "en" });
+    const otherBoot = await bootstrapOwner(repo, {
+      email: "gsi-other@acme.com",
+      name: "Other",
+      orgId: "gsi-other-org",
+    });
+    const otherActor = (await authenticate(repo, otherBoot.secret))!.actor;
+    const theirs = await svc.projects.create(otherActor, { name: "Theirs", baseLocale: "en" });
+
+    const myProjectIds = (await repo.listProjectsByOrg(owner.orgId)).map((p) => p.id);
+    expect(myProjectIds).toContain(mine.id);
+    expect(myProjectIds).not.toContain(theirs.id);
+    expect((await repo.listProjectsByOrg("gsi-other-org")).map((p) => p.id)).toEqual([theirs.id]);
+
+    // GSI3 ("by key"): one key's translations across every locale come back from a
+    // single PK-only query on the key's GSI3PK.
+    await svc.locales.add(owner, mine.id, "fr");
+    await svc.locales.add(owner, mine.id, "es");
+    await svc.keys.create(owner, mine.id, { name: "greeting", baseValue: "Hello" });
+    await svc.translations.set(owner, mine.id, "fr", { name: "greeting", value: "Bonjour" });
+    await svc.translations.set(owner, mine.id, "es", { name: "greeting", value: "Hola" });
+    const byKey = await repo.listTranslationsByKey(mine.id, "default", "greeting");
+    expect(byKey.map((t) => t.localeCode).sort()).toEqual(["en", "es", "fr"]);
+  });
+
+  it("walks the key partition by cursor with no duplicates and no gaps", async () => {
+    const project = await svc.projects.create(owner, { name: "Paged", baseLocale: "en" });
+    const total = 7;
+    for (let i = 0; i < total; i++) {
+      // Zero-padded so the lexical SK order is the obvious numeric order.
+      await svc.keys.create(owner, project.id, { name: `k${String(i).padStart(2, "0")}` });
+    }
+    const whole = (await repo.listKeys(project.id)).map((k) => k.name);
+    expect(whole).toHaveLength(total);
+
+    // Page at a limit that doesn't divide the total, so the last page is partial.
+    const limit = 3;
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    let pages = 0;
+    do {
+      const page = await repo.listKeysPage(project.id, { limit, cursor });
+      expect(page.keys.length).toBeLessThanOrEqual(limit);
+      seen.push(...page.keys.map((k) => k.name));
+      cursor = page.nextCursor;
+      pages++;
+    } while (cursor && pages < 20);
+
+    expect(pages).toBe(Math.ceil(total / limit)); // 3 pages: 3 + 3 + 1
+    expect(new Set(seen).size).toBe(total); // no duplicates across page boundaries
+    expect([...seen].sort()).toEqual([...whole].sort()); // no gaps: union == whole
+  });
 });

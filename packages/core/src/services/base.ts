@@ -2,7 +2,7 @@ import type { GlobalRole, Project, ProjectRole, User } from "@turjuman/schema";
 import { notFound } from "@turjuman/schema";
 import { newId } from "@turjuman/schema";
 import { type Actor, type ProjectAction, requireProject } from "@turjuman/schema";
-import type { Repository } from "../repository/index.js";
+import type { RepositoryApi } from "../repository/index.js";
 import { requireEmail, requireText } from "@turjuman/schema";
 
 /**
@@ -12,7 +12,7 @@ import { requireEmail, requireText } from "@turjuman/schema";
  * validation lives in ../validation.ts, shared with the transports.
  */
 export abstract class BaseService {
-  constructor(protected readonly repo: Repository) {}
+  constructor(protected readonly repo: RepositoryApi) {}
 
   /**
    * Load a project (scoped to the actor's org) and enforce a project-scoped

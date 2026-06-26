@@ -202,6 +202,46 @@ describe("MCP handler — processRequest", () => {
     expect(lastLog(logSpy)).toMatchObject({ outcome: "invalid_tool_scope", status: 400 });
   });
 
+  it("advertises only the code-mode tools under ?mode=code", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const res = await processRequest({
+      method: "POST",
+      query: { mode: "code" },
+      headers: { authorization: `Bearer ${SECRET}` },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+      service: deps({ touched: false }),
+    });
+    const names = (JSON.parse(res.body ?? "{}").result.tools as { name: string }[]).map((t) => t.name);
+    expect(names.sort()).toEqual(["describe", "run_code", "search"]);
+  });
+
+  it("rejects an unknown ?mode= with 400", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const res = await processRequest({
+      method: "POST",
+      query: { mode: "bogus" },
+      headers: { authorization: `Bearer ${SECRET}` },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+      service: deps({ touched: false }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body ?? "{}").error).toContain("bogus");
+    expect(lastLog(logSpy)).toMatchObject({ outcome: "invalid_mode", status: 400 });
+  });
+
+  it("rejects combining ?mode=code with ?tools=/?groups= (mutually exclusive)", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const res = await processRequest({
+      method: "POST",
+      query: { mode: "code", groups: "keys" },
+      headers: { authorization: `Bearer ${SECRET}` },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+      service: deps({ touched: false }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body ?? "{}").error).toContain("code mode");
+  });
+
   it("advertises every tool to a full-privilege (OWNER) key with no scope query", async () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     const res = await processRequest({

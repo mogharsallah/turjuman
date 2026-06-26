@@ -6,7 +6,6 @@ import { describeRoute, openAPIRouteHandler, resolver, validator } from "hono-op
 import { z } from "zod";
 import * as formats from "@turjuman/formats";
 import {
-  AppError,
   type Actor,
   BEARER_CHALLENGE,
   TurjumanService,
@@ -16,31 +15,28 @@ import {
   bulkSetResultSchema,
   bundleEntrySchema,
   errorEnvelopeSchema,
-  errorInfo,
   errorStatus,
   importKeysBodySchema,
   importKeysResultSchema,
   importTranslationsBodySchema,
   keyPageSchema,
   localeSchema,
-  logError,
   logInfo,
+  maskError,
   parseBearer,
   projectSchema,
   qaConfigBodySchema,
-  qaConfigSchema,
-  qaReportSchema,
-  reviewResultSchema,
   reviewTranslationsBodySchema,
   runChecksBodySchema,
   scoreConfigBodySchema,
-  scoreConfigSchema,
   scorePromptSchema,
   scoreTranslationBodySchema,
   translationKeySchema,
   translationSchema,
+  type User,
   validation,
 } from "@turjuman/core";
+import { OPERATIONS_BY_NAME, type OpContext } from "@turjuman/sdk";
 
 /**
  * REST API as a Hono app. Endpoints are the deterministic operations a
@@ -62,7 +58,7 @@ export interface RouterDeps {
 /** Hono environment: middleware stashes the resolved actor, the per-request id,
  * the authenticated key id (for the access log), and the request start time. */
 type Env = {
-  Variables: { actor: Actor; requestId: string; keyId?: string; startedAt?: number };
+  Variables: { actor: Actor; user: User; requestId: string; keyId?: string; startedAt?: number };
 };
 
 import pkg from "../package.json" with { type: "json" };
@@ -192,15 +188,15 @@ export function createApp(deps: RouterDeps): Hono<Env> {
   // and where thrown requests get their one access-log line.
   app.onError((err, c) => {
     const requestId = c.get("requestId");
-    if (err instanceof AppError) {
-      const status = errorStatus(err.code);
+    // One masking policy across every transport boundary (core's `maskError`): an
+    // AppError surfaces its code + message; anything else is logged server-side
+    // (request id + stack) and returned as a generic body, never leaking internals.
+    const masked = maskError(err, { msg: "api_unhandled", requestId });
+    if (masked.isAppError) {
+      const status = errorStatus(masked.code);
       accessLog(c, status);
-      return c.json({ error: err.message, code: err.code, requestId }, status as ContentfulStatusCode);
+      return c.json({ error: masked.message, code: masked.code, requestId }, status as ContentfulStatusCode);
     }
-    // Never leak an internal error's message to the client; log it (with the
-    // request id + stack, server-side only) so it's traceable in CloudWatch, and
-    // return a generic body.
-    logError({ msg: "api_unhandled", requestId, error: errorInfo(err) });
     accessLog(c, 500);
     return c.json({ error: "Internal error", code: "INTERNAL", requestId }, 500);
   });
@@ -243,10 +239,96 @@ export function createApp(deps: RouterDeps): Hono<Env> {
       );
     }
     c.set("actor", auth.actor);
+    c.set("user", auth.user);
     c.set("keyId", auth.keyId);
     await next();
   };
   projects.use("*", requireAuth);
+
+  // ---- SDK operation projection ---------------------------------------------
+  // Project a `@turjuman/sdk` Operation onto a REST route: same handler (so core
+  // business logic + RBAC are identical to the MCP tool), with the operation's
+  // canonical `output` documenting the response and a reused, ref-annotated body
+  // schema documenting the request. Path params map onto operation input fields;
+  // the validated JSON body supplies the rest. Reusing the shared schemas keeps
+  // each component emitted once under `components.schemas` and `$ref`'d for both
+  // request and response. Only operations that carry an `http` binding AND map
+  // cleanly are projected here; the rest stay bespoke (CLI push/pull surface).
+  interface ProjectionConfig {
+    summary: string;
+    description?: string;
+    tags: string[];
+    /** Reused, ref-annotated request-body schema. Omit for GET routes. */
+    body?: z.ZodTypeAny;
+    /** Success status code (default 200). */
+    status?: ContentfulStatusCode;
+    responseDescription: string;
+  }
+
+  const PROJECTS_PREFIX = "/v1/projects";
+
+  const projectOperation = (name: string, cfg: ProjectionConfig): void => {
+    const op = OPERATIONS_BY_NAME.get(name);
+    if (!op?.http || !op.output) {
+      throw new Error(`Operation "${name}" has no http binding or output schema to project`);
+    }
+    const { method, path, params = {} } = op.http;
+    // This sub-app is mounted at /v1/projects, so a binding outside that prefix
+    // can't be projected here — fail loud at startup rather than silently mount it
+    // at the wrong URL.
+    if (path !== PROJECTS_PREFIX && !path.startsWith(`${PROJECTS_PREFIX}/`)) {
+      throw new Error(`Operation "${name}" path "${path}" is not under ${PROJECTS_PREFIX}; cannot project it onto the projects router`);
+    }
+    const subPath = path.slice(PROJECTS_PREFIX.length) || "/";
+    // A param maps onto the URL as a `:name` path segment when it appears in the
+    // path, otherwise as a query param (per the HttpBinding contract).
+    const paramSources = Object.entries(params).map(([urlName, field]) => ({
+      urlName,
+      field,
+      fromPath: path.includes(`:${urlName}`),
+    }));
+    const status = cfg.status ?? 200;
+    const spec = describeRoute({
+      summary: cfg.summary,
+      ...(cfg.description ? { description: cfg.description } : {}),
+      tags: cfg.tags,
+      responses: { [status]: jsonResponse(op.output, cfg.responseDescription), ...errorResponses },
+    });
+    const handler = async (c: Context<Env>) => {
+      const ctx: OpContext = {
+        service: svc,
+        actor: c.get("actor"),
+        user: c.get("user"),
+        requestId: c.get("requestId"),
+      };
+      const merged: Record<string, unknown> = {};
+      for (const p of paramSources) {
+        // Path/query values are always strings. The op.input fields they map to are
+        // string today (projectId, locale, …); a binding that maps a numeric/boolean
+        // param must use a coercing schema (e.g. z.coerce.number()) on that field, or
+        // op.input.parse below would reject the raw string with a 400.
+        const raw = p.fromPath ? c.req.param(p.urlName) : c.req.query(p.urlName);
+        if (raw !== undefined) merged[p.field] = raw;
+      }
+      if (cfg.body) Object.assign(merged, (c.req.valid as (t: "json") => Record<string, unknown>)("json"));
+      // Re-validate the assembled input against the operation's OWN schema, so the
+      // REST surface enforces exactly the constraints MCP and the sandbox do (the
+      // body schema only documents/validates the body sub-shape; the op input may
+      // be stricter, e.g. an array `.max(...)`). A failure maps to a 400 VALIDATION.
+      let input: unknown;
+      try {
+        input = op.input.parse(merged);
+      } catch (e) {
+        throw validation(e instanceof z.ZodError ? (e.errors[0]?.message ?? "Invalid request") : "Invalid request");
+      }
+      return c.json(await op.handler(input, ctx), status);
+    };
+    if (cfg.body) {
+      projects.on(method.toUpperCase(), subPath, spec, validator("json", cfg.body, onInvalid), handler);
+    } else {
+      projects.on(method.toUpperCase(), subPath, spec, handler);
+    }
+  };
 
   projects.get(
     "/",
@@ -262,18 +344,12 @@ export function createApp(deps: RouterDeps): Hono<Env> {
     async (c) => c.json({ projects: await svc.projects.list(c.get("actor")) }),
   );
 
-  projects.get(
-    "/:id",
-    describeRoute({
-      summary: "Get a project",
-      tags: ["Projects"],
-      responses: {
-        200: jsonResponse(projectSchema, "The project"),
-        ...errorResponses,
-      },
-    }),
-    async (c) => c.json(await svc.projects.get(c.get("actor"), c.req.param("id"))),
-  );
+  // Projected from the `get_project` operation (same handler as the MCP tool).
+  projectOperation("get_project", {
+    summary: "Get a project",
+    tags: ["Projects"],
+    responseDescription: "The project",
+  });
 
   projects.get(
     "/:id/locales",
@@ -288,22 +364,13 @@ export function createApp(deps: RouterDeps): Hono<Env> {
     async (c) => c.json({ locales: await svc.locales.list(c.get("actor"), c.req.param("id")) }),
   );
 
-  projects.post(
-    "/:id/locales",
-    describeRoute({
-      summary: "Add a target locale to a project",
-      tags: ["Locales"],
-      responses: {
-        201: jsonResponse(localeSchema, "The created locale"),
-        ...errorResponses,
-      },
-    }),
-    validator("json", addLocaleBodySchema, onInvalid),
-    async (c) => {
-      const b = c.req.valid("json");
-      return c.json(await svc.locales.add(c.get("actor"), c.req.param("id")!, b.code, b.name), 201);
-    },
-  );
+  projectOperation("add_locale", {
+    summary: "Add a target locale to a project",
+    tags: ["Locales"],
+    body: addLocaleBodySchema,
+    status: 201,
+    responseDescription: "The created locale",
+  });
 
   projects.get(
     "/:id/keys",
@@ -458,107 +525,46 @@ export function createApp(deps: RouterDeps): Hono<Env> {
     },
   );
 
-  projects.post(
-    "/:id/checks",
-    describeRoute({
-      summary: "Run advisory QA checks on a project's translations",
-      tags: ["QA"],
-      responses: {
-        200: jsonResponse(qaReportSchema, "QA report (findings grouped by locale + rollup counts)"),
-        ...errorResponses,
-      },
-    }),
-    validator("json", runChecksBodySchema, onInvalid),
-    async (c) => {
-      const b = c.req.valid("json");
-      return c.json(
-        await svc.qa.run(c.get("actor"), c.req.param("id")!, {
-          locale: b.locale,
-          checkIds: b.checks,
-          slot: b.slot,
-        }),
-      );
-    },
-  );
+  projectOperation("run_qa_checks", {
+    summary: "Run advisory QA checks on a project's translations",
+    tags: ["QA"],
+    body: runChecksBodySchema,
+    responseDescription: "QA report (findings grouped by locale + rollup counts)",
+  });
 
-  projects.get(
-    "/:id/qa-config",
-    describeRoute({
-      summary: "Get the project's QA configuration",
-      tags: ["QA"],
-      responses: {
-        200: jsonResponse(qaConfigSchema, "The project's QA configuration"),
-        ...errorResponses,
-      },
-    }),
-    async (c) => c.json(await svc.qa.getConfig(c.get("actor"), c.req.param("id"))),
-  );
+  projectOperation("get_qa_config", {
+    summary: "Get the project's QA configuration",
+    tags: ["QA"],
+    responseDescription: "The project's QA configuration",
+  });
 
-  projects.put(
-    "/:id/qa-config",
-    describeRoute({
-      summary: "Set the project's QA configuration",
-      tags: ["QA"],
-      responses: {
-        200: jsonResponse(qaConfigSchema, "The updated QA configuration"),
-        ...errorResponses,
-      },
-    }),
-    validator("json", qaConfigBodySchema, onInvalid),
-    async (c) => {
-      const b = c.req.valid("json");
-      return c.json(await svc.qa.setConfig(c.get("actor"), c.req.param("id")!, b));
-    },
-  );
+  projectOperation("set_qa_config", {
+    summary: "Set the project's QA configuration",
+    tags: ["QA"],
+    body: qaConfigBodySchema,
+    responseDescription: "The updated QA configuration",
+  });
 
   // ---- AI scoring + review --------------------------------------------------
   // The grading runs in the connected agent; these REST routes let a non-MCP CI
   // agent fetch the methodology (score-prompt) and submit scores, in parity with
   // the MCP tools/prompts.
 
-  projects.post(
-    "/:id/translations/score",
-    describeRoute({
-      summary: "Submit an AI quality score for one translation",
-      description:
-        "Record an MQM 0–100 score and route the translation (needs_review / translated / approved).",
-      tags: ["Scoring"],
-      responses: {
-        200: jsonResponse(translationSchema, "The updated translation, with its new status and score"),
-        ...errorResponses,
-      },
-    }),
-    validator("json", scoreTranslationBodySchema, onInvalid),
-    async (c) => {
-      const b = c.req.valid("json");
-      return c.json(
-        await svc.scoring.score(c.get("actor"), c.req.param("id")!, b.locale, {
-          name: b.name,
-          namespace: b.namespace,
-          score: b.score,
-          comment: b.comment,
-          model: b.model,
-        }),
-      );
-    },
-  );
+  projectOperation("score_translation", {
+    summary: "Submit an AI quality score for one translation",
+    description:
+      "Record an MQM 0–100 score and route the translation (needs_review / translated / approved).",
+    tags: ["Scoring"],
+    body: scoreTranslationBodySchema,
+    responseDescription: "The updated translation, with its new status and score",
+  });
 
-  projects.post(
-    "/:id/translations/review",
-    describeRoute({
-      summary: "Submit AI quality scores for many translations in a locale",
-      tags: ["Scoring"],
-      responses: {
-        200: jsonResponse(reviewResultSchema, "Review summary (written/approved/flagged + skipped keys)"),
-        ...errorResponses,
-      },
-    }),
-    validator("json", reviewTranslationsBodySchema, onInvalid),
-    async (c) => {
-      const b = c.req.valid("json");
-      return c.json(await svc.scoring.reviewBatch(c.get("actor"), c.req.param("id")!, b.locale, b.entries));
-    },
-  );
+  projectOperation("review_translations", {
+    summary: "Submit AI quality scores for many translations in a locale",
+    tags: ["Scoring"],
+    body: reviewTranslationsBodySchema,
+    responseDescription: "Review summary (written/approved/flagged + skipped keys)",
+  });
 
   projects.get(
     "/:id/translations/for-review",
@@ -622,35 +628,18 @@ export function createApp(deps: RouterDeps): Hono<Env> {
     },
   );
 
-  projects.get(
-    "/:id/score-config",
-    describeRoute({
-      summary: "Get the project's AI-scoring configuration",
-      tags: ["Scoring"],
-      responses: {
-        200: jsonResponse(scoreConfigSchema, "The project's AI-scoring configuration"),
-        ...errorResponses,
-      },
-    }),
-    async (c) => c.json(await svc.scoring.getConfig(c.get("actor"), c.req.param("id"))),
-  );
+  projectOperation("get_score_config", {
+    summary: "Get the project's AI-scoring configuration",
+    tags: ["Scoring"],
+    responseDescription: "The project's AI-scoring configuration",
+  });
 
-  projects.put(
-    "/:id/score-config",
-    describeRoute({
-      summary: "Set the project's AI-scoring configuration",
-      tags: ["Scoring"],
-      responses: {
-        200: jsonResponse(scoreConfigSchema, "The updated AI-scoring configuration"),
-        ...errorResponses,
-      },
-    }),
-    validator("json", scoreConfigBodySchema, onInvalid),
-    async (c) => {
-      const b = c.req.valid("json");
-      return c.json(await svc.scoring.setConfig(c.get("actor"), c.req.param("id")!, b));
-    },
-  );
+  projectOperation("set_score_config", {
+    summary: "Set the project's AI-scoring configuration",
+    tags: ["Scoring"],
+    body: scoreConfigBodySchema,
+    responseDescription: "The updated AI-scoring configuration",
+  });
 
   app.route("/v1/projects", projects);
 

@@ -69,3 +69,29 @@ export function makeMcpClient(url: string, apiKey: string) {
     }
   };
 }
+
+/** The structured result the `run_code` tool returns (mirrors `RunResult`). */
+export interface SandboxRunResult<T = unknown> {
+  ok: boolean;
+  result?: T;
+  error?: string;
+  logs: { level: string; message: string }[];
+  opsUsed: number;
+  truncated: boolean;
+}
+
+/**
+ * A code-mode client for the deployed MCP Function URL. Connects with
+ * `?mode=code` (where the server advertises only `search` + `describe` +
+ * `run_code`), so calling `runCode` exercises the full sandbox → bridge → core
+ * path end to end over the real Function URL.
+ */
+export function makeCodeClient(mcpUrl: string, apiKey: string) {
+  const call = makeMcpClient(`${mcpUrl}?mode=code`, apiKey);
+  return {
+    runCode: <T = unknown>(code: string) => call<SandboxRunResult<T>>("run_code", { code }),
+    search: <T = unknown>(query?: string, limit?: number) =>
+      call<T>("search", limit !== undefined ? { query, limit } : query !== undefined ? { query } : {}),
+    describe: <T = unknown>(id: string) => call<T>("describe", { id }),
+  };
+}

@@ -655,3 +655,12 @@ export class Repository {
     return out;
   }
 }
+
+/**
+ * The public method surface of {@link Repository}. Services and auth helpers
+ * depend on this interface rather than the concrete class, so a complete
+ * in-memory fake can stand in without a cast and the compiler enforces that the
+ * fake implements every method. `keyof` excludes the private `doc`/`table`
+ * fields, leaving only the public API.
+ */
+export type RepositoryApi = Pick<Repository, keyof Repository>;

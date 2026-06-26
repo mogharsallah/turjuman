@@ -13,10 +13,18 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege: every job here only reads the repo (checkout). None writes
+# contents, opens PRs, or touches packages, so default the GITHUB_TOKEN to
+# read-only and let any future job opt into more explicitly. (Publishing lives in
+# release.yml, which scopes its own elevated permissions.)
+permissions:
+  contents: read
+
 jobs:
   build-and-unit:
     name: build + typecheck + unit
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
@@ -37,6 +45,7 @@ jobs:
   docs:
     name: docs link check (Mintlify)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
@@ -44,6 +53,12 @@ jobs:
         with:
           node-version: 24
       - name: Check internal doc links
+        # Leave the Mintlify CLI UNPINNED on purpose: pnpm-workspace.yaml's
+        # `minimumReleaseAge: 10080` (7-day cooldown) already blocks freshly
+        # published (possibly compromised) versions, so `dlx` resolves to the
+        # newest version that is >=7 days old. That cooldown is the supply-chain
+        # guard for npm deps (the SHA-pin stance is for GitHub Actions, which have
+        # no cooldown). A version pin here breaks CI whenever it is <7 days old.
         run: pnpm dlx mint broken-links
         working-directory: docs
 
@@ -51,6 +66,7 @@ jobs:
     name: integration + deployed e2e (LocalStack)
     runs-on: ubuntu-latest
     needs: build-and-unit
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9

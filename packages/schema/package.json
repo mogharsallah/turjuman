@@ -49,5 +49,8 @@
     "@formatjs/icu-messageformat-parser": "^2.11.4",
     "zod": "^3.24.1",
     "zod-openapi": "^4.2.4"
+  },
+  "devDependencies": {
+    "fast-check": "^3.23.1"
   }
 }

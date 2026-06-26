@@ -1,0 +1,48 @@
+{
+  "name": "@turjuman/sdk",
+  "version": "0.2.0",
+  "description": "Turjuman's transport-agnostic operation layer: the single source of capability (zod-typed input/output + handlers) that the MCP server, REST API, and code-mode sandbox all project from.",
+  "license": "MIT",
+  "author": "Turjuman contributors",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mogharsallah/turjuman.git",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://github.com/mogharsallah/turjuman#readme",
+  "bugs": "https://github.com/mogharsallah/turjuman/issues",
+  "keywords": [
+    "turjuman",
+    "i18n",
+    "l10n",
+    "localization",
+    "translation",
+    "sdk"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@turjuman/core": "workspace:*",
+    "zod": "^3.24.1"
+  }
+}
