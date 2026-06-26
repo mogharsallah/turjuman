@@ -53,9 +53,13 @@ jobs:
         with:
           node-version: 24
       - name: Check internal doc links
-        # Pin the Mintlify CLI version (not a floating fetch) to match this repo's
-        # SHA-pinned-actions supply-chain stance; bump deliberately.
-        run: pnpm dlx mint@4.2.644 broken-links
+        # Leave the Mintlify CLI UNPINNED on purpose: pnpm-workspace.yaml's
+        # `minimumReleaseAge: 10080` (7-day cooldown) already blocks freshly
+        # published (possibly compromised) versions, so `dlx` resolves to the
+        # newest version that is >=7 days old. That cooldown is the supply-chain
+        # guard for npm deps (the SHA-pin stance is for GitHub Actions, which have
+        # no cooldown). A version pin here breaks CI whenever it is <7 days old.
+        run: pnpm dlx mint broken-links
         working-directory: docs
 
   e2e:
