@@ -11,7 +11,7 @@ Status legend: ✅ done · 🚧 in progress · ⬜ not started
 
 ---
 
-## Shipped — Phases 0–4 + the QA layer
+## Shipped — Phases 0–5, the QA layer, and the operation-layer/code-mode platform
 
 ### Phase 0 — Foundation ✅
 
@@ -26,8 +26,9 @@ Status legend: ✅ done · 🚧 in progress · ⬜ not started
 ### Phase 1 — MCP server (the heart) ✅
 
 - ✅ Stateless MCP over Streamable HTTP, deployed as a Lambda handler
-- ✅ **40 tools**: projects, locales, keys, translations (incl. bulk fill + review + stale), glossary,
-  translation memory, QA checks, webhooks, and users/members/API keys
+- ✅ **45 operations**: projects, locales, keys, translations (incl. bulk fill + review + stale + MQM
+  scoring), glossary, translation memory, QA checks, webhooks, and users/members/API keys — each a
+  projection of the `@turjuman/sdk` operation layer, registered automatically as an MCP tool (classic mode)
 - ✅ Agent-driven translation flow (`list_untranslated` → translate → `bulk_set_translations`)
 - ✅ `tools/list` scoped per API key (read-only → read tools; org-gated tools hidden from a `MEMBER`)
   and per connection URL (`?tools=` / `?groups=`) — narrows the advertised surface; RBAC still gates calls
@@ -172,6 +173,34 @@ stale/coverage detection.
   `msgstr[N]`), which required a small locale-aware extension to the adapter interface (`FormatContext`)
   so the CLDR-category ⇄ gettext-index mapping is correct per locale; XLIFF carries the canonical ICU
   string verbatim in `<target>`. *(Promoted from the Phase 3 deferred list.)*
+
+### Platform — operation layer + code mode ✅
+
+A cross-cutting refactor and capability that sits under every surface: one transport-agnostic
+**operation layer** that the MCP and REST transports project, plus a second MCP **mode** built on it that
+slashes the context cost of using Turjuman from an agent. Not a buyer-facing phase — a foundation that
+keeps the surfaces honest and makes the agent experience cheap. All shipped.
+
+- ✅ **`@turjuman/sdk` — the single source of capability.** Every operation is declared once (zod
+  `input`/`output`, description, behaviour hints, optional REST `http` binding, and a `handler` into
+  `core`). The MCP classic-mode tools and the REST routes are both *projections* of this one registry, so
+  the two surfaces can never drift in behaviour or permissions. A self-maintaining coverage tracker lists
+  any operation still missing an HTTP route.
+- ✅ **MCP code mode (`?mode=code`).** A second, mutually-exclusive connection mode that advertises just
+  three tools — `search`, `describe`, `run_code` — instead of the full catalogue. The agent discovers
+  operations and docs with `search`, confirms exact arguments with `describe`, then writes one short
+  TypeScript program that chains many operations in a single `run_code` call. Cuts context tokens
+  dramatically: the per-tool schema tax disappears and intermediate data never round-trips through the
+  model. Same operations, same authorization as classic mode — a different surface, not a different
+  permission set. See [docs/guides/code-mode.mdx](docs/guides/code-mode.mdx).
+- ✅ **`@turjuman/knowledge` — the discovery layer.** One in-process Orama BM25 index over both the SDK
+  operations (rendered as typed signatures) and the docs corpus (every `docs/**/*.mdx` chunked by
+  heading at build time). Powers code mode's `search`/`describe` with results segmented by kind, synonym
+  expansion for recall, and a cold-start orientation when the query is empty. No runtime fs/network.
+- ✅ **`@turjuman/sandbox` — the execution engine.** `run_code` runs untrusted TypeScript in a per-run
+  QuickJS-WASM isolate whose only capability is the SDK registry (reached via an in-process host broker);
+  no network, filesystem, env, or timers. Each run is bounded on CPU, memory, output size, and
+  operation-call count, and a fresh WASM module per run means a timed-out script is abandoned cleanly.
 
 ### Phase 6 — Reach (broaden inputs & integrations) ⬜
 
