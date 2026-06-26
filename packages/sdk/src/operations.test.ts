@@ -8,8 +8,6 @@ import {
   effectiveAnnotations,
   isReadOnly,
   operationsMissingHttp,
-  searchOperations,
-  summarizeOperation,
 } from "./index.js";
 
 describe("operation registry", () => {
@@ -50,22 +48,6 @@ describe("effectiveAnnotations", () => {
     expect(setTranslation.idempotentHint).toBe(true);
     // An explicit annotation wins over the name-based derivation.
     expect(isReadOnly(OPERATIONS_BY_NAME.get("run_qa_checks")!)).toBe(true);
-  });
-});
-
-describe("searchOperations", () => {
-  it("ranks name matches first and returns summaries", () => {
-    const results = searchOperations("translation");
-    expect(results.length).toBeGreaterThan(0);
-    const summary = summarizeOperation(OPERATIONS_BY_NAME.get("set_translation")!);
-    expect(summary).toMatchObject({ name: "set_translation", group: "translations", readOnly: false });
-    expect(summary.inputFields).toContain("projectId");
-    // bulk_set_translations should surface for the query.
-    expect(results.map((r) => r.name)).toContain("bulk_set_translations");
-  });
-
-  it("returns the whole registry (capped) for an empty query", () => {
-    expect(searchOperations("", 1000)).toHaveLength(OPERATIONS.length);
   });
 });
 

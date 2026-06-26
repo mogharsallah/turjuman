@@ -1,21 +1,22 @@
 ---
 title: "Code mode: run TypeScript against the Turjuman SDK"
 sidebarTitle: "Code mode"
-description: "Code mode swaps Turjuman's full MCP tool catalogue for two tools — search_sdk and run_code — so an agent writes TypeScript that runs in a sandbox and only the final result returns, cutting context tokens dramatically."
+description: "Code mode swaps Turjuman's full MCP tool catalogue for three tools — search, describe, and run_code — so an agent discovers operations and docs, then writes TypeScript that runs in a sandbox and returns only the final result, cutting context tokens dramatically."
 ---
 
 A Turjuman MCP connection runs in one of two **mutually exclusive** modes:
 
 - **Classic mode** (default) — every operation is its own MCP tool. The agent picks
   tools by name and calls them one at a time.
-- **Code mode** — the server advertises just two tools, `search_sdk` and
-  `run_code`. The agent discovers operations with `search_sdk`, then writes a short
-  TypeScript program that calls them and runs it with `run_code`. Only the final
+- **Code mode** — the server advertises just three tools, `search`, `describe`, and
+  `run_code`. The agent finds what it needs with `search` (over both the operations
+  and the docs), pulls full detail with `describe`, then writes a short TypeScript
+  program that calls the operations and runs it with `run_code`. Only the final
   result comes back.
 
 Code mode exists to cut **context tokens**. In classic mode every tool's name,
 description, and JSON schema is injected into the model's context on every turn —
-a large, permanent tax that grows with the toolset. Code mode advertises two
+a large, permanent tax that grows with the toolset. Code mode advertises three
 tools instead of the full catalogue, and a multi-step job (read untranslated keys
 → translate → write them back) becomes **one** `run_code` call instead of a tool
 call per step, so intermediate data never round-trips through the model.
@@ -39,19 +40,63 @@ Omit it (or pass `?mode=classic`) for the full tool catalogue. The modes are
 mutually exclusive — `?mode=code` cannot be combined with the `?tools=` / `?groups=`
 classic-mode scoping params, and doing so returns a `400`.
 
-## Discover operations with `search_sdk`
+## Discover with `search`
 
-`search_sdk` returns the operations you can call from `run_code` — their names,
-domain group, one-line description, input fields, and read-only/destructive hints.
+`search` queries one knowledge base spanning **both** the operations you can call
+from `run_code` (returned with their full typed signatures) **and** the
+documentation — the guides, concepts, and reference pages. So an agent can learn
+*how the system works*, not just which functions exist.
 
 ```jsonc
-// search_sdk
-{ "query": "translation" }
+// search
+{ "query": "translate untranslated keys" }
 ```
 
-Pass a `query` to filter (by name, group, or description) or omit it to list
-everything. The operation names are identical to the classic-mode tool names, so
-anything in the [MCP tools reference](/reference/mcp-tools) is callable here.
+Results come back segmented by kind:
+
+```jsonc
+{
+  "total": 27,
+  "hasMore": true,
+  "operations": [
+    {
+      "id": "op:list_untranslated",
+      "title": "list_untranslated",
+      "group": "translations",
+      "signature": "list_untranslated(projectId: string, locale: string, limit?: number, cursor?: string) -> { locale, count, keys, nextCursor }",
+      "description": "List keys that have no value yet for a locale…"
+    },
+    { "id": "op:bulk_set_translations", "title": "bulk_set_translations", "signature": "…" }
+  ],
+  "docs": [
+    { "id": "guides/translate-with-mcp.mdx#example-workflows", "kind": "guide", "snippet": "…" }
+  ]
+}
+```
+
+Use **specific terms** (`"plural handling"`, `"webhook events"`, `"api key scope"`);
+if the first query is vague, search again with sharper words. Narrow to one kind
+with `"kind"` (`operation`, `guide`, `concept`, `reference`, `overview`).
+`total` / `hasMore` tell you when a list was trimmed. Omit `query` entirely to get
+a cold-start **orientation** — the operation groups plus the core concept pages.
+
+The operation `id`s (`op:<name>`) match the classic-mode tool names, so anything in
+the [MCP tools reference](/reference/mcp-tools) is callable from `run_code`.
+
+## Zoom in with `describe`
+
+`search` returns summaries; `describe` returns the full detail for a single result
+`id`. For an operation it returns the typed input fields, output shape, signature,
+and read-only/destructive hints; for a docs result it returns the whole page.
+
+```jsonc
+// describe
+{ "id": "op:bulk_set_translations" }
+```
+
+The pattern is **search → describe → run_code**: find the operation, confirm its
+exact arguments, then write the program — usually without a wasted `run_code`
+probe.
 
 ## Run code with `run_code`
 

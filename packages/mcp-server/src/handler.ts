@@ -197,8 +197,8 @@ async function route(args: {
   if (!auth) return { result: unauthorized(corsHeaders()), outcome: "unauthorized" };
   meta.keyId = auth.keyId;
 
-  // Pick the connection mode (?mode=). Code mode advertises only search_sdk +
-  // run_code; classic mode (default) advertises the operation toolset.
+  // Pick the connection mode (?mode=). Code mode advertises only search +
+  // describe + run_code; classic mode (default) advertises the operation toolset.
   const mode = resolveMode(query);
   if (typeof mode === "object") {
     await auth.touch;
@@ -218,14 +218,14 @@ async function route(args: {
       };
     }
     // Deliberately no per-actor tool filtering here (classic mode applies
-    // `allowedToolsForActor`). The code-mode surface is the fixed pair
-    // search_sdk + run_code, and both are appropriate for every authenticated
-    // actor: a read-only key can legitimately use run_code for reads, and any
-    // write it attempts is still authorized by core RBAC at dispatch (the same
-    // `OpContext` the classic path uses) — hiding run_code would only break
-    // read-only code-mode use without adding a real control. The presentation
-    // filter that matters in classic mode (trimming a ~45-tool list) has no
-    // analogue for a 2-tool surface.
+    // `allowedToolsForActor`). The code-mode surface is the fixed set
+    // search + describe + run_code, and all are appropriate for every
+    // authenticated actor: a read-only key can legitimately use run_code for
+    // reads, and any write it attempts is still authorized by core RBAC at
+    // dispatch (the same `OpContext` the classic path uses) — hiding run_code
+    // would only break read-only code-mode use without adding a real control.
+    // The presentation filter that matters in classic mode (trimming a ~45-tool
+    // list) has no analogue for this fixed surface.
     selection = { mode: "code" };
   } else {
     // Scope the advertised toolset. Two layers, both narrowing only:

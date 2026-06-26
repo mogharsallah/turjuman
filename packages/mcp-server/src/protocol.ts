@@ -140,7 +140,7 @@ function registrationFor(def: Operation) {
  * the authenticated {@link OpContext} is injected per request (via the tool
  * callback), so this work is not repeated on every invocation.
  *  - classic: every business operation as its own tool;
- *  - code:    just `search_sdk` + `run_code` (the model writes code instead).
+ *  - code:    just `search` + `describe` + `run_code` (the model writes code instead).
  * The two are mutually exclusive — a connection is in one mode or the other. */
 const CLASSIC_REGISTRATIONS = OPERATIONS.map(registrationFor);
 const CODEMODE_REGISTRATIONS = codemodeTools.map(registrationFor);

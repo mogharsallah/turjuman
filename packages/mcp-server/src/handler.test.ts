@@ -202,7 +202,7 @@ describe("MCP handler — processRequest", () => {
     expect(lastLog(logSpy)).toMatchObject({ outcome: "invalid_tool_scope", status: 400 });
   });
 
-  it("advertises only the code-mode pair under ?mode=code", async () => {
+  it("advertises only the code-mode tools under ?mode=code", async () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     const res = await processRequest({
       method: "POST",
@@ -212,7 +212,7 @@ describe("MCP handler — processRequest", () => {
       service: deps({ touched: false }),
     });
     const names = (JSON.parse(res.body ?? "{}").result.tools as { name: string }[]).map((t) => t.name);
-    expect(names.sort()).toEqual(["run_code", "search_sdk"]);
+    expect(names.sort()).toEqual(["describe", "run_code", "search"]);
   });
 
   it("rejects an unknown ?mode= with 400", async () => {

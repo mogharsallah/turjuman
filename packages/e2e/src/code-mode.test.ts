@@ -7,9 +7,9 @@ import { type SandboxRunResult, makeCodeClient, makeMcpClient, mcpListTools } fr
  * P1 — code mode, confirmed through the deployed path (closes Gap 2: the entire
  * sandbox → bridge → core path over a real Function URL was proven only
  * hermetically). Covers:
- *  - `?mode=code` advertises exactly `search_sdk` + `run_code` (and none of the
- *    classic tools) — mode selection over the Function URL.
- *  - `search_sdk` discovers operations over the deployed path.
+ *  - `?mode=code` advertises exactly `search` + `describe` + `run_code` (and none
+ *    of the classic tools) — mode selection over the Function URL.
+ *  - `search` discovers operations over the deployed path.
  *  - `run_code` performs a write+read round-trip inside the sandbox.
  *  - the SAME translate-then-read journey, parametrized over classic AND code
  *    mode, yields the identical outcome (the two transports agree).
@@ -25,18 +25,23 @@ interface Outcome {
 describe.skipIf(!env)("P1 code mode (deployed)", () => {
   const code = makeCodeClient(e.mcpUrl, e.apiKey);
 
-  it("advertises only search_sdk + run_code in ?mode=code", async () => {
+  it("advertises only search + describe + run_code in ?mode=code", async () => {
     const tools = await mcpListTools(`${e.mcpUrl}?mode=code`, e.apiKey);
-    expect(tools.sort()).toEqual(["run_code", "search_sdk"]);
+    expect(tools.sort()).toEqual(["describe", "run_code", "search"]);
     // The classic per-operation tools are NOT advertised in code mode.
     expect(tools).not.toContain("create_project");
     expect(tools).not.toContain("set_translation");
   });
 
-  it("discovers operations via search_sdk", async () => {
-    const res = await code.searchSdk<{ count: number; operations: { name: string }[] }>("project");
-    expect(res.count).toBeGreaterThan(0);
-    expect(res.operations.map((o) => o.name)).toContain("create_project");
+  it("discovers operations via search", async () => {
+    // search returns results segmented by kind, with a true total; operations
+    // carry a typed signature (title == the operation name / id stem).
+    const res = await code.search<{
+      total: number;
+      operations: { title: string; signature?: string }[];
+    }>("create project");
+    expect(res.total).toBeGreaterThan(0);
+    expect(res.operations.map((o) => o.title)).toContain("create_project");
   });
 
   it("runs a write+read round-trip inside the sandbox", async () => {

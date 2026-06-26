@@ -115,7 +115,7 @@ A connection runs in one of two **mutually exclusive** modes, chosen with the
 | Mode | URL | Advertised tools |
 |---|---|---|
 | **Classic** (default) | `…/` or `…/?mode=classic` | The full catalogue above |
-| **Code** | `…/?mode=code` | Only `search_sdk` + `run_code` |
+| **Code** | `…/?mode=code` | Only `search` + `describe` + `run_code` |
 
 In code mode the agent calls operations from inside a sandboxed TypeScript program
 instead of one tool at a time, which collapses a multi-step job into a single call
@@ -123,7 +123,8 @@ and keeps the full catalogue out of the model's context.
 
 | Tool | Purpose |
 |---|---|
-| `search_sdk` | Discover operations (name, group, description, input fields, hints); pass a `query` to filter or omit it to list all |
+| `search` | Search one knowledge base spanning the operations (with typed signatures) **and** the docs (guides, concepts, reference); results are segmented by kind with `total`/`hasMore`. Pass a `query` (narrow with `kind`), or omit it for a cold-start orientation |
+| `describe` | Full detail for one result `id` — an operation's typed input fields, output, signature, and hints, or a whole docs page |
 | `run_code` | Run TypeScript that calls `await turjuman.<operation>(args)` and returns a value; the sandbox has no network/filesystem, and only the final result is returned |
 
 Code mode runs the same operations with the same authorization — it is a

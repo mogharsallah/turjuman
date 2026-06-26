@@ -3,8 +3,9 @@ import { OPERATIONS } from "@turjuman/sdk";
 /**
  * Guest-side bootstrap source. It captures the host bridges (`__callOp`, `__log`)
  * and exposes the ergonomic capability surface: a frozen `turjuman` client whose
- * methods are `turjuman.<operation>(args)` (names identical to the MCP tools, so
- * `search_sdk` results map 1:1) and a `console` that routes to the host.
+ * methods are `turjuman.<operation>(args)` (names identical to the operation ids
+ * that `search`/`describe` surface, so they map 1:1) and a `console` that routes
+ * to the host.
  *
  * The raw `__callOp`/`__log` globals are left in place on purpose. They ARE the
  * sandbox's only capability — `__callOp("x", args)` is exactly equivalent to

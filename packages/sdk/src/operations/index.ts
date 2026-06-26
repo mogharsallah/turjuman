@@ -33,7 +33,8 @@ const webhookOps = lifecycleOps.filter((o) => o.name !== "delete_project");
 /** Caller-facing operation groups (domains). Defined here as the single source of
  * group membership, decoupled from the source-file arrays (so `delete_project`
  * reads under `projects`, not a "lifecycle" group). Used by MCP URL tool-scoping
- * (`?groups=`) and by `search_sdk`. The synthetic `read` group is computed at
+ * (`?groups=`) and by the knowledge layer's `search` (orientation + grouping).
+ * The synthetic `read` group is computed at
  * scope-resolution time from each operation's advertised read-only hint, so it is
  * not listed here. */
 export const OPERATION_GROUPS: Record<string, Operation[]> = {
@@ -47,7 +48,7 @@ export const OPERATION_GROUPS: Record<string, Operation[]> = {
   admin: adminOps,
 };
 
-/** Reverse index: the group an operation belongs to (for `search_sdk` / docs).
+/** Reverse index: the group an operation belongs to (for the knowledge `search` / docs).
  * `delete_project` resolves to `projects`, matching {@link OPERATION_GROUPS}. */
 export const GROUP_BY_OPERATION: Map<string, string> = new Map(
   Object.entries(OPERATION_GROUPS).flatMap(([group, ops]) => ops.map((o) => [o.name, group] as const)),

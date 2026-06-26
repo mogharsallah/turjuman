@@ -258,22 +258,38 @@ describe("MCP protocol handler", () => {
     expect(del).not.toHaveBeenCalled();
   });
 
-  it("code mode advertises only search_sdk and run_code", async () => {
+  it("code mode advertises only search, describe and run_code", async () => {
     const res = (await handleMessage({ jsonrpc: "2.0", id: 60, method: "tools/list" }, ctx, {
       mode: "code",
     })) as { result: { tools: { name: string }[] } };
-    expect(res.result.tools.map((t) => t.name).sort()).toEqual(["run_code", "search_sdk"]);
+    expect(res.result.tools.map((t) => t.name).sort()).toEqual(["describe", "run_code", "search"]);
   });
 
-  it("search_sdk returns matching operation signatures", async () => {
+  it("search returns matching operations (with signatures) and docs", async () => {
     const res = (await handleMessage(
-      { jsonrpc: "2.0", id: 61, method: "tools/call", params: { name: "search_sdk", arguments: { query: "translation" } } },
+      { jsonrpc: "2.0", id: 61, method: "tools/call", params: { name: "search", arguments: { query: "translation" } } },
       ctx,
       { mode: "code" },
-    )) as { result: { structuredContent?: { count: number; operations: { name: string }[] } } };
+    )) as {
+      result: {
+        structuredContent?: { total: number; operations: { title: string; signature?: string }[]; docs: unknown[] };
+      };
+    };
     const ops = res.result.structuredContent?.operations ?? [];
     expect(ops.length).toBeGreaterThan(0);
-    expect(ops.map((o) => o.name)).toContain("bulk_set_translations");
+    expect(ops.map((o) => o.title)).toContain("bulk_set_translations");
+    // Improvement #1: operations carry a typed signature, not just a name.
+    expect(ops[0]?.signature).toBeTruthy();
+  });
+
+  it("describe surfaces an unknown id as a tool error, not a soft success", async () => {
+    const res = (await handleMessage(
+      { jsonrpc: "2.0", id: 62, method: "tools/call", params: { name: "describe", arguments: { id: "op:does_not_exist" } } },
+      ctx,
+      { mode: "code" },
+    )) as { result: { isError?: boolean; content: { text: string }[] } };
+    expect(res.result.isError).toBe(true);
+    expect(res.result.content[0]?.text).toContain("NOT_FOUND");
   });
 
   it("run_code executes against the SDK through the sandbox", async () => {

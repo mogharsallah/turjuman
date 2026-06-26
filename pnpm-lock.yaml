@@ -210,6 +210,18 @@ importers:
         specifier: ^3.23.1
         version: 3.23.2
 
+  packages/knowledge:
+    dependencies:
+      '@orama/orama':
+        specifier: 3.1.18
+        version: 3.1.18
+      '@turjuman/sdk':
+        specifier: workspace:*
+        version: link:../sdk
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+
   packages/mcp-server:
     dependencies:
       '@modelcontextprotocol/sdk':
@@ -218,6 +230,9 @@ importers:
       '@turjuman/core':
         specifier: workspace:*
         version: link:../core
+      '@turjuman/knowledge':
+        specifier: workspace:*
+        version: link:../knowledge
       '@turjuman/sandbox':
         specifier: workspace:*
         version: link:../sandbox
@@ -1009,6 +1024,10 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
+
+  '@orama/orama@3.1.18':
+    resolution: {integrity: sha512-a61ljmRVVyG5MC/698C8/FfFDw5a8LOIvyOLW5fztgUXqUpc1jOfQzOitSCbge657OgXXThmY3Tk8fpiDb4UcA==}
+    engines: {node: '>= 20.0.0'}
 
   '@pkgjs/parseargs@0.11.0':
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
@@ -3729,6 +3748,8 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
+
+  '@orama/orama@3.1.18': {}
 
   '@pkgjs/parseargs@0.11.0':
     optional: true

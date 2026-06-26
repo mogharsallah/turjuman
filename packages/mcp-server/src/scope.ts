@@ -66,7 +66,7 @@ export type ToolScope = { allowed: Set<string> } | { error: string };
 /**
  * The connection mode, from `?mode=`:
  *  - `classic` (default) — every operation is its own MCP tool;
- *  - `code` — only `search_sdk` + `run_code` (the model writes code).
+ *  - `code` — only `search` + `describe` + `run_code` (the model writes code).
  * The two are mutually exclusive. An unknown value fails loud (caller → 400).
  */
 export type Mode = "classic" | "code";
