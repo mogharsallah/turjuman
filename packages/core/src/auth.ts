@@ -3,7 +3,7 @@ import type { User } from "@turjuman/schema";
 import { conflict } from "@turjuman/schema";
 import { newId } from "@turjuman/schema";
 import type { Actor } from "@turjuman/schema";
-import type { Repository } from "./repository/index.js";
+import type { RepositoryApi } from "./repository/index.js";
 import { requireEmail, requireText } from "@turjuman/schema";
 
 /**
@@ -47,7 +47,7 @@ export interface AuthResult {
 
 /** Resolve an authenticated actor and user from an API key secret. */
 export async function authenticate(
-  repo: Repository,
+  repo: RepositoryApi,
   secret: string | undefined,
 ): Promise<AuthResult | undefined> {
   if (!secret) return undefined;
@@ -82,7 +82,7 @@ export async function authenticate(
  * email regardless.
  */
 export async function bootstrapOwner(
-  repo: Repository,
+  repo: RepositoryApi,
   input: { email: string; name: string; orgId?: string; force?: boolean },
 ): Promise<{ user: User; secret: string }> {
   const orgId = input.orgId ?? "default";

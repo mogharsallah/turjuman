@@ -303,6 +303,10 @@ export function createApp(deps: RouterDeps): Hono<Env> {
       };
       const merged: Record<string, unknown> = {};
       for (const p of paramSources) {
+        // Path/query values are always strings. The op.input fields they map to are
+        // string today (projectId, locale, …); a binding that maps a numeric/boolean
+        // param must use a coercing schema (e.g. z.coerce.number()) on that field, or
+        // op.input.parse below would reject the raw string with a 400.
         const raw = p.fromPath ? c.req.param(p.urlName) : c.req.query(p.urlName);
         if (raw !== undefined) merged[p.field] = raw;
       }

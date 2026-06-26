@@ -4,7 +4,7 @@
 export * from "@turjuman/schema";
 export * from "./auth.js";
 export { logInfo, logError, errorInfo, maskError, type MaskedError } from "./logging.js";
-export { Repository, type RepositoryOptions } from "./repository/index.js";
+export { Repository, type RepositoryOptions, type RepositoryApi } from "./repository/index.js";
 export {
   TurjumanService,
   ProjectsService,
