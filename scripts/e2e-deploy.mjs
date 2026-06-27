@@ -3,11 +3,11 @@
 // write the resolved endpoints + API keys to packages/e2e/.e2e/env.json for the
 // deployed-e2e vitest spec to consume.
 //
-// This reuses Turjuman's own deploy code path (packages/aws-deploy/src): the
+// This reuses Turjuman's own deploy code path (packages/deploy-internal): the
 // @turjuman/aws-cdk construct deployed with the CDK programmatic toolkit, pointed
 // at LocalStack via AWS_ENDPOINT_URL. The Lambda code is the pre-bundled asset
-// shipped by @turjuman/mcp-server / @turjuman/api (produced by `pnpm run build`),
-// which the construct ships via Code.fromAsset. The toolkit self-bootstraps the
+// vendored into @turjuman/aws-cdk (produced by `pnpm run build`), which the
+// construct ships via Code.fromAsset. The toolkit self-bootstraps the
 // standard CDK environment unless TURJUMAN_E2E_SKIP_BOOTSTRAP=1 (in which case
 // run `cdklocal bootstrap` first).
 //
@@ -45,8 +45,10 @@ process.env.AWS_ENDPOINT_URL_S3 ??= "http://s3.localhost.localstack.cloud:4566";
 
 const { DynamoDBClient } = await import("@aws-sdk/client-dynamodb");
 const { Repository, bootstrapOwner } = await import("@turjuman/core");
-// Reuse the deploy tool's real toolkit (built to dist by `pnpm run build`).
-const { deployStack } = await import("../packages/aws-deploy/dist/toolkit.js");
+// Reuse the deploy-internal toolkit (built to dist by `pnpm run build`).
+const { deployStack } = await import(
+	"../packages/deploy-internal/dist/toolkit.js"
+);
 
 // 1. Deploy the CDK stack with the programmatic toolkit. The construct resolves
 //    the pre-bundled @turjuman/mcp-server / @turjuman/api Lambda assets; the

@@ -48,7 +48,7 @@ rows commonly go structural.
 | A **QA check** (`packages/schema/src/qa/checks/`, `CHECKS` in `qa/index.ts`) | `reference/qa-checks.mdx` (catalogue row + any limit); `guides/quality-checks.mdx` only if behaviour changed |
 | A **data-model / schema field** (`packages/schema/src/domain.ts`; repository in `packages/core/src/repository/`) | `concepts/architecture.mdx`; + `concepts/lifecycle.mdx` if it's lifecycle state (status, slots, `origin`, `stale`, `state`) |
 | **RBAC / permissions** (`packages/schema/src/rbac.ts`) | `concepts/roles-and-permissions.mdx` |
-| **CDK construct / deploy** (`packages/aws-cdk/src/`, `packages/aws-deploy/src/`) | `self-hosting.mdx` |
+| **CDK construct / deploy** (`packages/aws-cdk/src/`, deploy primitives in `packages/deploy-internal/src/`; first-owner `bootstrap` route/command) | `self-hosting.mdx` |
 | **Tests / tiers** (`packages/*/`, `.github/workflows/`) | `CLAUDE.md` / `TESTING.md` (no docs-site page today) |
 | **Shipped/planned status** | `ROADMAP.md` at the repo root — not a docs page; refer to it in prose, don't link it |
 

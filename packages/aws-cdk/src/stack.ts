@@ -5,7 +5,7 @@ import { Turjuman } from "./turjuman.js";
 
 /**
  * A standalone CloudFormation stack wrapping the {@link Turjuman} construct, for
- * the self-host CLI (`@turjuman/aws-deploy`) and `cdk deploy`. Uses the default
+ * a plain `cdk deploy` (or the repo's dev/e2e deploy scripts). Uses the default
  * stack synthesizer, so it deploys through the standard CDK bootstrap + asset
  * pipeline. The three outputs (McpUrl, ApiUrl, TableName) carry stable keys the
  * deployer reads back; ApiUrl is omitted when the REST API surface is disabled.

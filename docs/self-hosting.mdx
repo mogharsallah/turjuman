@@ -1,10 +1,10 @@
 ---
-title: "Deploy Turjuman to your own AWS account with one command"
-sidebarTitle: "Self-Hosting"
-description: "Self-host Turjuman on AWS using @turjuman/aws-deploy — one DynamoDB table and three Lambda Function URLs. No SAM CLI, no cdk bootstrap required."
+title: "Deploy Turjuman to your own AWS account"
+sidebarTitle: "Self-hosting"
+description: "Self-host Turjuman on AWS with the @turjuman/aws-cdk construct — one DynamoDB table and Lambda Function URLs — then bootstrap the first owner."
 ---
 
-Self-hosting Turjuman means running it in your own AWS account: one DynamoDB table and up to three Lambda Function URLs (MCP server, REST API, and webhook dispatcher). The `@turjuman/aws-deploy` package handles everything — CDK synthesis, bootstrapping, CloudFormation deployment, and first-owner creation — in a single interactive command. You don't need the SAM CLI, a separate CDK bootstrap step, or a clone of the Turjuman repo.
+Self-hosting Turjuman means running it in your own AWS account: one DynamoDB table and up to three Lambda Function URLs (MCP server, REST API, and webhook dispatcher). Turjuman ships as a standalone AWS CDK construct, **`@turjuman/aws-cdk`**, with the Lambda handlers pre-bundled and vendored into the package. You deploy it with the AWS CDK CLI (`cdk deploy`) — no SAM CLI and no clone of the Turjuman repo — then create the first owner over HTTP with `turjuman bootstrap`.
 
 <Warning>
   The CDK stack is conventional but has **not yet been verified end-to-end against a live AWS account**. Use the [Quickstart](/quickstart) to evaluate Turjuman locally first, and treat the AWS deploy as beta. Please report any issues you encounter.
@@ -13,65 +13,83 @@ Self-hosting Turjuman means running it in your own AWS account: one DynamoDB tab
 ## Prerequisites
 
 - An AWS account with credentials configured (via environment variables, `~/.aws/credentials`, or an IAM role)
-- Node.js 20 or later
+- Node.js 24 or later
+- The AWS CDK CLI: `npm install -g aws-cdk` (or use `npx cdk`)
 - Sufficient IAM permissions to create CloudFormation stacks, Lambda functions, DynamoDB tables, and IAM roles
 
 ## Deploy
 
 <Steps>
-  <Step title="Run the deploy command">
-    Run the interactive deployer with `npx` — it ships as a self-contained package with pre-bundled Lambda assets, so no repo clone is required:
+  <Step title="Create a CDK app">
+    Make a small project that instantiates the `TurjumanStack`. The construct carries its own pre-bundled Lambda assets, so the only dependencies are the construct and the CDK runtime:
 
     ```bash
-    npx @turjuman/aws-deploy deploy
+    mkdir turjuman-deploy && cd turjuman-deploy
+    npm init -y && npm pkg set type=module
+    npm install @turjuman/aws-cdk aws-cdk-lib constructs
     ```
 
-    The command prompts you for:
-    - CloudFormation stack name (default: `turjuman`)
-    - AWS region
-    - Allowed CORS origins
-    - Lambda memory (MB) and timeout (seconds)
-    - Whether to deploy the REST API surface and the webhook dispatcher
-    - DynamoDB point-in-time recovery and deletion protection settings
-    - Whether to run functions inside a VPC (optional)
-    - First owner email and name
+    Add a `cdk.json` that tells the CDK CLI how to run your app:
 
-    After the CloudFormation stack reaches `CREATE_COMPLETE` (or `UPDATE_COMPLETE`), the command prints your stack outputs and API key:
+    ```json
+    {
+      "app": "node app.mjs"
+    }
+    ```
+
+    Then write `app.mjs`. Every prop is optional — the defaults reproduce the standard stack (on-demand DynamoDB, arm64 Lambdas at 256 MB, all three surfaces):
+
+    ```js
+    import { App } from "aws-cdk-lib";
+    import { TurjumanStack } from "@turjuman/aws-cdk";
+
+    const app = new App();
+    new TurjumanStack(app, "Turjuman", {
+      // stackName: "turjuman",
+      // corsAllowOrigins: ["https://app.example.com"],
+      // table: { pointInTimeRecovery: true, deletionProtection: true },
+    });
+    ```
+
+    <Tip>
+      Prefer to embed Turjuman in an existing stack? Import the `Turjuman` **construct** instead of `TurjumanStack` and drop it into any `Stack`. Its public members — `table`, `mcpFunction`, `mcpUrl`, `apiFunction`, `apiUrl`, `webhookFunction` — let you wire your own resources (grants, outputs, alarms) without any extra props.
+    </Tip>
+  </Step>
+
+  <Step title="Bootstrap CDK and deploy">
+    The default synthesizer publishes the Lambda assets through the standard CDK bootstrap bucket, so bootstrap the environment once per account/region, then deploy:
+
+    ```bash
+    cdk bootstrap        # once per account+region
+    cdk deploy           # creates/updates the CloudFormation stack
+    ```
+
+    When the stack reaches `CREATE_COMPLETE`, the CDK CLI prints the [stack outputs](#stack-outputs):
 
     ```
-    ┌ Stack outputs ──────────────────────────────────────┐
-    │ MCP URL:   https://xxxx.lambda-url.us-east-1.on.aws │
-    │ API URL:   https://yyyy.lambda-url.us-east-1.on.aws │
-    │ Table:     turjuman-TurjumanTable-XXXXXXXXXXXX        │
-    └─────────────────────────────────────────────────────┘
+    Outputs:
+    Turjuman.McpUrl   = https://xxxx.lambda-url.us-east-1.on.aws/
+    Turjuman.ApiUrl   = https://yyyy.lambda-url.us-east-1.on.aws/
+    Turjuman.TableName = Turjuman-TurjumanTableXXXX-XXXXXXXXXXXX
+    ```
+  </Step>
 
-    ┌ First owner ────────────────────────────────────────┐
-    │ API key: op_live_xxxxxxxxxxxxxxxxxxxx               │
-    │                                                     │
-    │ Store this now — it is shown only once.             │
-    │ Saved to ~/.turjuman/auth.json (you're logged in).  │
-    └─────────────────────────────────────────────────────┘
+  <Step title="Create the first owner">
+    With the stack deployed, create the first OWNER over HTTP and capture its API key. This works only while the deployment has no users — a second call returns `409`:
+
+    ```bash
+    turjuman bootstrap --url <ApiUrl> --email you@example.com --name "Your Name"
     ```
 
     <Note>
-      Your API key is shown **once** and is not stored in plaintext. Copy it to a secrets manager or password vault immediately. If the org already has users (e.g. on a re-deploy), the command skips owner creation and tells you to reuse your existing key.
+      The API key is printed **once** and is not stored in plaintext (only its SHA-256 hash is). `turjuman bootstrap` also saves it to `~/.turjuman/auth.json`, so you're logged in for the CLI immediately — but copy it to a secrets manager now; it cannot be retrieved again.
     </Note>
-  </Step>
 
-  <Step title="Save your deploy config">
-    The deployer writes a `turjuman.deploy.json` file in your working directory. This file caches your settings (stack name, region, Lambda tuning, etc.) so subsequent re-deploys are non-interactive:
+    <Warning>
+      `POST /v1/bootstrap` is **unauthenticated** — by design, since there is no key yet — and whoever calls it first becomes the global OWNER. The single-owner guard is atomic (concurrent calls can't both win, and a second call returns `409`), but it does **not** verify *who* the first caller is. **Bootstrap immediately after `cdk deploy`, before sharing the `ApiUrl`.** Until you do, anyone who learns the `ApiUrl` (it appears in deploy logs, CI output, screenshots) can claim ownership and lock you out — in which case tear the stack down (the table is retained) and redeploy.
+    </Warning>
 
-    ```bash
-    npx @turjuman/aws-deploy deploy   # reads turjuman.deploy.json; no prompts
-    ```
-
-    Use `--reconfigure` to re-prompt for all settings:
-
-    ```bash
-    npx @turjuman/aws-deploy deploy --reconfigure
-    ```
-
-    `turjuman.deploy.json` contains no secrets — it is safe to commit. The canonical copy of your config is also stored in AWS SSM Parameter Store so you can redeploy from any machine.
+    `turjuman bootstrap` talks to the REST API surface, so it requires `api.enabled` (the default). If you deploy MCP-only (`api: { enabled: false }`), there is no bootstrap route — re-enable the REST API to create the owner, then disable it again if you wish.
   </Step>
 </Steps>
 
@@ -80,31 +98,39 @@ Self-hosting Turjuman means running it in your own AWS account: one DynamoDB tab
 | Output | Description |
 |--------|-------------|
 | `McpUrl` | The Lambda Function URL for the MCP server. Use this in your `.mcp.json`. |
-| `ApiUrl` | The Lambda Function URL for the REST API. Use this with `turjuman login`. |
-| `TableName` | The DynamoDB table name. Needed for the `bootstrap` command and manual operations. |
+| `ApiUrl` | The Lambda Function URL for the REST API. Use this with `turjuman bootstrap` and `turjuman login`. Absent when the REST API surface is disabled. |
+| `TableName` | The DynamoDB table name, for manual operations. |
 
-## Deploy options
+## Configuration
 
-You can override individual settings non-interactively using `--set`, `--enable`, and `--disable`:
+Configure the stack by passing props in your `app.mjs` — composition in code, not CLI flags. All props are optional.
 
-| Option | Example | Description |
-|--------|---------|-------------|
-| `--set` | `--set mcp.memorySize=512` | Set a specific config value (`path=value`). Repeatable. |
-| `--enable` | `--enable webhook` | Enable a surface (`api` or `webhook`). |
-| `--disable` | `--disable webhook` | Disable a surface (`api` or `webhook`). |
-| `--skip-bootstrap` | | Skip the CDK bootstrap step (for already-bootstrapped accounts). |
-| `--reconfigure` | | Re-prompt for all settings instead of reusing saved config. |
+```js
+new TurjumanStack(app, "Turjuman", {
+  stackName: "turjuman",
+  corsAllowOrigins: ["https://app.example.com"],
+  functionDefaults: { memorySize: 512, timeout: 30 },
+  mcp: { memorySize: 1024 },            // per-function override
+  api: { enabled: true },
+  webhook: { enabled: true },
+  table: { pointInTimeRecovery: true, deletionProtection: true },
+});
+```
 
-**Common tuning knobs via `--set`:**
-
-| Path | Default | Description |
+| Prop | Default | Description |
 |------|---------|-------------|
-| `functionDefaults.memorySize` | `256` | Lambda memory (MB) applied to all functions. |
-| `functionDefaults.timeout` | `15` | Lambda timeout (seconds) applied to all functions. |
-| `mcp.memorySize` | — | Override memory for the MCP function only. |
-| `corsAllowOrigins` | `["*"]` | Comma-separated allowed origins for Function URL CORS. |
-| `table.pointInTimeRecovery` | `false` | Enable continuous backups on the DynamoDB table. |
-| `table.deletionProtection` | `false` | Block accidental table deletion at the API level. |
+| `stackName` | construct id | CloudFormation stack name. |
+| `corsAllowOrigins` | `["*"]` | Allowed origins for Function URL CORS. |
+| `functionDefaults.memorySize` | `256` | Lambda memory (MB) applied to every function. |
+| `functionDefaults.timeout` | `15` | Lambda timeout (seconds) applied to every function. |
+| `functionDefaults.architecture` | `"arm64"` | CPU architecture (`"arm64"` or `"x86_64"`). |
+| `mcp` / `api` / `webhook` | — | Per-function tuning that overrides `functionDefaults`. |
+| `api.enabled` / `webhook.enabled` | `true` | Deploy that surface. Set `false` to remove it. |
+| `webhook.streamStartingPosition` | `"LATEST"` | Where the Streams poller starts reading: `"LATEST"` (only changes made after deploy) or `"TRIM_HORIZON"` (from the shard start). |
+| `table.billingMode` | `"PAY_PER_REQUEST"` | `"PROVISIONED"` uses `readCapacity`/`writeCapacity`. |
+| `table.pointInTimeRecovery` | `false` | Continuous backups on the DynamoDB table. |
+| `table.deletionProtection` | `false` | Block table deletion at the DynamoDB API level. |
+| `vpc` | — | Run the functions inside an existing VPC (`subnetIds`, `securityGroupIds`). |
 
 ## Connect your MCP client
 
@@ -130,7 +156,7 @@ Add the `McpUrl` to your `.mcp.json`:
 
 ## Connect the developer CLI
 
-Log in with your `ApiUrl` and API key:
+`turjuman bootstrap` already logged you in. On another machine, log in with your `ApiUrl` and API key:
 
 ```bash
 turjuman login --url <ApiUrl> --key <your-api-key>
@@ -140,7 +166,7 @@ This saves your credentials to `~/.turjuman/auth.json`. After logging in, you ca
 
 ## Health check
 
-Both Lambda Function URLs respond to an unauthenticated `GET /health`:
+The MCP Function URL answers an unauthenticated `GET /health`:
 
 ```bash
 curl https://<McpUrl>/health
@@ -150,51 +176,32 @@ curl https://<McpUrl>/health
 {"status":"ok"}
 ```
 
-A `200` response confirms the function is deployed and reachable. Use this in monitoring or uptime checks.
-
-## Check deploy status
-
-To see whether Turjuman is installed in your AWS account and region:
-
-```bash
-npx @turjuman/aws-deploy status
-```
-
-This lists all Turjuman-managed CloudFormation stacks in the configured region, their current status, and their stack outputs.
+A `200` confirms the function is deployed and reachable. The REST Function URL exposes an unauthenticated `GET /` returning the service name and version for the same purpose.
 
 ## Update
 
-To deploy a new version of Turjuman, run:
+To deploy a new version of Turjuman, bump `@turjuman/aws-cdk` in your deploy project and redeploy — the Lambda code updates in place:
 
 ```bash
-npx @turjuman/aws-deploy deploy
+npm update @turjuman/aws-cdk
+cdk deploy
 ```
-
-Because `turjuman.deploy.json` (or the SSM canonical copy) retains your settings, the redeploy is non-interactive and updates the Lambda code in-place.
 
 ## Teardown
 
+```bash
+cdk destroy
+```
+
 <Warning>
-  Teardown permanently deletes your CloudFormation stack and, by default, the DynamoDB table and all its data. This is irreversible.
+  The DynamoDB table carries `RemovalPolicy.RETAIN`, so `cdk destroy` deletes the Lambda functions and other resources but **leaves the table (and all its data) in place** — by design, so an accidental teardown can't lose data. To remove the data too, delete the table yourself afterwards:
+
+  ```bash
+  aws dynamodb delete-table --table-name <TableName>
+  ```
+
+  If you enabled `table.deletionProtection`, disable it first (`aws dynamodb update-table --table-name <TableName> --no-deletion-protection-enabled`).
 </Warning>
-
-To remove the stack interactively (you will be prompted to confirm by typing the stack name):
-
-```bash
-npx @turjuman/aws-deploy teardown
-```
-
-To skip the confirmation prompt, pass `--yes`. To target a specific stack by name, use `--stack-name`:
-
-```bash
-npx @turjuman/aws-deploy teardown --yes --stack-name my-turjuman-stack
-```
-
-To preserve the DynamoDB table (and its data) while removing the Lambda functions and other resources:
-
-```bash
-npx @turjuman/aws-deploy teardown --keep-table
-```
 
 ## Cost
 
@@ -204,17 +211,3 @@ Turjuman uses on-demand DynamoDB billing and AWS Lambda, both of which have gene
 - **DynamoDB**: 25 GB of storage, 25 read capacity units, and 25 write capacity units free (or pay-per-request at fractions of a cent per million operations).
 
 For most small teams managing translations, the monthly cost is effectively **$0**.
-
-## Bootstrap an existing table
-
-If you deployed the CloudFormation stack manually (without using `@turjuman/aws-deploy deploy`) or need to create the first owner against an already-deployed table, use the `bootstrap` command:
-
-```bash
-npx @turjuman/aws-deploy bootstrap \
-  --table <TableName> \
-  --region us-east-1 \
-  --email you@example.com \
-  --name "Your Name"
-```
-
-This creates the first OWNER and prints the API key once. Re-running the command when the org already has users is safe — it exits without making changes.

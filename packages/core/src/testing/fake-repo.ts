@@ -41,6 +41,7 @@ const compareSk = (a: string, b: string): number =>
 export class FakeRepo implements RepositoryApi {
 	users = new Map<string, User>();
 	emails = new Map<string, string>();
+	orgOwners = new Set<string>(); // orgIds that already have a bootstrapped OWNER
 	apiKeys = new Map<string, ApiKey>(); // by hash
 	projects = new Map<string, Project>();
 	memberships = new Map<string, Membership>(); // `${projectId}#${userId}`
@@ -84,6 +85,20 @@ export class FakeRepo implements RepositoryApi {
 				globalRole: role,
 				updatedAt: new Date().toISOString(),
 			});
+	}
+
+	/** Mirrors the real repo's single transaction: rejects a second owner per org
+	 * (the `orgOwners` sentinel) or a duplicate email, all-or-nothing. */
+	async createOwnerWithKey(user: User, key: ApiKey): Promise<void> {
+		const emailKey = user.email.toLowerCase();
+		if (this.orgOwners.has(user.orgId))
+			throw conflict(`Org "${user.orgId}" already has an owner.`);
+		if (this.emails.has(emailKey))
+			throw conflict(`Email ${user.email} is already in use`);
+		this.orgOwners.add(user.orgId);
+		this.users.set(user.id, user);
+		this.emails.set(emailKey, user.id);
+		this.apiKeys.set(key.hash, key);
 	}
 
 	// ---- api keys -------------------------------------------------------------

@@ -33,7 +33,7 @@ const { DynamoDBClient, DeleteTableCommand } = await import(
 	"@aws-sdk/client-dynamodb"
 );
 const { deleteStack, describeStack } = await import(
-	"../packages/aws-deploy/dist/stack.js"
+	"../packages/deploy-internal/dist/stack.js"
 );
 
 const cfn = new CloudFormationClient({

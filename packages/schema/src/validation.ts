@@ -58,6 +58,20 @@ export const addLocaleBodySchema = z
 	})
 	.openapi({ ref: "AddLocaleBody" });
 
+/**
+ * Body of the unauthenticated `POST /v1/bootstrap` (first-owner creation).
+ * Deliberately only `email` + `name`: `orgId`/`force` are server-side concerns
+ * that must not be settable over a public endpoint — the org always defaults to
+ * the single `"default"` tenant and the single-owner guard can't be bypassed
+ * remotely (a second call returns 409).
+ */
+export const bootstrapBodySchema = z
+	.object({
+		email: emailSchema,
+		name: nonEmptyTextSchema,
+	})
+	.openapi({ ref: "BootstrapBody" });
+
 /** Body of `POST /v1/projects/:id/keys/import` (the CLI `push` of source keys). */
 export const importKeysBodySchema = z
 	.object({

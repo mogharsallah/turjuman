@@ -3,7 +3,7 @@
 // the shared `turjuman` e2e stack: deploy a throwaway-named stack, assert
 // findManagedStacks discovers it by tag, tear it down (stack + retained table),
 // then assert it's gone. Exercises the real deploy/teardown building blocks
-// (packages/aws-deploy/src) end-to-end.
+// (packages/deploy-internal) end-to-end.
 //
 // Prereqs: LocalStack running (pnpm run localstack:up) and `pnpm run build`.
 //
@@ -32,9 +32,11 @@ const { CloudFormationClient } = await import("@aws-sdk/client-cloudformation");
 const { DynamoDBClient, DeleteTableCommand } = await import(
 	"@aws-sdk/client-dynamodb"
 );
-const { deployStack } = await import("../packages/aws-deploy/dist/toolkit.js");
+const { deployStack } = await import(
+	"../packages/deploy-internal/dist/toolkit.js"
+);
 const { deleteStack, describeStack, findManagedStacks } = await import(
-	"../packages/aws-deploy/dist/stack.js"
+	"../packages/deploy-internal/dist/stack.js"
 );
 
 const cfn = new CloudFormationClient({

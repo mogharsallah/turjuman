@@ -1,5 +1,5 @@
-import { createRequire } from "node:module";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
 	Duration,
 	aws_dynamodb as dynamodb,
@@ -11,15 +11,20 @@ import {
 import { Construct } from "constructs";
 import type { TurjumanFunctionTuning, TurjumanProps } from "./props.js";
 
-const require = createRequire(import.meta.url);
-/** Resolve the directory holding a package asset file — the Code.fromAsset root. */
-const assetDir = (spec: string): string => dirname(require.resolve(spec));
+// At runtime this file is dist/turjuman.js, so `..` is the package root, where
+// `pnpm run build` vendors the three Lambda bundles into lambda/{mcp,api,webhook}
+// (scripts/vendor-lambda.mjs). Resolving from here keeps the construct
+// standalone-installable — no runtime dependency on the sibling source packages.
+const here = dirname(fileURLToPath(import.meta.url));
+/** Resolve the package's own vendored Lambda asset dir — the Code.fromAsset root. */
+export const lambdaDir = (sub: "mcp" | "api" | "webhook"): string =>
+	join(here, "..", "lambda", sub);
 
 interface FunctionDef {
 	/** Construct id → drives a stable (idiomatic) CloudFormation logical id. */
 	id: string;
-	/** npm subpath to the pre-bundled asset, resolved for the default Code. */
-	assetSpec: string;
+	/** Subdir under the package's vendored lambda/ holding this function's bundle. */
+	assetSubdir: "mcp" | "api" | "webhook";
 	/** Lambda handler `<file>.<exportedFn>`. */
 	handler: string;
 	description: string;
@@ -27,19 +32,19 @@ interface FunctionDef {
 
 const MCP: FunctionDef = {
 	id: "McpFunction",
-	assetSpec: "@turjuman/mcp-server/lambda/handler.mjs",
+	assetSubdir: "mcp",
 	handler: "handler.handler",
 	description: "Turjuman MCP server",
 };
 const API: FunctionDef = {
 	id: "ApiFunction",
-	assetSpec: "@turjuman/api/lambda/handler.mjs",
+	assetSubdir: "api",
 	handler: "handler.handler",
 	description: "Turjuman REST API",
 };
 const WEBHOOK: FunctionDef = {
 	id: "WebhookFunction",
-	assetSpec: "@turjuman/api/lambda-webhook/webhook.mjs",
+	assetSubdir: "webhook",
 	handler: "webhook.handler",
 	description: "Turjuman webhook dispatcher (DynamoDB Streams)",
 };
@@ -130,7 +135,7 @@ export class Turjuman extends Construct {
 				);
 				return lambda.Code.fromBucket(bucket, hotReloadDir);
 			}
-			return lambda.Code.fromAsset(assetDir(def.assetSpec));
+			return lambda.Code.fromAsset(lambdaDir(def.assetSubdir));
 		};
 
 		const addUrl = (

@@ -52,8 +52,8 @@ export interface TurjumanTableOptions {
 }
 
 /** Override the Lambda code for one or more functions. When omitted, each
- * function resolves the pre-bundled asset shipped by @turjuman/mcp-server /
- * @turjuman/api. */
+ * function resolves the Lambda bundle vendored into @turjuman/aws-cdk at build
+ * time (so the construct is standalone — no dependency on the source packages). */
 export interface TurjumanCodeOverrides {
 	mcp?: lambda.Code;
 	api?: lambda.Code;
@@ -79,7 +79,7 @@ export interface TurjumanHotReloadDirs {
 
 /** Props for the reusable {@link Turjuman} construct. */
 export interface TurjumanProps {
-	/** Override the default npm-asset Lambda code (mainly for tests). */
+	/** Override the default (vendored) Lambda code (mainly for tests/hot-reload). */
 	code?: TurjumanCodeOverrides;
 	table?: TurjumanTableOptions;
 	/** Tuning applied to every function unless a per-function block overrides it. */

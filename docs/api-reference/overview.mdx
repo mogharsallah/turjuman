@@ -19,11 +19,12 @@ curl https://<your-base-url>/v1/projects \
   -H "Authorization: Bearer <your-api-key>"
 ```
 
-The following meta endpoints are public and do not require authentication:
+The following endpoints are public and do not require authentication:
 
 - `GET /`
 - `GET /v1/formats`
 - `GET /v1/openapi.json`
+- `POST /v1/bootstrap` — create the first owner on a fresh deployment (returns `409` once an owner exists)
 
 | Response | Meaning |
 |---|---|
@@ -32,12 +33,10 @@ The following meta endpoints are public and do not require authentication:
 
 ## Base URL
 
-Your base URL is the `ApiUrl` value printed by the deploy command:
+Your base URL is the `ApiUrl` stack output printed by `cdk deploy` (see [Self-Hosting](/self-hosting)):
 
-```bash
-npx @turjuman/aws-deploy deploy
-# ...
-# ApiUrl: https://example.com
+```
+Turjuman.ApiUrl = https://yyyy.lambda-url.us-east-1.on.aws/
 ```
 
 All paths in this reference are relative to that base URL.
@@ -48,6 +47,7 @@ All paths in this reference are relative to that base URL.
 |---|---|---|
 | `GET` | `/` | Service metadata |
 | `GET` | `/v1/formats` | List supported file formats |
+| `POST` | `/v1/bootstrap` | Create the first owner (public; one-time, returns `409` once an owner exists) |
 | `GET` | `/v1/projects` | List projects you can access |
 | `GET` | `/v1/projects/{id}` | Get a project |
 | `GET` | `/v1/projects/{id}/locales` | List locales |

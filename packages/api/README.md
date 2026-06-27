@@ -9,10 +9,11 @@ and CI sync; all business logic and authorization live in
 [`@turjuman/core`](https://github.com/mogharsallah/turjuman/tree/main/packages/core). The OpenAPI spec is
 served at `GET /v1/openapi.json`.
 
-It's normally deployed for you by
-[`@turjuman/aws-deploy`](https://github.com/mogharsallah/turjuman/tree/main/packages/aws-deploy),
-which ships this package's pre-bundled Lambda assets (`lambda/handler.mjs` and
-`lambda-webhook/webhook.mjs`).
+Its pre-bundled Lambda assets (`lambda/handler.mjs` and `lambda-webhook/webhook.mjs`)
+are vendored into
+[`@turjuman/aws-cdk`](https://github.com/mogharsallah/turjuman/tree/main/packages/aws-cdk)
+and deployed with `cdk deploy` (see
+[self-hosting](https://github.com/mogharsallah/turjuman/blob/main/docs/self-hosting.mdx)).
 
 ## License
 

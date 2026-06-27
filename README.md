@@ -52,7 +52,7 @@ JSON/YAML file, downloading translations, and syncing them in CI.
 | `packages/core` | Domain model, DynamoDB repository, RBAC, services, format adapters (the shared brain) |
 | `packages/mcp-server` | Stateless Streamable HTTP MCP server → Lambda |
 | `packages/api` | REST API for the CLI/CI → Lambda, plus the webhook dispatcher |
-| `packages/cli` | The `turjuman` developer CLI (incl. the AWS CDK deployer in `src/deploy/`) |
+| `packages/cli` | The `turjuman` developer CLI (locale-file sync + first-owner `bootstrap`) |
 
 ## Try it locally
 
@@ -76,28 +76,36 @@ talking to it.
 
 ## Self-host on AWS
 
-> **Status:** the SAM stack is conventional but has **not yet been verified end-to-end against a
+> **Status:** the CDK stack is conventional but has **not yet been verified end-to-end against a
 > live AWS account** (see [ROADMAP](ROADMAP.md)). Use the local path above to evaluate; treat the
 > cloud deploy as beta and please report issues.
 
 ### 1. Deploy to your AWS account
 
-One command self-bootstraps the CDK environment, deploys the CloudFormation stack from pre-bundled
-Lambda assets, and creates your first owner — no SAM CLI, no clone needed (see
-[Self-hosting](docs/self-hosting.mdx) for options):
+Instantiate the `TurjumanStack` in a tiny CDK app and deploy it with the AWS CDK CLI. The construct
+vendors its Lambda bundles, so there's no SAM CLI and no repo clone (see
+[Self-hosting](docs/self-hosting.mdx) for the full walkthrough and config):
 
 ```bash
-pnpm dlx @turjuman/aws-deploy deploy   # interactive; prints McpUrl/ApiUrl and your API key
+npm install @turjuman/aws-cdk aws-cdk-lib constructs
+cdk bootstrap   # once per account+region (standard CDK bootstrap)
+cdk deploy      # prints McpUrl / ApiUrl / TableName as stack outputs
 ```
 
-Self-hosting ships as a separate `@turjuman/aws-deploy` package (binary `turjuman-aws-deploy`) so the
-day-to-day `turjuman` developer CLI stays a lean, AWS-free install.
+`@turjuman/aws-cdk` is standalone-installable, so the day-to-day `turjuman` developer CLI stays a
+lean, AWS-free install.
 
 ### 2. Your first owner + API key
 
-`turjuman-aws-deploy deploy` creates the first owner at the end and prints the API key **once** (also
-saved to `~/.turjuman/auth.json`, so you're logged in). It refuses to create a second owner once the
-org has users, so re-running `deploy` to update the stack is safe.
+Once the stack is up, create the first owner over HTTP and capture its key — printed **once**, and
+saved to `~/.turjuman/auth.json` so you're logged in:
+
+```bash
+turjuman bootstrap --url <ApiUrl> --email you@example.com --name "Your Name"
+```
+
+It refuses to create a second owner once the deployment has users (returns `409`), so re-running it
+is safe.
 
 ### 3. Connect Claude Code (MCP)
 

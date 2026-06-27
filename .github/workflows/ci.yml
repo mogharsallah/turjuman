@@ -41,15 +41,16 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
-      # The build products downstream jobs consume: every package's dist, the
-      # three pre-bundled Lambda assets (api: handler + webhook; mcp-server:
-      # handler), and the generated knowledge corpus.
+      # The build products downstream jobs consume: every package's dist, every
+      # pre-bundled Lambda asset (the source bundles under api/mcp-server plus the
+      # copies vendored into @turjuman/aws-cdk/lambda that the deploy resolves via
+      # Code.fromAsset), and the generated knowledge corpus.
       - name: Package build output
         run: |
           tar -czf build-output.tar.gz \
             packages/*/dist \
-            packages/api/lambda packages/api/lambda-webhook \
-            packages/mcp-server/lambda \
+            packages/*/lambda \
+            packages/*/lambda-webhook \
             packages/knowledge/src/generated/corpus.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

@@ -14,16 +14,16 @@ import { usageError } from "./errors.js";
  * ~/.turjuman/auth.json (NOT committed). Environment variables
  * TURJUMAN_API_URL / TURJUMAN_API_KEY override the file.
  *
- * This module is published under the `@turjuman/cli/auth` subpath so the
- * separate `@turjuman/aws-deploy` tool can write/remove credentials through the
- * same single source as the CLI.
+ * This module is published under the `@turjuman/cli/auth` subpath so external
+ * self-host tooling can write/remove credentials through the same single source
+ * as the CLI (the in-CLI `bootstrap` command writes them through here too).
  */
 
 const AUTH_DIR = join(homedir(), ".turjuman");
 /** Resolve the credentials file inside a credentials directory. */
 const authFile = (dir: string) => join(dir, "auth.json");
-/** Absolute path to the machine-local credentials file. Exported so `teardown`
- * can remove it without re-deriving the path. */
+/** Absolute path to the machine-local credentials file. Exported so external
+ * tooling can remove it without re-deriving the path. */
 export const AUTH_FILE = authFile(AUTH_DIR);
 
 export interface AuthConfig {

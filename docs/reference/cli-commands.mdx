@@ -7,7 +7,7 @@ description: "Full reference for the turjuman CLI — all commands, turjuman.con
 The `turjuman` CLI is purpose-built for deterministic locale file work: it pulls translations from Turjuman and writes them to your repository as locale files, and it pushes locale files back to Turjuman. Everything else — creating projects, managing keys, running QA from an agent, administering users — goes through the MCP server or the REST API.
 
 <Note>
-Deploy commands (`deploy`, `status`, `teardown`, `bootstrap`) live in the separate `@turjuman/aws-deploy` package and are not part of the core CLI documented here.
+Self-hosting (provisioning and tearing down the AWS stack) is **not** a CLI command — it's the [`@turjuman/aws-cdk`](/self-hosting) construct, deployed with `cdk deploy`. The one deploy-adjacent command that does live here is `bootstrap`, which creates the first owner over HTTP after the stack is up.
 </Note>
 
 ---
@@ -79,6 +79,7 @@ Environment variables take precedence over `~/.turjuman/auth.json` when both are
 | Command | What it does |
 |---|---|
 | `login --url <url> --key <key>` | Save credentials to `~/.turjuman/auth.json` for this machine |
+| `bootstrap --url <url> --email <email> --name <name>` | Create the first owner on a fresh deployment, print its one-time API key, and log in. Returns an error once an owner exists. |
 | `init --project <id> [--format <fmt>] [--path <pattern>] [--namespace <ns>]` | Scaffold a `turjuman.config.json` in the current directory |
 | `projects` | List all projects your API key can access |
 | `locales` | List the locales configured for the current project |
