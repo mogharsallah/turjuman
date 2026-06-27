@@ -21,11 +21,28 @@ tool surface and (via its `http` binding) the REST route. Therefore:
 If the paths in the table below have moved, the principle still holds — fix the rows (see *Keeping this
 current*).
 
-## The change → page table (a convenience over the principle)
+## First decide: content change or structural change?
+
+These are two different jobs with different workflows and different "done." Decide before you start —
+treating a structural change as a content one is the classic failure.
+
+- **Content change** — the docs *shape* stays the same; you edit the page that already documents the
+  thing (a row, a table, a field). Use the **change → page table** below. *Most code changes are this.*
+- **Structural change** — the docs *shape itself* must change: a **new page**, a **new group or tab**,
+  or **splitting / moving / renaming / removing** pages. Use the **decision rule** and the **ripple
+  checklist** under *Structural changes*.
+
+Rule of thumb: another operation in an existing group → content (a row in `reference/mcp-tools.mdx`). A
+**brand-new domain** (`XService` + a new operations group) or a new product surface → usually
+structural (a new Guide + Reference page, maybe a new group). The "Update" column below flags which
+rows commonly go structural.
+
+## The change → page table (content changes — a convenience over the principle)
 
 | You changed (source) | Update (docs) |
 |---|---|
 | A **capability**: a service in `packages/core/src/services/` + its `Operation` in `packages/sdk/src/operations/` | `reference/mcp-tools.mdx` (row in the right group) + a workflow in `guides/translate-with-mcp.mdx` (and `guides/code-mode.mdx`) if it enables a new task. REST page auto-generated from the `http` binding. Use the operation name **verbatim**. |
+| A **brand-new domain** (`XService` + a new operations group) | **Usually structural** — a new Guide (the task) + a new Reference surface, registered in `docs.json`; a Concept page only if there's a non-obvious model. See *Structural changes*. |
 | A **CLI command or flag** (`packages/cli/src/`, commands in `src/commands/`) | `reference/cli-commands.mdx` (+ `guides/sync-with-cli.mdx` if the workflow changed; + `self-hosting.mdx` for deploy/teardown/status) |
 | A **file-format adapter** (`packages/formats/src/`, `ADAPTERS` in `formats/src/index.ts`) | `reference/file-formats.mdx` |
 | A **QA check** (`packages/schema/src/qa/checks/`, `CHECKS` in `qa/index.ts`) | `reference/qa-checks.mdx` (catalogue row + any limit); `guides/quality-checks.mdx` only if behaviour changed |
@@ -35,7 +52,9 @@ current*).
 | **Tests / tiers** (`packages/*/`, `.github/workflows/`) | `CLAUDE.md` / `TESTING.md` (no docs-site page today) |
 | **Shipped/planned status** | `ROADMAP.md` at the repo root — not a docs page; refer to it in prose, don't link it |
 
-## Docs structure (where things live, and the rationale)
+## Structural changes (the docs shape itself)
+
+### The structure today (where things live, and why)
 
 `docs/` follows a Diátaxis-by-directory convention, surfaced as two `docs.json` tabs:
 
@@ -57,7 +76,7 @@ docs/
 - **Root pages** are the few cross-cutting entry points (intro, quickstart, self-hosting); everything
   else lives under its type directory.
 
-**Decision rule — new page vs. group vs. tab:**
+### Decision rule — new page vs. group vs. tab
 
 1. **Does an existing page cover it?** Extend that page. Prefer this — don't spawn thin pages.
 2. **New page, existing area?** Add the `.mdx` under the matching type directory and register it in the
@@ -67,6 +86,25 @@ docs/
 4. **Genuinely distinct audience or product surface?** A new **tab**. This is rare — justify it.
 
 Name files in kebab-case matching their nav path (`reference/mcp-tools.mdx` → `"reference/mcp-tools"`).
+
+### The ripple — a structural change is never just one file
+
+Every structural move has consequences beyond the page itself. Do the whole ripple, or you ship broken
+nav/links. (The pieces live in other reference files; this is the one place that sequences them.)
+
+- **Add a page** → create it under the right type dir · `title` + a tight `description`
+  (`pages-and-frontmatter.md`) · **register it in the right `docs.json` group** or it won't appear ·
+  cross-link from neighbouring pages (and any `<Card>` hub) · add it to the page list below.
+- **Add a group / tab** → apply nav strategy — ≤7 per level, label by user goal, a new tab only for a
+  distinct audience (`navigation-and-settings.md`) · update the structure tree above.
+- **Move / rename a page** → add a `redirects` entry in `docs.json` (old → new) · fix every inbound
+  link · rename it in the page list · run `mint broken-links`.
+- **Split an overgrown page** (a rewrite trigger: mixed topics, or >50% caveats — `writing-craft.md`) →
+  create the new pages · redirect/anchor the old URLs · cross-link the set · register all in `docs.json`.
+- **Remove a page** → deprecate first if it's user-facing (`deprecated` frontmatter + migration note) ·
+  redirect old → replacement · fix inbound links · drop it from `docs.json` **and** the page list below.
+
+After any structural change, `mint broken-links` is the backstop — run it before pushing.
 
 ## Keeping this current (self-maintenance)
 

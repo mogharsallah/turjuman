@@ -103,9 +103,12 @@ When code changes, update the matching page(s) in the **same PR**. The durable p
 > never hand-written. Domain concepts (schema fields, RBAC) go to `concepts/`; CLI to
 > `reference/cli-commands.mdx`; formats and QA checks to their `reference/` page.
 
-**`element-map.md` is the single authoritative change→page table** (and the `docs/` structure +
-new-page/group/tab decision rule). Open it when the principle above isn't enough — don't re-derive the
-mapping here.
+**First decide whether the change is a *content* edit or a *structural* one** — a new page, group, or
+tab, or splitting/moving/renaming a page (a new *domain* usually is structural; another operation in an
+existing group usually isn't). They're different jobs: a structural change has a ripple (register in
+`docs.json`, redirect moved URLs, fix inbound links). **`element-map.md` is the single authoritative
+source** for both — the change→page table, the `docs/` structure + new-page/group/tab decision rule,
+and the structural-change ripple checklist. Open it; don't re-derive the mapping here.
 
 ## API reference (OpenAPI — auto-generated, never hand-written)
 
@@ -123,13 +126,16 @@ to `docs/api-reference/openapi.json`, and the "Endpoints" group in `docs/docs.js
 
 ## Authoring workflow
 
-1. Decide the page's **placement in `docs.json`** and its **primary job** (`doc-types.md`).
-2. Start from the matching template in `templates/`.
-3. Write it. Reuse exact tool/operation names, flags, and field names from the code — grep the source
+1. **Content or structural?** Decide whether you're editing an existing page or changing the docs shape
+   (new page/group/tab, or split/move/rename). If structural, follow the decision rule **and the ripple
+   checklist** in `element-map.md` (register in `docs.json`, redirect moved URLs, fix inbound links).
+2. Decide the page's **placement in `docs.json`** and its **primary job** (`doc-types.md`).
+3. Start from the matching template in `templates/`.
+4. Write it. Reuse exact tool/operation names, flags, and field names from the code — grep the source
    to be sure (`packages/sdk/src/operations/`, `packages/cli/src/`, `packages/schema/src/domain.ts`).
-4. Choose components by intent (`components.md`); write a tight `description` (`discoverability.md`).
-5. Add/confirm the page in `docs/docs.json` `navigation`.
-6. Validate, then commit docs **with** the code change.
+5. Choose components by intent (`components.md`); write a tight `description` (`discoverability.md`).
+6. Add/confirm the page in `docs/docs.json` `navigation`.
+7. Validate, then commit docs **with** the code change.
 
 ## Validate before committing
 
