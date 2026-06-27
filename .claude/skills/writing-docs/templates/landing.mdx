@@ -1,18 +1,26 @@
 ---
-title: <Section landing title>
-description: "<One sentence framing this area of the docs. Feeds llms.txt.>"
+title: "[Section or product landing title]"
+description: "[What this area is and who it's for] — ~130–160 chars, active voice."
 ---
 
-<!-- LANDING: a short orientation paragraph + a CardGroup of the most important next pages. Used for
-     the docs home (index.mdx) or a section overview. Keep prose minimal. -->
+{/* LANDING / Overview. Job: orient + route. A short orientation, then a <CardGroup> of the most
+    important next pages. Keep prose minimal — this page's value is the navigation. Used for the docs
+    home (introduction.mdx) or a section overview. Consider mode: "custom" for a full-canvas landing
+    (pages-and-frontmatter.md). See doc-types.md. */}
 
-<One or two sentences on what this is and who it's for.>
+[One or two sentences on what this is and who it's for. Lead with the value.]
 
 <CardGroup cols={2}>
-  <Card title="<Page>" icon="rocket" href="/quickstart">
-    <One line on what the reader gets there.>
+  <Card title="[Get started]" icon="rocket" href="/quickstart">
+    [One line on what the reader gets there.]
   </Card>
-  <Card title="<Page>" icon="diagram-project" href="/concepts/architecture">
-    <One line.>
+  <Card title="[Core concept]" icon="diagram-project" href="/concepts/architecture">
+    [One line.]
+  </Card>
+  <Card title="[Main task]" icon="wand-magic-sparkles" href="/guides/translate-with-mcp">
+    [One line.]
+  </Card>
+  <Card title="[Reference]" icon="list" href="/reference/mcp-tools">
+    [One line.]
   </Card>
 </CardGroup>

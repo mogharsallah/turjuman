@@ -1,29 +1,34 @@
-# Element → docs map
+# Element → docs map (Turjuman)
 
-When you change code, this is the page (or pages) that must change with it. Source locations are
-relative to the repo root; doc pages are under `docs/`.
+When you change code, this is the page (or pages) that must change with it, **in the same PR**. Source
+locations are relative to the repo root; doc pages are under `docs/`.
 
-## Transports / surfaces
+> **Architecture reminder.** Turjuman has one brain (`@turjuman/core`) exposed through one
+> transport-agnostic **operation layer** (`@turjuman/sdk`). A capability is declared **once** as an
+> `Operation` in `packages/sdk/src/operations/*` and projected to *both* the MCP tool surface and (via
+> its `http` binding) the REST API. So you document a capability at the operation/reference level — you
+> do **not** document "the MCP tool" and "the REST route" as separate features. There is no
+> `mcp-server/src/tools/` directory anymore.
 
-- **MCP tool** added/changed/removed (`packages/mcp-server/src/tools/`)
+## Capabilities / surfaces
+
+- **A new or changed capability** — a service method in `packages/core/src/services/` (e.g.
+  `services/keys.ts`, with its `rbac` check) **plus** its `Operation` in `packages/sdk/src/operations/`
+  (the matching group: `projects.ts`, `keys.ts`, `translations.ts`, `glossary.ts`, `qa.ts`,
+  `lifecycle.ts`, `scoring.ts`, `admin.ts`):
   → `reference/mcp-tools.mdx`: add/update the row in the right group (Projects & locales, Keys,
-    Translations, Glossary & memory, Quality, Webhooks & lifecycle, Administration).
-  → if it unlocks a new *task*, add or update a workflow in `guides/translate-with-mcp.mdx`.
-  → verify the tool name verbatim against `tools/index.ts`.
+    Translations, Glossary & memory, Quality, Webhooks & lifecycle, Administration). Use the operation
+    name **verbatim** from `sdk/src/operations/`.
+  → if it unlocks a new *task*, add or update a workflow in `guides/translate-with-mcp.mdx` (and
+    `guides/code-mode.mdx` if it changes the `search`/`describe`/`run_code` story).
+  → the **REST route + its API-reference page are auto-generated** from the operation's `http` binding
+    via the OpenAPI snapshot — don't hand-write endpoint pages (see `SKILL.md` → OpenAPI). For a
+    CLI-specific bespoke route, also annotate it with `describeRoute(...)`.
 
-- **REST route** added/changed (`packages/api/src/router.ts`)
-  → annotate the route with `describeRoute({ summary, tags, parameters, responses })` so it lands in
-    the OpenAPI spec. The `.githooks/pre-commit` hook refreshes + stages
-    `docs/api-reference/openapi.json` on commit (or run `npm run gen:openapi`). Mintlify
-    auto-generates the endpoint page + playground from that snapshot — **do not** hand-write endpoint
-    pages. CI fails if the committed snapshot drifts from the code.
-  → also update the "Surfaces" table on the relevant reference page (e.g. `reference/qa-checks.mdx`)
-    and `guides/sync-with-cli.mdx` if the CLI workflow changed.
-
-- **CLI command or flag** (`packages/cli/src/`)
-  → `reference/cli-commands.mdx`: the command table and/or the config section.
-  → `guides/sync-with-cli.mdx` if it changes the push/pull workflow or CI gate.
-  → if it's a deploy/teardown/status change, `self-hosting.mdx` too.
+- **CLI command or flag** (`packages/cli/src/`, commands in `src/commands/`)
+  → `reference/cli-commands.mdx`: the command table and/or the multi-target config section.
+  → `guides/sync-with-cli.mdx` if it changes the push/pull workflow or the CI gate.
+  → `self-hosting.mdx` too if it's a deploy/teardown/status change.
 
 ## Core domain
 
@@ -34,12 +39,9 @@ relative to the repo root; doc pages are under `docs/`.
   → `reference/qa-checks.mdx`: a catalogue row (id, default severity, what it catches) and any
     deliberate limit. Mention config knobs in `guides/quality-checks.mdx` only if behaviour changed.
 
-- **New service / capability** (`packages/core/src/services/`)
-  → usually a new Guide (the task) and a new Reference surface; add both to `docs/docs.json`. Add a
-    Concept page only if there's a non-obvious model to explain.
-
-- **Data-model / schema field** (`packages/schema/src/domain.ts`; repository in `packages/core/src/repository/`)
-  → `concepts/architecture.mdx` (domain model + single-table tables).
+- **Data-model / schema field** (`packages/schema/src/domain.ts`; repository in
+  `packages/core/src/repository/`)
+  → `concepts/architecture.mdx` (domain model + single-table layout).
   → `concepts/lifecycle.mdx` if the field is part of the key/translation state model (status, slots,
     `origin`, `stale`, `state`).
 
@@ -48,12 +50,22 @@ relative to the repo root; doc pages are under `docs/`.
 
 ## Infra / ops
 
-- **CDK construct / deploy** (`packages/aws-cdk/src/`, `packages/aws-deploy/src/`, `turjuman-aws-deploy` bin)
+- **CDK construct / deploy** (`packages/aws-cdk/src/`, `packages/aws-deploy/src/`)
   → `self-hosting.mdx` (deploy, options, cost, teardown).
 
 - **Tests / tiers** (`packages/*/`, `.github/workflows/`)
-  → `contributing.mdx` (testing tiers).
+  → `contributing.mdx` lives in the repo docs set if present; otherwise the testing tiers are described
+    in `CLAUDE.md` and `TESTING.md` — keep those consistent.
 
 ## Roadmap
 
-- **Shipped/planned status** → `ROADMAP.md` at the repo root (not a docs page).
+- **Shipped/planned status** → `ROADMAP.md` at the repo root (not a docs page; refer to it in prose,
+  don't link it).
+
+## Current docs pages (so you extend rather than duplicate)
+
+`introduction` · `quickstart` · `self-hosting` · `concepts/architecture` · `concepts/lifecycle` ·
+`concepts/roles-and-permissions` · `guides/translate-with-mcp` · `guides/code-mode` ·
+`guides/sync-with-cli` · `guides/quality-checks` · `guides/webhooks` · `reference/mcp-tools` ·
+`reference/cli-commands` · `reference/file-formats` · `reference/qa-checks` · `api-reference/overview`
+(+ the auto-generated `Endpoints` group).

@@ -189,10 +189,12 @@ readers (the site), external agents (Mintlify auto-generates `llms.txt`/`llms-fu
 - **Update docs in the same change as the code.** A new MCP tool, REST route, CLI flag, format
   adapter, QA check, service, or schema field is not done until its page is updated.
 - **Use the `writing-docs` skill** (`.claude/skills/writing-docs/`) when adding or revising a page —
-  it encodes the Mintlify conventions (frontmatter, components) and which Diátaxis page type each
-  project element belongs to.
-- Author pages as `.mdx` with `title` + `description` frontmatter (the description feeds `llms.txt`);
-  keep the body mostly plain Markdown so it reads cleanly in-repo too. New pages must be added to the
+  it encodes Mintlify's craft (content types, components, frontmatter, navigation, SEO/GEO, AI-native
+  docs) and the Turjuman code→docs map.
+- Author pages as `.mdx` with `title` + a tight, front-loaded `description` (it's the SEO snippet and
+  the `llms.txt`/agent line — ~130–160 chars, no line break). Reach for the right Mintlify component
+  for each intent (Steps, Tabs, Callouts, Cards, Fields, Frame) — don't avoid them — while keeping the
+  page readable when flattened to Markdown (the `.md`/`llms.txt` view). New pages must be added to the
   `navigation` in `docs/docs.json` to appear on the site.
 - **The REST API reference is auto-generated** from the OpenAPI spec the API serves at
   `GET /v1/openapi.json`. Annotate every route with `describeRoute({ summary, tags, ... })` so it
