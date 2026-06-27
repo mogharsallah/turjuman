@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadEnv } from "./helpers/env.js";
+import { loadEnv, modeOf } from "./helpers/env.js";
 import { uniq } from "./helpers/fixtures.js";
 import {
 	makeCodeClient,
@@ -9,17 +9,17 @@ import {
 } from "./helpers/mcp.js";
 
 /**
- * P1 — code mode, confirmed through the deployed path (closes Gap 2: the entire
- * sandbox → bridge → core path over a real Function URL was proven only
- * hermetically). Covers:
+ * P1 — code mode, confirmed through the MCP transport (the entire sandbox →
+ * bridge → core path, not just the hermetic unit test). Covers:
  *  - `?mode=code` advertises exactly `search` + `describe` + `run_code` (and none
- *    of the classic tools) — mode selection over the Function URL.
- *  - `search` discovers operations over the deployed path.
+ *    of the classic tools) — mode selection via the query string.
+ *  - `search` discovers operations through the transport.
  *  - `run_code` performs a write+read round-trip inside the sandbox.
  *  - the SAME translate-then-read journey, parametrized over classic AND code
  *    mode, yields the identical outcome (the two transports agree).
  */
 const env = loadEnv();
+const mode = modeOf(env);
 const e = env ?? { mcpUrl: "", apiUrl: "", tableName: "", apiKey: "" };
 
 interface Outcome {
@@ -27,7 +27,7 @@ interface Outcome {
 	status: string;
 }
 
-describe.skipIf(!env)("P1 code mode (deployed)", () => {
+describe.skipIf(mode !== "inprocess")("P1 code mode", () => {
 	const code = makeCodeClient(e.mcpUrl, e.apiKey);
 
 	it("advertises only search + describe + run_code in ?mode=code", async () => {
@@ -131,7 +131,7 @@ const MODES: { name: string; run: Journey }[] = [
 	},
 ];
 
-describe.skipIf(!env)(
+describe.skipIf(mode !== "inprocess")(
 	"P1 translate-then-read journey (classic vs code)",
 	() => {
 		describe.each(MODES)("$name mode", ({ run }) => {

@@ -1,4 +1,6 @@
-/** Result of a REST call against the deployed API Function URL. */
+import { request } from "./transport.js";
+
+/** Result of a REST call against the API transport. */
 export interface RestResponse<T = unknown> {
 	status: number;
 	ok: boolean;
@@ -6,9 +8,10 @@ export interface RestResponse<T = unknown> {
 }
 
 /**
- * Minimal REST client for the deployed API Function URL. The URL carries a
- * trailing slash (as LocalStack/AWS mint it), so paths are passed without a
- * leading slash, e.g. `rest("GET", "v1/projects")`.
+ * Minimal REST client over the transport seam. The base URL carries a trailing
+ * slash (as LocalStack/AWS mint it), so paths are passed without a leading slash,
+ * e.g. `rest("GET", "v1/projects")`. `apiUrl` is the deployed API Function URL in
+ * deployed mode, or the `api.inproc` sentinel in in-process mode.
  */
 export function makeRestClient(apiUrl: string, defaultKey?: string) {
 	const base = apiUrl.endsWith("/") ? apiUrl : `${apiUrl}/`;
@@ -18,7 +21,7 @@ export function makeRestClient(apiUrl: string, defaultKey?: string) {
 		opts: { body?: unknown; apiKey?: string | null } = {},
 	): Promise<RestResponse<T>> {
 		const key = opts.apiKey === null ? undefined : (opts.apiKey ?? defaultKey);
-		const res = await fetch(base + path.replace(/^\//, ""), {
+		const res = await request(base + path.replace(/^\//, ""), {
 			method,
 			headers: {
 				"content-type": "application/json",

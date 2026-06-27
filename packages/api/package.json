@@ -9,6 +9,7 @@
 	"types": "./dist/handler.d.ts",
 	"exports": {
 		".": "./dist/handler.js",
+		"./router": "./dist/router.js",
 		"./lambda/handler.mjs": "./lambda/handler.mjs",
 		"./lambda/package.json": "./lambda/package.json",
 		"./lambda-webhook/webhook.mjs": "./lambda-webhook/webhook.mjs",

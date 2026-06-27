@@ -35,14 +35,26 @@ isolation, property tests, determinism, coverage discipline) — read `TESTING.m
 LocalStack-backed tests (need Docker):
 
 ```bash
-pnpm run localstack:up && pnpm run test:integration && pnpm run localstack:down   # Tier A: repo+services vs real DynamoDB
-pnpm run test:e2e                                                               # Tier B: deploy SAM stack + black-box HTTP e2e
+pnpm run localstack:up                          # shared LocalStack on :4566 (+ health wait)
+pnpm run test:integration                       # Tier A: repo+services vs real DynamoDB
+pnpm run e2e:inprocess                           # in-process e2e: MCP/REST handlers vs real DynamoDB (no deploy)
+pnpm run localstack:down
+pnpm run test:e2e                                # Tier B: deploy CDK stack + deployed-only black-box e2e
 ```
 
+The `@turjuman/e2e` specs run in two modes (opted into via `TURJUMAN_E2E_MODE`; see
+`packages/e2e/src/helpers/env.ts`). **In-process** (`e2e:inprocess`) invokes the MCP/REST handlers
+directly — the MCP server's `processRequest` and the REST Hono `app.request` — against LocalStack
+DynamoDB, with no CDK deploy; it covers the behavioral specs (agent loop, code mode, tool scoping, CI
+sync, RBAC, API keys) fast and in parallel. **Deployed** (`e2e:deploy` + `e2e:test`, bundled as
+`test:e2e`) deploys the CDK stack into LocalStack and runs only the two specs that can be proven
+nowhere else: Function URL reachability and the DynamoDB Streams → webhook Lambda path.
+
 These tiers (and the DynamoDB-Local flow below) need a working Docker daemon, and the suites
-self-skip when their endpoint env vars are unset. You can also rely on GitHub Actions: every PR runs
-`build + typecheck + unit`, `docs link check`, and `integration + deployed e2e (LocalStack)` — the
-last is Tier A + Tier B end-to-end. Push the branch / open the PR and read those check results as the
+self-skip when their mode/endpoint env vars are unset. You can also rely on GitHub Actions: every PR
+runs a shared `build` job whose output the other jobs download (no rebuilds), then in parallel
+`typecheck + openapi + unit`, `format`, `docs link check`, `integration + in-process e2e (LocalStack)`,
+and `deployed e2e (LocalStack)`. Push the branch / open the PR and read those check results as the
 source of truth for end-to-end verification.
 
 Local dev loop — everything runs against the **shared LocalStack** (the same `:4566` service the test

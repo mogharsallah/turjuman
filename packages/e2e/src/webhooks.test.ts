@@ -1,18 +1,20 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { loadEnv } from "./helpers/env.js";
+import { loadEnv, modeOf } from "./helpers/env.js";
 import { uniq } from "./helpers/fixtures.js";
 import { makeMcpClient } from "./helpers/mcp.js";
 import { type CapturedRequest, startReceiver } from "./helpers/receiver.js";
 
 /**
  * P1 — webhook delivery through the real DynamoDB Streams -> WebhookFunction
- * event-source-mapping (the only place the ESM is exercised end-to-end):
+ * event-source-mapping (the only place the ESM is exercised end-to-end), so this
+ * runs in deployed mode only:
  *  - event coverage: each change type maps to the right HMAC-signed event;
  *  - filtering & removal: a narrowly-subscribed webhook ignores other events,
  *    and a removed webhook stops receiving entirely.
  */
 const env = loadEnv();
+const mode = modeOf(env);
 const e = env ?? { mcpUrl: "", apiUrl: "", tableName: "", apiKey: "" };
 
 const WAIT = 90_000;
@@ -26,7 +28,7 @@ function expectSigned(delivery: CapturedRequest, secret: string): void {
 	expect(delivery.headers["x-turjuman-signature"]).toBe(expected);
 }
 
-describe.skipIf(!env)("P1 webhooks (Streams -> Lambda)", () => {
+describe.skipIf(mode !== "deployed")("P1 webhooks (Streams -> Lambda)", () => {
 	const mcp = makeMcpClient(e.mcpUrl, e.apiKey);
 
 	it("delivers a distinct signed event for each change type", async () => {

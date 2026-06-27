@@ -172,9 +172,15 @@ importers:
       '@aws-sdk/client-dynamodb':
         specifier: ^3.700.0
         version: 3.1069.0
+      '@turjuman/api':
+        specifier: workspace:*
+        version: link:../api
       '@turjuman/core':
         specifier: workspace:*
         version: link:../core
+      '@turjuman/mcp-server':
+        specifier: workspace:*
+        version: link:../mcp-server
 
   packages/formats:
     dependencies:

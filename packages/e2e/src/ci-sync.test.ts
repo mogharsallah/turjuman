@@ -1,16 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { loadEnv } from "./helpers/env.js";
+import { loadEnv, modeOf } from "./helpers/env.js";
 import { uniq } from "./helpers/fixtures.js";
 import { makeMcpClient } from "./helpers/mcp.js";
 import { makeRestClient } from "./helpers/rest.js";
 
 /**
- * P1 — the developer/CI persona, driven through the deployed REST Function URL:
- * the deterministic push/pull path a CI job uses (import keys + translations,
- * then export them back). Also proves the MCP and REST Lambdas share one table
- * and config — data written through one surface is visible through the other.
+ * P1 — the developer/CI persona, driven through the REST transport: the
+ * deterministic push/pull path a CI job uses (import keys + translations, then
+ * export them back). Also proves the MCP and REST surfaces share one table and
+ * config — data written through one is visible through the other.
  */
 const env = loadEnv();
+const mode = modeOf(env);
 const e = env ?? { mcpUrl: "", apiUrl: "", tableName: "", apiKey: "" };
 
 interface Key {
@@ -25,7 +26,7 @@ interface BundleEntry {
 	value: string;
 }
 
-describe.skipIf(!env)("P1 developer CI sync (REST)", () => {
+describe.skipIf(mode !== "inprocess")("P1 developer CI sync (REST)", () => {
 	const mcp = makeMcpClient(e.mcpUrl, e.apiKey);
 	const rest = makeRestClient(e.apiUrl, e.apiKey);
 

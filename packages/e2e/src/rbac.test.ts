@@ -1,16 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { loadEnv } from "./helpers/env.js";
+import { loadEnv, modeOf } from "./helpers/env.js";
 import { uniq } from "./helpers/fixtures.js";
 import { makeMcpClient } from "./helpers/mcp.js";
 import { makeRestClient } from "./helpers/rest.js";
 
 /**
- * P1 — the security boundary, confirmed through the deployed auth path (one
+ * P1 — the security boundary, confirmed through the transport auth path (one
  * representative check per concern, not the exhaustive matrix Tier A owns):
  *  - RBAC: a VIEWER can read but not write; an EDITOR can write.
  *  - Tenant isolation: a key from another org cannot see this org's project.
  */
 const env = loadEnv();
+const mode = modeOf(env);
 const e = env ?? {
 	mcpUrl: "",
 	apiUrl: "",
@@ -37,7 +38,7 @@ async function makeMember(
 	return key.secret;
 }
 
-describe.skipIf(!env)("P1 security boundary", () => {
+describe.skipIf(mode !== "inprocess")("P1 security boundary", () => {
 	const ownerMcp = makeMcpClient(e.mcpUrl, e.apiKey);
 
 	it("enforces RBAC at the boundary: VIEWER reads, EDITOR writes", async () => {
