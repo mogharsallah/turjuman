@@ -1,7 +1,3 @@
-# CLAUDE.md
-
-## What this is
-
 Turjuman is open-source, self-hosted translation management driven primarily through an **MCP server**
 (an LLM/agent does the translating) with a thin **developer CLI** for deterministic locale-file work.
 It runs serverless on AWS (Lambda Function URLs + a single DynamoDB table). Deliberate non-goals: no
