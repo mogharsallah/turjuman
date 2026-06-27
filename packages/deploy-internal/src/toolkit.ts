@@ -26,7 +26,7 @@ export interface DeployStackOptions {
  *
  * The toolkit creates its own AWS SDK clients from the ambient environment
  * (credentials, region, and — for LocalStack — `AWS_ENDPOINT_URL`). The stack is
- * tagged `turjuman:managed` so `status`/`teardown` can discover it.
+ * tagged `turjuman:managed` so the teardown scripts can discover it.
  */
 export async function deployStack(
 	opts: DeployStackOptions,

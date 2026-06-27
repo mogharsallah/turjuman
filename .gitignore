@@ -9,6 +9,8 @@ dist/
 packages/mcp-server/lambda/
 packages/api/lambda/
 packages/api/lambda-webhook/
+# Vendored into @turjuman/aws-cdk by scripts/vendor-lambda.mjs at build time
+packages/aws-cdk/lambda/
 
 # SAM / build artifacts
 .aws-sam/

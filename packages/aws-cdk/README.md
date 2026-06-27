@@ -6,15 +6,16 @@ self-hosted, MCP-driven translation backend as a composable, props-driven stack.
 It declares the whole topology: the retained single-table DynamoDB store (PK/SK +
 GSI1/2/3 + Streams) and up to three Lambda Function URLs — the always-on **MCP
 server**, the optional **REST API** (for the developer CLI/CI), and the optional
-**DynamoDB Streams → webhook dispatcher**. The Lambda code ships pre-bundled
-inside `@turjuman/mcp-server` and `@turjuman/api`, so the construct needs no
-build step of its own.
+**DynamoDB Streams → webhook dispatcher**. The Lambda handlers are pre-built and
+**vendored into this package** (`lambda/{mcp,api,webhook}/`), so it is
+standalone-installable: `npm i @turjuman/aws-cdk aws-cdk-lib constructs` gives you
+everything needed to synth and deploy, with no dependency on the Turjuman source
+packages.
 
-Most self-hosters never touch this directly — they run
-[`@turjuman/aws-deploy`](https://github.com/mogharsallah/turjuman/tree/main/packages/aws-deploy),
-the one-command CLI that deploys this construct (and self-bootstraps the CDK
-environment). Reach for `@turjuman/aws-cdk` when you want to compose Turjuman into
-your **own** CDK app.
+To self-host, instantiate `TurjumanStack` in a small CDK app and run `cdk deploy`,
+then `turjuman bootstrap` to create the first owner — see the
+[self-hosting guide](https://github.com/mogharsallah/turjuman/blob/main/docs/self-hosting.mdx).
+Or compose the reusable `Turjuman` construct into your **own** CDK app.
 
 ## Usage
 

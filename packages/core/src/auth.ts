@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import type { Actor, User } from "@turjuman/schema";
+import type { Actor, ApiKey, User } from "@turjuman/schema";
 import { conflict, newId, requireEmail, requireText } from "@turjuman/schema";
 import type { RepositoryApi } from "./repository/index.js";
 
@@ -88,6 +88,9 @@ export async function bootstrapOwner(
 	input: { email: string; name: string; orgId?: string; force?: boolean },
 ): Promise<{ user: User; secret: string }> {
 	const orgId = input.orgId ?? "default";
+	// Friendly fast-path messages for the common (non-concurrent) cases. These are
+	// advisory only — the authoritative single-owner guard is the atomic write
+	// below, which closes the check-then-act race on the public bootstrap route.
 	if (!input.force && (await repo.listUsersByOrg(orgId)).length > 0) {
 		throw conflict(
 			`Org "${orgId}" already has users; refusing to bootstrap another owner. Pass force=true to override.`,
@@ -106,9 +109,8 @@ export async function bootstrapOwner(
 		createdAt: now,
 		updatedAt: now,
 	};
-	await repo.createUser(user);
 	const { secret, prefix, hash } = newApiKeySecret();
-	await repo.createApiKey({
+	const apiKey: ApiKey = {
 		id: newId("key"),
 		orgId,
 		userId: user.id,
@@ -116,6 +118,18 @@ export async function bootstrapOwner(
 		hash,
 		prefix,
 		createdAt: now,
-	});
+	};
+	if (input.force) {
+		// Operator override (never reachable over HTTP): force intentionally allows a
+		// second owner, so it must bypass the single-owner sentinel. Non-atomic is
+		// fine here — a credentialed operator, not a concurrent public caller.
+		await repo.createUser(user);
+		await repo.createApiKey(apiKey);
+	} else {
+		// One transaction: user + email companion + org-owner sentinel + key. The
+		// sentinel's attribute_not_exists makes "one owner per org" race-safe, so two
+		// concurrent POST /v1/bootstrap calls can never both create an OWNER.
+		await repo.createOwnerWithKey(user, apiKey);
+	}
 	return { user, secret };
 }

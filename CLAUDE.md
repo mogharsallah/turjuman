@@ -57,10 +57,10 @@ Developer CLI / CI ──REST + Bearer key────────────�
 | `packages/knowledge` | Orama BM25 index over SDK operations + the docs corpus; powers code mode's `search`/`describe`. No MCP/AWS dep. |
 | `packages/sandbox` | Code-mode engine: `runCode(...)` runs untrusted JS/TS in a per-run QuickJS-WASM isolate whose only capability is the SDK registry. |
 | `packages/mcp-server` | Stateless MCP over Streamable HTTP; tool surface is a projection of `OPERATIONS`. Modes: *classic* (default) and *code* (`?mode=code`). |
-| `packages/api` | REST API (`src/router.ts`) + Streams→webhook dispatcher (`src/webhook.ts`); operation-backed routes via `projectOperation(...)`, plus bespoke CLI routes. |
+| `packages/api` | REST API (`src/router.ts`) + Streams→webhook dispatcher (`src/webhook.ts`); operation-backed routes via `projectOperation(...)`, plus bespoke CLI routes (incl. the unauthenticated first-owner `POST /v1/bootstrap`). |
 | `packages/cli` | The lean `turjuman` developer CLI (commander); pure `run*` commands; no AWS SDK. |
-| `packages/aws-cdk` | `@turjuman/aws-cdk` construct library: props-driven deploy topology (table + 3 GSIs + Streams + up to 3 Function URLs). |
-| `packages/aws-deploy` | Self-host CLI (`turjuman-aws-deploy`) over the construct; zod config canonical in SSM. |
+| `packages/aws-cdk` | `@turjuman/aws-cdk` construct library: props-driven deploy topology (table + 3 GSIs + Streams + up to 3 Function URLs). Standalone-installable: vendors the 3 Lambda bundles into `lambda/` at build, so no runtime dep on mcp-server/api. |
+| `packages/deploy-internal` | **Private** deploy primitives for the dev/e2e scripts: `deployStack` (`toolkit.ts`) + CloudFormation helpers (`stack.ts`). |
 | `packages/e2e` | Black-box vitest specs that only talk HTTP to a deployed (LocalStack) stack. |
 
 ### Where to make changes

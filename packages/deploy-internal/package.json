@@ -1,0 +1,30 @@
+{
+	"name": "@turjuman/deploy-internal",
+	"version": "0.2.0",
+	"description": "Internal (unpublished) Turjuman deploy primitives: programmatic CDK toolkit deploy + CloudFormation helpers used by the repo's dev/e2e scripts.",
+	"license": "MIT",
+	"author": "Turjuman contributors",
+	"private": true,
+	"type": "module",
+	"main": "./dist/index.js",
+	"files": [
+		"dist"
+	],
+	"engines": {
+		"node": ">=24"
+	},
+	"scripts": {
+		"build": "tsc -p tsconfig.json",
+		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"test": "vitest run",
+		"clean": "rm -rf dist"
+	},
+	"dependencies": {
+		"@aws-cdk/cloud-assembly-schema": ">=54.3.0",
+		"@aws-cdk/toolkit-lib": "^1.29.0",
+		"@aws-sdk/client-cloudformation": "^3.700.0",
+		"@turjuman/aws-cdk": "workspace:*",
+		"aws-cdk-lib": "^2.259.0",
+		"constructs": "^10.6.0"
+	}
+}

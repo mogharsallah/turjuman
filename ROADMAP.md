@@ -21,7 +21,7 @@ Status legend: ✅ done · 🚧 in progress · ⬜ not started
 - ✅ Service layer with all business logic + authorization
 - ✅ API-key authentication (hashed bearer tokens)
 - ✅ Published, composable AWS CDK construct (`@turjuman/aws-cdk`): DynamoDB (on-demand/provisioned, optional PITR + deletion protection) + Lambda Function URLs, with api/webhook toggles and per-function tuning
-- ✅ One-command `turjuman-aws-deploy deploy` (`@turjuman/aws-deploy`): deploys the construct from pre-bundled npm Lambda assets via the CDK programmatic toolkit, self-bootstrapping the standard CDK environment (no SAM CLI), with client-side first-owner bootstrap and the canonical config in SSM
+- ✅ Standalone, `cdk deploy`-ready: `@turjuman/aws-cdk` vendors its Lambda bundles, so `npm i @turjuman/aws-cdk aws-cdk-lib` + `cdk deploy` self-hosts Turjuman with no repo clone; first-owner creation is the unauthenticated `POST /v1/bootstrap` route + the `turjuman bootstrap` CLI command (the repo's dev/e2e scripts reuse the same deploy primitives via the private `@turjuman/deploy-internal`)
 
 ### Phase 1 — MCP server (the heart) ✅
 

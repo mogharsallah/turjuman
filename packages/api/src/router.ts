@@ -5,6 +5,9 @@ import {
 	addLocaleBodySchema,
 	authenticate,
 	BEARER_CHALLENGE,
+	bootstrapBodySchema,
+	bootstrapOwner,
+	bootstrapResultSchema,
 	bulkSetResultSchema,
 	bundleEntrySchema,
 	errorEnvelopeSchema,
@@ -260,6 +263,36 @@ export function createApp(deps: RouterDeps): Hono<Env> {
 		}),
 		(c) => c.json({ formats: formats.listFormats() }),
 	);
+	app.post(
+		"/v1/bootstrap",
+		describeRoute({
+			summary: "Bootstrap the first owner",
+			description:
+				"Create the very first OWNER (in the default org) and return its " +
+				"one-time API key. Public — no auth required — but only while the org " +
+				"has no users: once an owner exists it returns 409. This is the only " +
+				"way to obtain the first key; mint further keys through the API/MCP.",
+			tags: ["Meta"],
+			security: [],
+			responses: {
+				201: jsonResponse(
+					bootstrapResultSchema,
+					"The created owner and its one-time API key",
+				),
+				400: jsonResponse(errorEnvelopeSchema, "Validation error"),
+				409: jsonResponse(errorEnvelopeSchema, "An owner already exists"),
+			},
+		}),
+		validator("json", bootstrapBodySchema, onInvalid),
+		async (c) => {
+			const { email, name } = c.req.valid("json");
+			// Only email + name cross the wire — orgId defaults to "default" and the
+			// single-owner guard stays server-side (a second call throws conflict →
+			// 409 via onError). The secret is returned once and never stored.
+			const result = await bootstrapOwner(deps.repo, { email, name });
+			return c.json(result, 201);
+		},
+	);
 
 	// ---- authenticated project API --------------------------------------------
 	// A sub-app so the bearer check applies to every /v1/projects route at once.
@@ -483,9 +516,7 @@ export function createApp(deps: RouterDeps): Hono<Env> {
 			const projectId = c.req.param("id");
 			const namespace = c.req.query("namespace");
 			const cursor = c.req.query("cursor");
-			const limit = c.req.query("limit")
-				? Number(c.req.query("limit"))
-				: undefined;
+			const limit = queryLimit(c.req.query("limit"));
 			if (limit !== undefined || cursor) {
 				const page = await svc.keys.listPage(actor, projectId, {
 					namespace,
@@ -573,9 +604,7 @@ export function createApp(deps: RouterDeps): Hono<Env> {
 			const locale = c.req.query("locale");
 			if (!locale) throw validation("Missing required query parameter: locale");
 			const cursor = c.req.query("cursor");
-			const limit = c.req.query("limit")
-				? Number(c.req.query("limit"))
-				: undefined;
+			const limit = queryLimit(c.req.query("limit"));
 			if (limit !== undefined || cursor) {
 				const page = await svc.translations.listForLocalePage(
 					actor,
@@ -664,9 +693,7 @@ export function createApp(deps: RouterDeps): Hono<Env> {
 			const fallback = c.req.query("fallback") === "omit" ? "omit" : undefined;
 			const excludeStale = c.req.query("excludeStale") === "1";
 			const cursor = c.req.query("cursor");
-			const limit = c.req.query("limit")
-				? Number(c.req.query("limit"))
-				: undefined;
+			const limit = queryLimit(c.req.query("limit"));
 			if (limit !== undefined || cursor) {
 				const page = await svc.translations.exportBundlePage(
 					actor,
@@ -915,16 +942,17 @@ export function createApp(deps: RouterDeps): Hono<Env> {
 					version: API_VERSION,
 					description:
 						"Deterministic REST API for the Turjuman developer CLI and CI sync.\n\n" +
-						"**Base URL:** your own deployment's `ApiUrl` (printed by `turjuman deploy`); " +
+						"**Base URL:** your own deployment's `ApiUrl` (the `cdk deploy` stack output); " +
 						"replace the server below with it.\n\n" +
 						"**Auth:** every `/v1/projects` route requires `Authorization: Bearer <api-key>`. " +
-						"The meta endpoints (`/`, `/v1/formats`, `/v1/openapi.json`) are public.",
+						"The meta endpoints (`GET /`, `GET /v1/formats`, `GET /v1/openapi.json`) and the " +
+						"first-owner `POST /v1/bootstrap` are public (no auth).",
 				},
 				servers: [
 					{
 						url: "https://your-turjuman-api.example.com",
 						description:
-							"Your deployed Turjuman API URL (the ApiUrl from `turjuman deploy`)",
+							"Your deployed Turjuman API URL (the ApiUrl from `cdk deploy`)",
 					},
 				],
 				components: {

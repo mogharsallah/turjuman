@@ -30,7 +30,7 @@ export async function devDeploy() {
 		"@turjuman/core"
 	);
 	const { deployStack } = await import(
-		"../packages/aws-deploy/dist/toolkit.js"
+		"../packages/deploy-internal/dist/toolkit.js"
 	);
 
 	console.log(

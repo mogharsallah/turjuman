@@ -36,6 +36,7 @@ import {
 	localeSK,
 	memberSK,
 	orgGSI1PK,
+	orgOwnerPK,
 	projectPK,
 	qaConfigSK,
 	scoreConfigSK,
@@ -186,6 +187,86 @@ export class Repository {
 			...key,
 		});
 		return key;
+	}
+
+	/**
+	 * Atomically create the first OWNER of an org together with its initial API
+	 * key. A single `TransactWriteItems` writes the user, the email-uniqueness
+	 * companion, an **org-owner sentinel** (`orgOwnerPK`), and the key — every Put
+	 * guarded by `attribute_not_exists(PK)`. The sentinel is what makes the
+	 * single-owner invariant race-safe: two concurrent first-owner requests (e.g.
+	 * against the unauthenticated `POST /v1/bootstrap`) can't both win — the loser's
+	 * conditional check fails and the whole transaction rolls back, so a second
+	 * OWNER is never written. Bundling the key in the same transaction also removes
+	 * the half-state where an owner exists with no key.
+	 */
+	async createOwnerWithKey(user: User, key: ApiKey): Promise<void> {
+		try {
+			await this.doc.send(
+				new TransactWriteCommand({
+					TransactItems: [
+						{
+							Put: {
+								TableName: this.table,
+								Item: {
+									PK: userPK(user.id),
+									SK: userPK(user.id),
+									GSI1PK: orgGSI1PK(user.orgId),
+									GSI1SK: userPK(user.id),
+									entityType: "User",
+									...user,
+								} satisfies Item,
+								ConditionExpression: "attribute_not_exists(PK)",
+							},
+						},
+						{
+							Put: {
+								TableName: this.table,
+								Item: {
+									PK: emailPK(user.email),
+									SK: emailPK(user.email),
+									entityType: "UserEmail",
+									userId: user.id,
+								} satisfies Item,
+								ConditionExpression: "attribute_not_exists(PK)",
+							},
+						},
+						{
+							Put: {
+								TableName: this.table,
+								Item: {
+									PK: orgOwnerPK(user.orgId),
+									SK: orgOwnerPK(user.orgId),
+									entityType: "OrgOwner",
+									userId: user.id,
+								} satisfies Item,
+								ConditionExpression: "attribute_not_exists(PK)",
+							},
+						},
+						{
+							Put: {
+								TableName: this.table,
+								Item: {
+									PK: apiKeyPK(key.hash),
+									SK: apiKeyPK(key.hash),
+									GSI2PK: userPK(key.userId),
+									GSI2SK: `APIKEY#${key.id}`,
+									entityType: "ApiKey",
+									...key,
+								} satisfies Item,
+								ConditionExpression: "attribute_not_exists(PK)",
+							},
+						},
+					],
+				}),
+			);
+		} catch (err) {
+			if (isConditionalFailure(err))
+				throw conflict(
+					`This deployment already has an owner (or the email ${user.email} is in use).`,
+				);
+			throw err;
+		}
 	}
 
 	async getApiKeyByHash(hash: string): Promise<ApiKey | undefined> {
