@@ -120,7 +120,9 @@ Developer CLI / CI ──REST + Bearer key────────────�
   the matching group in `sdk/src/operations/` (`@turjuman/sdk`) — that one definition is projected to
   an MCP tool automatically, and to a REST route when you give it an `http` binding. Never put
   authorization or domain logic in a transport, and never hand-write an MCP tool or REST route that
-  bypasses `OPERATIONS`.
+  bypasses `OPERATIONS`. If you add a new operation **group**, a new service, or relocate a package,
+  update the change→docs map in `.claude/skills/writing-docs/element-map.md` in the same change (it
+  hardcodes these paths and otherwise rots).
 - **Authorization** → `schema/src/rbac.ts` (in `@turjuman/core`'s `@turjuman/schema` base). The matrix
   (global OWNER/ADMIN/MEMBER + per-project MANAGER/EDITOR/DEVELOPER/VIEWER) is enforced by
   `requireProject` / `requireOrg` before every mutating service call. OWNER/ADMIN act as MANAGER on

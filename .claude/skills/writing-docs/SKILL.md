@@ -95,21 +95,17 @@ but there is still no separate "agent doc." Write each page once so it renders w
 
 ## Where each Turjuman change gets documented
 
-When code changes, update the matching page(s) in the **same PR**. `element-map.md` has the full
-table; the common cases:
+When code changes, update the matching page(s) in the **same PR**. The durable principle:
 
-| You changed… | Update | Page type |
-|---|---|---|
-| A capability — a **service** (`core/services/`) + its **operation** (`packages/sdk/src/operations/`) | `reference/mcp-tools.mdx` (the tool catalogue) + a workflow in `guides/translate-with-mcp.mdx` if it enables a new task. The REST route + its API-reference page are generated from the operation's `http` binding (see OpenAPI below). | Reference (+ Guide) |
-| A **CLI command or flag** (`packages/cli/src/`) | `reference/cli-commands.mdx` + `guides/sync-with-cli.mdx` if the workflow changed | Reference (+ Guide) |
-| A **file-format adapter** (`packages/formats/src/`) | `reference/file-formats.mdx` | Reference |
-| A **QA check** (`packages/schema/src/qa/checks/`) | `reference/qa-checks.mdx` (catalogue row + any limit) | Reference |
-| A **data-model / schema field** (`packages/schema/src/domain.ts`, repository) | `concepts/architecture.mdx` (and `concepts/lifecycle.mdx` if it's lifecycle state) | Concept |
-| **Auth / RBAC** (`packages/schema/src/rbac.ts`) | `concepts/roles-and-permissions.mdx` | Concept |
-| **Deploy / infra** (`packages/aws-cdk/`, `packages/aws-deploy/`) | `self-hosting.mdx` | Guide |
+> A capability is one **service** (`core/services/`) + one **operation** (`packages/sdk/src/operations/`),
+> documented **once at the reference level** (`reference/mcp-tools.mdx`) plus a workflow guide if it
+> enables a new task. The REST endpoint page is auto-generated from the operation's `http` binding —
+> never hand-written. Domain concepts (schema fields, RBAC) go to `concepts/`; CLI to
+> `reference/cli-commands.mdx`; formats and QA checks to their `reference/` page.
 
-A brand-new top-level area is a new group/tab in `docs.json`. Prefer extending an existing page over
-spawning a thin new one.
+**`element-map.md` is the single authoritative change→page table** (and the `docs/` structure +
+new-page/group/tab decision rule). Open it when the principle above isn't enough — don't re-derive the
+mapping here.
 
 ## API reference (OpenAPI — auto-generated, never hand-written)
 
