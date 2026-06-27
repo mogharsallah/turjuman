@@ -1,0 +1,64 @@
+---
+title: "Security and API keys for a self-hosted Turjuman"
+sidebarTitle: "Security & API keys"
+description: "How Turjuman authenticates requests — bearer API keys stored as SHA-256 hashes, the unauthenticated bootstrap route, read-only and expiry scoping, and AuthType NONE."
+---
+
+When you self-host Turjuman, API keys are your security boundary. There is no API Gateway, no Cognito, and no web login: every request to either Lambda Function URL carries a bearer key, and Turjuman validates it itself. This page covers how keys work operationally. For the full role model that keys inherit, see [Roles & permissions](/concepts/roles-and-permissions).
+
+## How authentication works
+
+Every request — MCP tool call or REST request — must include an `Authorization: Bearer <api-key>` header. Turjuman resolves that key to a user and their roles before any operation runs. There are no anonymous requests; a missing, expired, or revoked key returns `401` immediately.
+
+Keys are **stored as a SHA-256 hash**, never in plaintext. The raw key is shown exactly once — at the moment it is created — and cannot be recovered afterwards. If you lose a key, you issue a new one and revoke the old.
+
+## The first owner and the bootstrap race
+
+The first OWNER is created over HTTP with [`turjuman bootstrap`](/self-hosting/deploy) immediately after you deploy. That call hits `POST /v1/bootstrap`, which is **unauthenticated by design** — there is no key yet to authenticate with. Whoever calls it first becomes the global OWNER.
+
+The single-owner guard is atomic: concurrent calls can't both win, and once the deployment has any user, a second call returns `409`. But the guard does **not** verify *who* the first caller is.
+
+<Warning>
+  **Bootstrap immediately after `cdk deploy`, before sharing the `ApiUrl`.** The URL appears in deploy logs, CI output, and screenshots — until you claim ownership, anyone who learns it can call `turjuman bootstrap` and lock you out. If someone beats you to it, tear the stack down (`cdk destroy` — the table is retained) and redeploy.
+</Warning>
+
+`turjuman bootstrap` talks to the REST API surface, so it requires `api.enabled` (the default). If you deploy MCP-only, re-enable the REST API to create the owner — see [Configuration](/self-hosting/configuration).
+
+<Warning>
+  There is no recovery path if you lose access to the sole OWNER account. Store the first key in a secrets manager immediately, and promote a second OWNER (via the `set_user_role` MCP tool) so you are never down to one.
+</Warning>
+
+## Scope keys to least privilege
+
+A key inherits its user's roles, but you can tighten it further at creation time. Both constraints are set once and cannot be changed afterwards — to alter either, revoke the key and issue a new one.
+
+| Constraint | Effect |
+|---|---|
+| `readOnly: true` | The key can perform read operations only, regardless of the user's roles. Use it for dashboards, monitoring, or any read-only integration. |
+| `expiresAt` | An ISO-8601 timestamp after which the key returns `401` on every request. Expired keys remain listed but cannot be reactivated. |
+
+<Tip>
+  Issue a DEVELOPER-scoped key to your CI pipeline and an EDITOR-scoped key to your AI translation agent. A misconfigured pipeline then can't approve translations, and the agent still gets the writing surface it needs. The MCP server also filters its advertised tools to match the key — see [MCP tool scoping](/reference/mcp-tools).
+</Tip>
+
+## Revoke a compromised key
+
+If a key leaks, revoke it immediately with the `revoke_api_key` MCP tool (or ask your agent to "find and revoke the leaked key"). Revocation is permanent and takes effect on the next request. List keys first with `list_api_keys` to identify the one to revoke — which is why every key should have a meaningful `description`.
+
+Keep keys out of version control. If `.mcp.json` or any config file is committed, reference the key through an environment variable or a secrets manager rather than pasting the literal value.
+
+## Why Function URLs use `AuthType: NONE`
+
+The Lambda Function URLs are configured with `AuthType: NONE`, which means AWS does not authenticate callers — Turjuman does. This is deliberate: Turjuman validates its own bearer keys in the service layer, so layering AWS IAM auth or API Gateway on top would add cost and operational surface without adding protection. The trade-off is that the URLs are publicly reachable, so **the strength of your key handling is the strength of your security**.
+
+The Function URLs are public, but Turjuman exposes almost nothing without a valid key. The unauthenticated routes are the `bootstrap` route (above), a `GET /health` on the MCP URL, and a `GET /` on the REST URL — the latter two for uptime checks and deployment verification:
+
+```bash
+curl https://<McpUrl>/health
+```
+
+```json
+{"status":"ok"}
+```
+
+The health routes reveal no data and accept no input — they are safe to expose to a monitoring probe.

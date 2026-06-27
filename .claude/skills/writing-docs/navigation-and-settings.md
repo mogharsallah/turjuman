@@ -15,9 +15,10 @@ the exhaustive field schema is at <https://mintlify.com/docs/organize/navigation
   ("Reference", "API Reference"). Keep labels under ~4 words; no internal jargon.
 - **Decide placement before you write.** Adding a page is also deciding where it belongs — do it up
   front so the structure doesn't rot as the docs grow.
-- **Distinct audiences → tabs.** When two audiences genuinely need different paths, separate them with
-  tabs rather than blending content on shared pages. (Turjuman already does this: a **Documentation**
-  tab and an **API Reference** tab.)
+- **Separate by concern (or audience) → tabs.** When sections serve genuinely different needs,
+  separate them with tabs rather than blending content on shared pages. (Turjuman organizes **by
+  concern** into three tabs: **Using Turjuman** for using the product, **Reference** for looking up
+  facts, and **Self-hosting** for running your own instance.)
 
 ## `docs.json` navigation schema (the shape)
 
@@ -42,18 +43,25 @@ Turjuman's current shape, for reference:
 ```jsonc
 "navigation": {
   "tabs": [
-    { "tab": "Documentation", "groups": [
-      { "group": "Get Started", "pages": ["introduction", "quickstart", "self-hosting"] },
-      { "group": "Concepts",    "pages": ["concepts/architecture", "concepts/lifecycle", "concepts/roles-and-permissions"] },
-      { "group": "Guides",      "pages": ["guides/translate-with-mcp", "guides/code-mode", "guides/sync-with-cli", "guides/quality-checks", "guides/webhooks"] },
-      { "group": "Reference",   "pages": ["reference/mcp-tools", "reference/cli-commands", "reference/file-formats", "reference/qa-checks"] }
+    { "tab": "Using Turjuman", "groups": [
+      { "group": "Get Started", "pages": ["introduction", "quickstart", "guides/try-it-locally"] },
+      { "group": "Concepts",    "pages": ["concepts/why-mcp-first", "concepts/architecture", "concepts/lifecycle", "concepts/roles-and-permissions", "concepts/how-agents-use-turjuman"] },
+      { "group": "Guides",      "pages": ["guides/translate-with-mcp", "guides/code-mode", "guides/sync-with-cli", "guides/quality-checks", "guides/webhooks", "guides/connect-claude-code"] }
     ]},
-    { "tab": "API Reference", "groups": [
-      { "group": "REST API",   "pages": ["api-reference/overview"] },
-      { "group": "Endpoints",  "openapi": "api-reference/openapi.json" }
+    { "tab": "Reference", "groups": [
+      { "group": "Reference",   "pages": ["reference/mcp-tools", "reference/cli-commands", "reference/rest-api", "reference/file-formats", "reference/qa-checks", "reference/glossary"] },
+      { "group": "Endpoints",   "openapi": "api-reference/openapi.json" }
+    ]},
+    { "tab": "Self-hosting", "groups": [
+      { "group": "Self-hosting", "pages": ["self-hosting/overview", "self-hosting/deploy", "self-hosting/configuration", "self-hosting/security"] }
     ]}
   ]
-}
+},
+// Add a redirect whenever a page moves or is renamed, so shared/bookmarked URLs don't 404:
+"redirects": [
+  { "source": "/self-hosting",          "destination": "/self-hosting/overview" },
+  { "source": "/api-reference/overview", "destination": "/reference/rest-api" }
+]
 ```
 
 Adding a page = add its path to the right group. A genuinely new top-level area = a new group (or a

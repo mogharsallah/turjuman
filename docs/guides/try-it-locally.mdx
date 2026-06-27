@@ -1,0 +1,120 @@
+---
+title: "Try Turjuman locally with LocalStack — no AWS account needed"
+sidebarTitle: "Try it locally"
+description: "Evaluate the full Turjuman stack on your machine with LocalStack and Docker — connect an MCP client and translate your first project in minutes, with no cloud account."
+---
+
+The fastest way to evaluate Turjuman is to run the whole stack on your own machine — no AWS account, no credentials, no cost. You run the MCP server and REST API against LocalStack (a local AWS emulator) using Docker, connect an MCP client, and translate a first project in minutes. When you're ready to run it for real, follow the [Quickstart](/quickstart) to deploy to AWS.
+
+<Note>
+  The API key printed by the setup script determines both your identity and your permissions. Whoever holds it has full OWNER access. Store it somewhere safe and keep it out of version control.
+</Note>
+
+## Prerequisites
+
+- Node.js 24 or later
+- pnpm (enabled via `corepack enable`)
+- Docker (for LocalStack)
+- The Turjuman repo cloned locally
+
+## Steps
+
+<Steps>
+  <Step title="Install dependencies and build">
+    Clone the repo (if you haven't already) and install dependencies:
+
+    ```bash
+    git clone https://github.com/mogharsallah/turjuman.git
+    cd turjuman
+    pnpm install && pnpm run build
+    ```
+
+    This compiles all workspace packages — `mcp-server`, `api`, `cli`, and `core` — into their `dist/` directories.
+  </Step>
+
+  <Step title="Start LocalStack">
+    Start the local AWS emulator using Docker Compose:
+
+    ```bash
+    pnpm run localstack:up
+    ```
+
+    This starts LocalStack on port 4566 and waits until it is healthy before returning. LocalStack provides a local DynamoDB instance and the Lambda runtime that Turjuman needs.
+  </Step>
+
+  <Step title="Deploy and bootstrap">
+    Deploy the Turjuman stack into LocalStack and create your first owner:
+
+    ```bash
+    pnpm run dev
+    ```
+
+    This deploys the MCP and API Lambda functions locally, creates a first OWNER user, and prints your stack URLs and API key:
+
+    ```
+    Deployed "turjuman-dev".
+      MCP:     http://localhost:4566/restapis/.../mcp/...
+      REST:    http://localhost:4566/restapis/.../api/...
+      owner:   dev-owner@turjuman.test
+      apiKey:  op_live_xxxxxxxxxxxxxxxxxxxx
+
+    Use the key as `Authorization: Bearer <apiKey>`.
+    ```
+
+    Copy the `MCP` URL and `apiKey` values — you will need them in the next step. Leave the process running; press `Ctrl+C` to stop.
+  </Step>
+
+  <Step title="Connect your MCP client">
+    Add Turjuman to your MCP client configuration. For Claude Code, create or update `.mcp.json` in your project root:
+
+    ```json .mcp.json
+    {
+      "mcpServers": {
+        "turjuman": {
+          "type": "http",
+          "url": "<MCP URL from previous step>",
+          "headers": {
+            "Authorization": "Bearer <your-api-key>"
+          }
+        }
+      }
+    }
+    ```
+
+    Replace the URL and API key with the values printed in Step 3. Restart your MCP client to pick up the new configuration.
+
+    <Note>
+      Keep your API key out of version control. If `.mcp.json` is committed to your repo, reference the key via an environment variable or a secrets manager rather than pasting it in plaintext. Revoke any leaked key immediately using the `revoke_api_key` MCP tool.
+    </Note>
+  </Step>
+
+  <Step title="Try it">
+    With the MCP server connected, ask your agent to get started:
+
+    > *"Create a project called Web App with base locale `en`. Add `fr` and `es` locales. Then translate all the keys into French and Spanish."*
+
+    Turjuman's MCP tools handle the project setup, and the connected LLM translates the keys directly — no separate translation engine needed.
+
+    You can also try:
+    - *"What projects do I have?"*
+    - *"Add a key called `checkout.empty_cart` with the English value `Your cart is empty.`"*
+    - *"Run QA on the French locale and show me any issues."*
+  </Step>
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Translate with MCP" icon="robot" href="/guides/translate-with-mcp">
+    A full walkthrough of translation workflows using the MCP server and your AI agent.
+  </Card>
+  <Card title="Sync with the CLI" icon="terminal" href="/guides/sync-with-cli">
+    Use `turjuman pull` and `turjuman push` to keep locale files in your repo in sync with Turjuman.
+  </Card>
+  <Card title="Self-host on AWS" icon="cloud" href="/self-hosting/overview">
+    Deploy Turjuman to your own AWS account with a single command when you're ready.
+  </Card>
+  <Card title="Architecture" icon="building" href="/concepts/architecture">
+    Understand the domain model, data storage, and Lambda surfaces.
+  </Card>
+</CardGroup>

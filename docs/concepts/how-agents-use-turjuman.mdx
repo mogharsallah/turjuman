@@ -1,0 +1,66 @@
+---
+title: "How AI agents use Turjuman over MCP"
+sidebarTitle: "How agents use Turjuman"
+description: "How an agent drives Turjuman: it connects over MCP with a bearer key, discovers capability, and calls tools — in classic mode or token-saving code mode."
+---
+
+An AI agent drives Turjuman by connecting to the [MCP server](/reference/mcp-tools) with a bearer API key and calling tools. What tools it sees, how it discovers them, and how its calls are authorized all follow from a few deliberate design choices. This page explains the interaction model; for step-by-step usage, see [Translate with MCP](/guides/translate-with-mcp) and [Code mode](/guides/code-mode).
+
+## The interaction loop
+
+Every agent session follows the same shape:
+
+1. **Connect** — the agent opens a Streamable HTTP connection to the MCP Function URL, passing `Authorization: Bearer <api-key>` on every request. The connection is stateless: there is no session to manage, and the agent can retry or reconnect freely.
+2. **Discover** — the agent learns which capabilities exist, either by listing the tool catalogue (classic mode) or by searching (code mode).
+3. **Act** — the agent calls operations to read and change translation data. Each call is dispatched to the shared service layer, which enforces authorization before anything runs.
+
+Because the server holds no per-connection state, the agent's only durable context is what Turjuman stores and what the agent keeps in its own reasoning.
+
+## Two modes: classic and code
+
+A connection runs in exactly one of two **mutually exclusive** modes, chosen with the `mode` URL parameter.
+
+| | Classic mode (default) | Code mode (`?mode=code`) |
+|---|---|---|
+| **Advertised tools** | Every operation as its own tool | Just `search`, `describe`, `run_code` |
+| **How the agent acts** | One tool call per step | Writes a TypeScript program that calls many operations, runs once |
+| **Best for** | One-off actions, interactive exploration, conventional clients | Multi-step jobs, large intermediate data, minimizing context tokens |
+
+### Classic mode
+
+The agent calls `tools/list`, receives the full catalogue, and invokes tools one at a time by name. It's the default and needs no setup — ideal for interactive work and clients that expect a conventional per-tool surface.
+
+### Code mode
+
+Instead of the full catalogue, the server advertises three tools. The agent uses `search` to find what it needs, `describe` to confirm exact arguments, then writes a short TypeScript program that calls `turjuman.<operation>(args)` and runs it with `run_code`. The program executes in an isolated QuickJS-WASM sandbox whose only capability is the Turjuman SDK — no network, filesystem, or environment access — and only the final result returns.
+
+Code mode exists to cut **context tokens**. In classic mode, every tool's name, description, and schema sits in the model's context on every turn — a tax that grows with the toolset. Code mode keeps the catalogue out of context and collapses a multi-step job (read untranslated keys → translate → write them back) into a single round-trip, so intermediate data never passes through the model.
+
+## Discovery spans operations *and* docs
+
+In code mode, `search` queries one knowledge index that covers both the **operations** (returned with full typed signatures) and the **documentation** — these guides, concepts, and reference pages. So an agent can learn *how the system works*, not merely which functions exist: a search for "webhook events" surfaces both the relevant operations and the concept page that explains them. This is why the docs are treated as a first-class agent surface, not just a human one.
+
+## Authorization is the same in every mode
+
+The mode changes the *surface*, never the *permissions*. Whether an agent calls a tool directly, or calls an operation from inside a `run_code` sandbox, the request is dispatched to the same handler in the shared service layer with the same authenticated context. A read-only key still can't write in code mode — the write is denied in the core, not merely hidden.
+
+The server also tailors what an agent can see and do to the key it presents:
+
+- **Tool scoping by key.** When the agent lists tools, the catalogue is filtered to the operations the key's roles permit. An EDITOR key never sees MANAGER-only tools; a read-only key sees only read tools.
+- **Tool scoping by URL.** You can narrow the surface further at connect time with `?tools=` or `?groups=` (classic mode only) — useful for restricting a reviewer agent to exactly the tools it needs.
+
+See [Roles & permissions](/concepts/roles-and-permissions) for the underlying model.
+
+## When to reach for which
+
+Use **classic mode** when you're exploring interactively or performing a single action — it's the zero-setup default. Switch to **code mode** when you're running multi-step jobs, moving large intermediate data you don't want in context, or chaining many calls you'd rather express as one program. The two are chosen per connection, so you can run both side by side with different keys.
+
+## Common misconceptions
+
+<Note>
+  **"Code mode lets the agent run arbitrary code on my server."** It runs the agent's TypeScript in a sandbox whose only capability is the Turjuman SDK — no network, filesystem, environment, or access to the discovery tools. Every operation call still passes through the same authorization as a normal tool call.
+</Note>
+
+<Note>
+  **"I have to pick a mode for my whole instance."** Mode is per connection, set by a URL parameter. Different agents (or the same agent in different contexts) can connect in different modes against the same deployment.
+</Note>

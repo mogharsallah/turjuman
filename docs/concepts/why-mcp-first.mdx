@@ -1,0 +1,45 @@
+---
+title: "Why Turjuman is MCP-first and developer-first"
+sidebarTitle: "Why MCP-first"
+description: "Turjuman is driven by an AI agent over MCP, not a web dashboard, with a thin CLI for deterministic file work and no built-in machine-translation engine. Here's why."
+---
+
+Turjuman is built to be operated by an AI agent, not a person clicking through a web dashboard. Its primary interface is an [MCP server](/reference/mcp-tools) that your agent calls in natural language; a thin [developer CLI](/reference/cli-commands) handles the deterministic file work. There is deliberately **no web UI** and **no built-in machine-translation engine**. This page explains why those are features, not gaps.
+
+## The shift this is built for
+
+Translation management has historically meant a SaaS dashboard: a project manager logs in, uploads strings, assigns translators, and exports files. That model assumes a human is the operator.
+
+Increasingly, the operator is an agent. Developers already work through Claude Code and other agentic IDEs, and large language models are themselves excellent translators. Turjuman is designed for that world: you describe what you want — *"add French and Spanish, translate everything, and flag anything that breaks our glossary"* — and your agent calls the right tools to do it. The translation management system becomes something your agent operates on your behalf, not another tab you keep open.
+
+## What "MCP-first" means in practice
+
+- **The MCP server is the full surface.** Projects, locales, keys, translations, glossary, QA, members, and API-key administration are all exposed as MCP tools. Anything you'd do in a dashboard, your agent does through a tool call.
+- **The CLI is intentionally thin.** It exists for the deterministic, scriptable half of the job — pulling and pushing locale files in your repo and CI — where you want predictable, non-interactive behaviour, not a conversation. See [Sync with the CLI](/guides/sync-with-cli).
+- **The model does the translating.** Turjuman ships no machine-translation engine. The LLM already connected to your agent produces the translations, informed by your glossary and translation memory. You bring your own model; there is no separate MT vendor to configure or pay for.
+
+## Why no web UI
+
+A web UI would be a second, parallel surface to build, secure, and keep in sync with the agent surface — and it would pull the product back toward the dashboard model Turjuman is deliberately moving away from. By committing to MCP as the primary interface, every capability is declared once and projected to the surfaces that need it, with no risk of a UI and an API drifting apart. A web UI, a built-in MT engine, and a vendor marketplace are all **explicitly out of scope** for the project.
+
+## Why this design holds together
+
+The MCP-first choice is reinforced by the rest of Turjuman's architecture:
+
+- **One brain, many surfaces.** Every capability is a single operation in the shared service layer, projected to both the MCP and REST surfaces. A new tool can't introduce a divergent code path or a different permission rule. See [Architecture](/concepts/architecture).
+- **Agent-native authorization.** API keys carry roles, and the MCP server filters the tools it advertises to match the key — so an agent is only ever offered actions it is allowed to take. See [Roles & permissions](/concepts/roles-and-permissions).
+- **Self-hostable and serverless.** Because there's no always-on dashboard, the whole system is a few Lambda functions and one DynamoDB table — cheap to run and simple to own. See [Self-hosting](/self-hosting/overview).
+
+## When this matters to you
+
+If you already work through an AI agent, Turjuman fits the way you work: localization becomes another thing your agent handles in context. If you expected a dashboard to click through, the adjustment is real — but the payoff is that translation management lives where your code and your agent already are, instead of in a separate tool you have to switch to.
+
+## Common misconceptions
+
+<Note>
+  **"MCP-first means there's no automation."** The opposite — the CLI and REST API give you fully deterministic, scriptable automation for CI. MCP-first describes the *primary management surface*, not the only one. See [How agents use Turjuman](/concepts/how-agents-use-turjuman).
+</Note>
+
+<Note>
+  **"No MT engine means I have to translate manually."** No — the LLM connected to your agent does the translating. Turjuman supplies the context (glossary, memory, descriptions) and stores the result; the model supplies the words.
+</Note>

@@ -9,7 +9,7 @@ strict to be. This file reconciles them.
 | Diátaxis job | Mintlify's name | Reader is… | Answers | Turjuman examples | Lives under | Template |
 |---|---|---|---|---|---|---|
 | **Explanation** | Explanation | understanding | "Why / how does it work?" | architecture, lifecycle, roles & permissions | `concepts/` | `templates/concept.mdx` |
-| **How-to** | How-to Guide | doing a task | "How do I do X?" | translate with MCP, sync with the CLI, run QA, webhooks, self-host | `guides/` (+ `self-hosting` at root) | `templates/guide.mdx` |
+| **How-to** | How-to Guide | doing a task | "How do I do X?" | translate with MCP, sync with the CLI, run QA, webhooks, connect a client | `guides/` (+ the `self-hosting/` tab for operator how-tos) | `templates/guide.mdx` |
 | **Reference** | Reference | looking up | "What exactly is the tool/flag/field?" | MCP tools, CLI commands, file formats, QA checks | `reference/` | `templates/reference.mdx` |
 | **Tutorial** | Tutorial | learning end-to-end | "Get me started, hands-on" | the quickstart | `quickstart.mdx` | `templates/tutorial.mdx` |
 
@@ -60,7 +60,7 @@ quadrants — no separate template, just patterns:
 
 - **Getting started / Quickstart** — a blend of tutorial + how-to. (Turjuman: `quickstart.mdx`.)
 - **Overview / Landing** — orientation + a navigation hub of `<Card>`s. (Turjuman: `introduction.mdx`,
-  `api-reference/overview.mdx`; see `templates/landing.mdx`.)
+  `self-hosting/overview.mdx`; see `templates/landing.mdx`.)
 - **Changelog** — chronological `<Update>` entries (often `mode: "center"`). Turjuman tracks shipped
   vs. planned status in `ROADMAP.md` at the repo root, not a docs page.
 - **FAQ / Troubleshooting** — `<AccordionGroup>` of question → answer.

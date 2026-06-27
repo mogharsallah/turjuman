@@ -1,0 +1,108 @@
+---
+title: "Connect Claude Code to Turjuman's MCP server"
+sidebarTitle: "Connect Claude Code"
+description: "Connect Claude Code (or any MCP client) to your Turjuman instance — register the server, pick classic or code mode, scope the toolset, and verify the connection."
+---
+
+Connect Claude Code to your Turjuman instance and your agent can manage projects, locales, keys, and translations in natural language. The connection is plain Streamable HTTP with a bearer key, so the same pattern works for any MCP-compatible client. This guide registers the server, selects a mode, and verifies it works.
+
+## Prerequisites
+
+- A running Turjuman instance — its **MCP Function URL** (`McpUrl`) and a valid **API key**. Get these from the [Quickstart](/quickstart) (deploy to AWS) or [Try it locally](/guides/try-it-locally) (no AWS account).
+- Claude Code installed, or another MCP client that supports the Streamable HTTP transport.
+
+## Register the server
+
+<Steps>
+  <Step title="Add Turjuman to your MCP config">
+    Create or update `.mcp.json` in your project root:
+
+    ```json .mcp.json
+    {
+      "mcpServers": {
+        "turjuman": {
+          "type": "http",
+          "url": "<McpUrl>",
+          "headers": {
+            "Authorization": "Bearer <your-api-key>"
+          }
+        }
+      }
+    }
+    ```
+
+    Replace `<McpUrl>` with your MCP Function URL and `<your-api-key>` with your key.
+
+    <Tip>
+      Prefer the CLI? Run `claude mcp add --transport http turjuman <McpUrl> --header "Authorization: Bearer <your-api-key>"` instead of editing the file by hand.
+    </Tip>
+  </Step>
+
+  <Step title="Restart and verify">
+    Restart Claude Code so it picks up the new server, then run `/mcp` to confirm `turjuman` is listed as connected. As a live check, ask your agent:
+
+    > *"What projects do I have in Turjuman?"*
+
+    A successful reply (even "none yet") confirms the key authenticated and the tools are reachable.
+  </Step>
+</Steps>
+
+## Choose a mode
+
+Turjuman offers two mutually exclusive connection modes, selected with a URL parameter. For the model behind them, see [How agents use Turjuman](/concepts/how-agents-use-turjuman).
+
+<Tabs>
+  <Tab title="Classic (default)">
+    Every operation is its own tool; the agent calls them one at a time. Use the `McpUrl` as-is — no parameter needed. Best for interactive work and one-off actions.
+
+    ```
+    <McpUrl>
+    ```
+  </Tab>
+  <Tab title="Code mode">
+    The server advertises only `search`, `describe`, and `run_code`; the agent writes a TypeScript program that runs in a sandbox. Append `?mode=code` to the URL. Best for multi-step jobs and minimizing context tokens — see [Code mode](/guides/code-mode).
+
+    ```
+    <McpUrl>/?mode=code
+    ```
+  </Tab>
+</Tabs>
+
+## Scope the toolset
+
+In classic mode you can narrow which tools the agent sees by appending query parameters to the URL — useful for a least-privilege or single-purpose agent:
+
+```
+<McpUrl>/?groups=read,translations
+<McpUrl>/?tools=list_keys,get_key,set_translation
+```
+
+The toolset is always also constrained by the API key's permissions. See [Toolset scoping](/reference/mcp-tools) for the full parameter and group list. (`?mode=code` can't be combined with `?tools=` / `?groups=`.)
+
+## Other MCP clients
+
+Any client that speaks the MCP Streamable HTTP transport connects the same way: point it at your `McpUrl` and send `Authorization: Bearer <your-api-key>`. The config format differs per client, but the URL, transport, and header are identical to the example above.
+
+<Warning>
+  Your API key grants access to your Turjuman instance at the level of its roles. Keep it out of version control — reference it through an environment variable or a secrets manager rather than committing the literal value, and revoke any leaked key immediately with the `revoke_api_key` tool.
+</Warning>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="The server doesn't appear after restart">
+    Confirm `.mcp.json` is valid JSON and lives where your client expects it (project root for Claude Code). Run `/mcp` to see connection status and any error. A `GET /health` on your `McpUrl` should return `{"status":"ok"}` — if it doesn't, the instance itself isn't reachable.
+  </Accordion>
+  <Accordion title="Calls fail with 401 Unauthorized">
+    The key is missing, malformed, expired, or revoked. Check the `Authorization` header reads `Bearer <key>` exactly, and that the key hasn't passed its `expiresAt`. Issue a fresh key if needed — see [Security & API keys](/self-hosting/security).
+  </Accordion>
+  <Accordion title="The agent can't see a tool it needs">
+    The key's roles or a `?tools=`/`?groups=` scope may be filtering it out. Remove the URL scoping or use a key with the required role. See [Roles & permissions](/concepts/roles-and-permissions).
+  </Accordion>
+</AccordionGroup>
+
+## Related
+
+- [Translate with MCP](/guides/translate-with-mcp) — workflows to run once you're connected.
+- [Code mode](/guides/code-mode) — the `search` / `describe` / `run_code` surface.
+- [MCP tools reference](/reference/mcp-tools) — the full tool catalogue and scoping parameters.

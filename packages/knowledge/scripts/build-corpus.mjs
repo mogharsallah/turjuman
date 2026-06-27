@@ -41,9 +41,10 @@ function collectMdx(dir) {
 function kindForPath(relPath) {
 	const seg = relPath.split("/")[0];
 	if (seg === "guides") return "guide";
+	if (seg === "self-hosting") return "guide"; // operator how-tos
 	if (seg === "concepts") return "concept";
 	if (seg === "reference" || seg === "api-reference") return "reference";
-	return "overview"; // top-level pages: introduction, quickstart, self-hosting…
+	return "overview"; // top-level pages: introduction, quickstart
 }
 
 /** Pull `title`/`description` out of the leading `--- … ---` frontmatter. */

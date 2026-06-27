@@ -1,0 +1,67 @@
+---
+title: "Self-hosting Turjuman on AWS: topology, responsibilities, and cost"
+sidebarTitle: "Overview"
+description: "Self-hosting runs Turjuman in your own AWS account — one DynamoDB table and up to three Lambda Function URLs. Understand the topology, what you own, and the cost."
+---
+
+Self-hosting Turjuman means running it in your own AWS account. There is no hosted service to sign up for: you deploy one DynamoDB table and up to three Lambda Function URLs, hold the only API keys, and own the data end to end. Turjuman ships as a standalone AWS CDK construct, [`@turjuman/aws-cdk`](/self-hosting/deploy), with the Lambda handlers pre-bundled — you deploy it with the AWS CDK CLI (`cdk deploy`) and create the first owner with `turjuman bootstrap`. No SAM CLI, no separate deploy tooling, and no clone of the Turjuman repo.
+
+<Warning>
+  The CDK stack is conventional but has **not yet been verified end-to-end against a live AWS account**. Evaluate Turjuman locally first with [Try it locally](/guides/try-it-locally), and treat the AWS deploy as beta. Please report any issues you encounter.
+</Warning>
+
+## What gets deployed
+
+A Turjuman deployment is fully serverless — there are no always-on servers, no API Gateway, and no Cognito. It is a single DynamoDB table fronted by stateless Lambda Function URLs.
+
+| Component | What it is | Deployed |
+|---|---|---|
+| **MCP server** | A Lambda Function URL — the primary surface for AI agents and agentic IDEs | Always |
+| **REST API** | A Lambda Function URL — backs the developer CLI and CI pipelines | Optional (toggle) |
+| **Webhook dispatcher** | A Lambda that consumes DynamoDB Streams and sends HMAC-signed event POSTs | Optional (toggle) |
+| **Data store** | One DynamoDB table (on-demand billing, three GSIs, Streams, `RETAIN` on delete) | Always |
+
+Both Lambda functions are stateless; the DynamoDB table is the single source of truth. Because the connected LLM does the translating itself, there is no machine-translation engine to provision or pay for. For how the surfaces relate to the shared service layer, see [Architecture](/concepts/architecture).
+
+## What you own as the operator
+
+Self-hosting puts you in control of the whole system. That also makes you responsible for it:
+
+- **Access** — you provision the [first OWNER](/self-hosting/security) with `turjuman bootstrap`, then issue, scope, and rotate every API key. The bootstrap route is unauthenticated until claimed — run it immediately after deploy. There is no recovery path if you lose the sole OWNER key.
+- **Network exposure** — Lambda Function URLs are public endpoints. Turjuman validates its own bearer keys (`AuthType: NONE`), so [how you handle keys](/self-hosting/security) is your security boundary.
+- **Backups** — DynamoDB point-in-time recovery is opt-in. Enable it in [Configuration](/self-hosting/configuration) if you want continuous backups.
+- **Upgrades** — you pull new Turjuman versions by bumping `@turjuman/aws-cdk` and redeploying; nothing updates itself.
+- **The AWS bill** — see below.
+
+## Prerequisites
+
+- An AWS account with credentials configured (environment variables, `~/.aws/credentials`, or an IAM role).
+- Node.js 24 or later.
+- The AWS CDK CLI: `npm install -g aws-cdk` (or use `npx cdk`).
+- IAM permissions to create CloudFormation stacks, Lambda functions, DynamoDB tables, and IAM roles.
+
+## Cost
+
+Turjuman uses on-demand DynamoDB billing and AWS Lambda, both of which have generous free tiers:
+
+- **Lambda** — 1 million free requests and 400,000 GB-seconds of compute per month.
+- **DynamoDB** — 25 GB of storage plus pay-per-request operations at fractions of a cent per million.
+
+For most small teams managing translations, the monthly cost is effectively **$0**. There is no per-seat or per-translation pricing, because there is no vendor in the path — you pay AWS for what you use and nothing else.
+
+## Get started
+
+<CardGroup cols={2}>
+  <Card title="Deploy to AWS" icon="cloud-arrow-up" href="/self-hosting/deploy">
+    Stand up the stack with a tiny CDK app, then connect your MCP client and CLI.
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/self-hosting/configuration">
+    Tune memory, timeouts, CORS, backups, and which surfaces are deployed — all in code.
+  </Card>
+  <Card title="Security & API keys" icon="key" href="/self-hosting/security">
+    How keys are stored, scoped, and revoked — and why the bootstrap route is unauthenticated.
+  </Card>
+  <Card title="Try it locally first" icon="flask" href="/guides/try-it-locally">
+    Evaluate the full stack on your machine with LocalStack before deploying.
+  </Card>
+</CardGroup>

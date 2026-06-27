@@ -8,10 +8,10 @@ Turjuman is an open-source, self-hosted translation management system built for 
 
 <CardGroup cols={2}>
   <Card title="Quickstart" icon="rocket" href="/quickstart">
-    Run the full Turjuman stack locally with LocalStack in under 5 minutes — no AWS account needed.
+    Deploy to AWS, connect your agent, and translate your first project.
   </Card>
-  <Card title="Self-host on AWS" icon="cloud" href="/self-hosting">
-    Deploy to your own AWS account with the `@turjuman/aws-cdk` construct and `cdk deploy`.
+  <Card title="Try it locally" icon="flask" href="/guides/try-it-locally">
+    Run the whole stack on your machine with LocalStack — no AWS account needed.
   </Card>
   <Card title="Translate with MCP" icon="robot" href="/guides/translate-with-mcp">
     Use your AI agent to create projects, add locales, and translate keys in natural language.
@@ -61,7 +61,13 @@ Your MCP client and your developer CLI both authenticate with a bearer API key. 
 ## Next steps
 
 <CardGroup cols={2}>
-  <Card title="Concepts: Architecture" icon="building" href="/concepts/architecture">
+  <Card title="Why MCP-first" icon="wand-magic-sparkles" href="/concepts/why-mcp-first">
+    The design philosophy: agent-driven, developer-first, no web UI, bring your own model.
+  </Card>
+  <Card title="How agents use Turjuman" icon="robot" href="/concepts/how-agents-use-turjuman">
+    Classic vs. code mode, how agents discover capability, and how authorization stays consistent.
+  </Card>
+  <Card title="Architecture" icon="building" href="/concepts/architecture">
     Understand the domain model, data storage, and how the MCP and REST surfaces relate.
   </Card>
   <Card title="Roles & Permissions" icon="lock" href="/concepts/roles-and-permissions">
