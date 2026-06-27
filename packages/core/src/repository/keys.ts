@@ -5,6 +5,9 @@
 
 export const userPK = (id: string) => `USER#${id}`;
 export const emailPK = (email: string) => `USEREMAIL#${email.toLowerCase()}`;
+/** Singleton marker reserving the single OWNER bootstrap slot for an org. Written
+ * with `attribute_not_exists` so first-owner creation is atomic under concurrency. */
+export const orgOwnerPK = (orgId: string) => `ORGOWNER#${orgId}`;
 export const apiKeyPK = (hash: string) => `APIKEY#${hash}`;
 export const orgGSI1PK = (orgId: string) => `ORG#${orgId}`;
 export const projectPK = (id: string) => `PROJECT#${id}`;

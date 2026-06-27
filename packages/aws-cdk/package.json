@@ -12,7 +12,8 @@
 		"./package.json": "./package.json"
 	},
 	"files": [
-		"dist"
+		"dist",
+		"lambda"
 	],
 	"publishConfig": {
 		"access": "public"
@@ -38,20 +39,19 @@
 		"node": ">=24"
 	},
 	"scripts": {
-		"build": "tsc -p tsconfig.json",
+		"build": "tsc -p tsconfig.json && node scripts/vendor-lambda.mjs",
 		"typecheck": "tsc -p tsconfig.json --noEmit",
 		"test": "vitest run",
-		"clean": "rm -rf dist"
+		"clean": "rm -rf dist lambda",
+		"prepublishOnly": "pnpm run build"
 	},
 	"peerDependencies": {
 		"aws-cdk-lib": "^2.259.0",
 		"constructs": "^10.6.0"
 	},
-	"dependencies": {
-		"@turjuman/api": "workspace:*",
-		"@turjuman/mcp-server": "workspace:*"
-	},
 	"devDependencies": {
+		"@turjuman/api": "workspace:*",
+		"@turjuman/mcp-server": "workspace:*",
 		"aws-cdk-lib": "^2.259.0",
 		"constructs": "^10.6.0"
 	}

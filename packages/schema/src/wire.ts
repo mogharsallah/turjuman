@@ -22,6 +22,7 @@ import {
 	apiKeySchema,
 	translationKeySchema,
 	translationSchema,
+	userSchema,
 	webhookSchema,
 } from "./domain.js";
 import type { ErrorCode } from "./errors.js";
@@ -99,6 +100,19 @@ export const bundlePageSchema = z
 	})
 	.openapi({ ref: "BundlePage" });
 export type BundlePage = z.infer<typeof bundlePageSchema>;
+
+/** Result of `POST /v1/bootstrap`: the created OWNER and its one-time API key
+ * secret. The secret is shown exactly once — it is never stored (only its hash)
+ * and never returned again. */
+export const bootstrapResultSchema = z
+	.object({
+		user: userSchema,
+		secret: z
+			.string()
+			.describe("The one-time API key secret — shown once, store it now."),
+	})
+	.openapi({ ref: "BootstrapResult" });
+export type BootstrapResult = z.infer<typeof bootstrapResultSchema>;
 
 /** Summary returned by a key import (CLI push of source keys). */
 export const importKeysResultSchema = z

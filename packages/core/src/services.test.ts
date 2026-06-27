@@ -25,6 +25,37 @@ describe("TurjumanService (in-memory)", () => {
 		expect(forced.user.globalRole).toBe("OWNER");
 	});
 
+	it("createOwnerWithKey enforces one owner per org atomically (race guard)", async () => {
+		// Models the lost-race case the pre-check can't catch: two callers that both
+		// passed the empty-org check then race to write. The org-owner sentinel makes
+		// only the first succeed; the second's transaction is rejected as a conflict.
+		const { repo } = setup();
+		const now = new Date().toISOString();
+		const owner = (id: string, email: string) => ({
+			id,
+			orgId: "default",
+			email,
+			name: id,
+			globalRole: "OWNER" as const,
+			createdAt: now,
+			updatedAt: now,
+		});
+		const key = (id: string, userId: string) => ({
+			id,
+			orgId: "default",
+			userId,
+			name: "bootstrap",
+			hash: `hash_${id}`,
+			prefix: "op_live_x",
+			createdAt: now,
+		});
+		await repo.createOwnerWithKey(owner("u1", "a@acme.com"), key("k1", "u1"));
+		await expect(
+			repo.createOwnerWithKey(owner("u2", "b@acme.com"), key("k2", "u2")),
+		).rejects.toMatchObject({ code: "CONFLICT" });
+		expect(await repo.listUsersByOrg("default")).toHaveLength(1);
+	});
+
 	it("revokes an API key so it no longer authenticates", async () => {
 		const { repo, svc } = setup();
 		const { actor } = await ownerActor(repo);

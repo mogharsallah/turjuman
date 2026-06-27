@@ -7,8 +7,8 @@ import {
 
 /**
  * Tags stamped on every Turjuman stack at deploy time. `findManagedStacks`
- * keys off `turjuman:managed` so `status`/`teardown` can locate installs even
- * when the operator renamed the stack or has no local turjuman.deploy.json.
+ * keys off `turjuman:managed` so the dev/e2e teardown scripts can locate
+ * installs even when the operator renamed the stack.
  */
 export const STACK_TAGS: { Key: string; Value: string }[] = [
 	{ Key: "app", Value: "turjuman" },
@@ -18,6 +18,10 @@ const MANAGED_TAG_KEY = "turjuman:managed";
 const MANAGED_TAG_VALUE = "true";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Hard cap on the delete poll loop so a stuck CloudFormation delete can't hang
+ * teardown forever (this small stack deletes in ~1-2 min; 15 is generous). */
+const DELETE_TIMEOUT_MS = 15 * 60 * 1000;
 
 /** Current status of a stack, or undefined if it does not exist. */
 async function stackStatus(
@@ -82,8 +86,8 @@ export async function describeStack(
  * Find every Turjuman-managed stack in the client's region by the
  * `turjuman:managed` tag. Pages through all stacks (DescribeStacks with no
  * name lists non-deleted stacks) and filters client-side, so it works even for
- * renamed stacks with no local config. CloudFormation is regional — this only
- * sees the region the client was constructed with.
+ * renamed stacks. CloudFormation is regional — this only sees the region the
+ * client was constructed with.
  */
 export async function findManagedStacks(
 	cfn: CloudFormationClient,
@@ -148,6 +152,7 @@ async function attemptDelete(
 	);
 
 	let last = "";
+	const deadline = Date.now() + DELETE_TIMEOUT_MS;
 	for (;;) {
 		const status = await stackStatus(cfn, name);
 		if (status === undefined) return "gone"; // DELETE_COMPLETE
@@ -156,6 +161,13 @@ async function attemptDelete(
 			last = status;
 		}
 		if (status === "DELETE_FAILED") return "failed";
+		// A stuck DELETE_IN_PROGRESS would otherwise poll forever; bound the wait so
+		// dev/e2e teardown fails loudly instead of hanging.
+		if (Date.now() >= deadline) {
+			throw new Error(
+				`Timed out after ${Math.round(DELETE_TIMEOUT_MS / 60000)} min waiting for stack "${name}" to delete (last status: ${status}).`,
+			);
+		}
 		await sleep(5000);
 	}
 }

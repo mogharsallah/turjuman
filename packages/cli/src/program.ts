@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import { registerBootstrap } from "./commands/bootstrap.js";
 import { registerCheck } from "./commands/check.js";
 import { registerFormats } from "./commands/formats.js";
 import { registerInit } from "./commands/init.js";
@@ -11,17 +12,20 @@ import { type CliDeps, defaultClientFactory, realLoadConfig } from "./deps.js";
 import { createSink, wantsJson } from "./output.js";
 import { cliVersion } from "./version.js";
 
-/** The self-host/deploy verbs moved to the separate `@turjuman/aws-deploy` tool
- * so the sync CLI install stays free of the AWS SDK + CDK. Point users there. */
-const DEPLOY_VERBS = new Set(["deploy", "status", "teardown", "bootstrap"]);
+/** Self-hosting (deploy/inspect/teardown) is no longer a CLI: it's the
+ * `@turjuman/aws-cdk` construct deployed with `cdk deploy`. Catch the old verbs so
+ * muscle-memory `turjuman deploy` gets a useful pointer instead of a bare
+ * "unknown command". (`bootstrap` IS a real command now — handled above.) */
+const DEPLOY_VERBS = new Set(["deploy", "status", "teardown"]);
 
 function registerDeployHint(program: Command): void {
 	program.on("command:*", (operands: string[]) => {
 		const cmd = operands[0];
 		if (cmd && DEPLOY_VERBS.has(cmd)) {
 			process.stderr.write(
-				`"${cmd}" is part of the Turjuman self-host tooling. Run it with:\n` +
-					`  npx @turjuman/aws-deploy ${cmd}\n`,
+				`"${cmd}" is no longer a CLI command. Self-host Turjuman with the ` +
+					"@turjuman/aws-cdk construct (deploy with `cdk deploy`), then run " +
+					'"turjuman bootstrap" to create the first owner. See the self-hosting guide.\n',
 			);
 		} else {
 			process.stderr.write(
@@ -47,6 +51,7 @@ export function buildProgram(deps: CliDeps): Command {
 		);
 
 	registerLogin(program, deps);
+	registerBootstrap(program, deps);
 	registerInit(program, deps);
 	registerProjects(program, deps);
 	registerLocales(program, deps);
