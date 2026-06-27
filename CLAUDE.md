@@ -3,6 +3,8 @@ Turjuman is open-source, self-hosted translation management driven primarily thr
 It runs serverless on AWS (Lambda Function URLs + a single DynamoDB table). Deliberate non-goals: no
 web UI, no built-in machine-translation engine, no vendor marketplace (see `ROADMAP.md`).
 
+**Follow YAGNI principles, and one-liner solutions.**
+
 ## Commands
 
 Standard scripts (`build`, `typecheck`, `test`, `check`, `clean`, …) live in `package.json`. The
