@@ -32,7 +32,7 @@ The commands above are *how to run* the suites. For *how to write* tests — the
 new or changed test must follow (the independent-oracle rule, the L0–L5 test layers, fakes &
 isolation, property tests, determinism, coverage discipline) — read `TESTING.md` at the repo root.
 
-LocalStack-backed tests (need Docker; see `docs/contributing.mdx`):
+LocalStack-backed tests (need Docker):
 
 ```bash
 pnpm run localstack:up && pnpm run test:integration && pnpm run localstack:down   # Tier A: repo+services vs real DynamoDB
