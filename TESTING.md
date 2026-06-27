@@ -4,7 +4,7 @@ Testing conventions for Turjuman. Concise by design — these rules are meant to
 humans and coding agents before writing or changing tests. New test code must conform.
 
 For *how to run* the suites (commands, the LocalStack tiers, CI), see `CLAUDE.md` and
-`docs/contributing.mdx`. This file is about *how to write tests that actually pin behavior*.
+`CONTRIBUTING.md`. This file is about *how to write tests that actually pin behavior*.
 
 ## Core principle
 

@@ -138,11 +138,11 @@ The full documentation lives in [`docs/`](docs/) and is published as a documenta
 auto-generates `llms.txt` / `llms-full.txt` and an "open in Claude/ChatGPT" menu per page), and the
 agents working in this repo. Start here:
 
-- [Introduction](docs/index.mdx) · [Quickstart](docs/quickstart.mdx) (run locally, no AWS) · [Self-hosting](docs/self-hosting.mdx) (deploy on AWS)
+- [Introduction](docs/introduction.mdx) · [Quickstart](docs/quickstart.mdx) (run locally, no AWS) · [Self-hosting](docs/self-hosting.mdx) (deploy on AWS)
 - [Architecture](docs/concepts/architecture.mdx) · [Roles & permissions](docs/concepts/roles-and-permissions.mdx) · [Lifecycle](docs/concepts/lifecycle.mdx)
 - [Translate with MCP](docs/guides/translate-with-mcp.mdx) · [Sync with the CLI](docs/guides/sync-with-cli.mdx) · [Quality checks](docs/guides/quality-checks.mdx) · [Webhooks](docs/guides/webhooks.mdx)
 - Reference: [MCP tools](docs/reference/mcp-tools.mdx) · [CLI commands](docs/reference/cli-commands.mdx) · [File formats](docs/reference/file-formats.mdx) · [QA checks](docs/reference/qa-checks.mdx)
-- [Contributing](docs/contributing.mdx) · [Roadmap](ROADMAP.md)
+- [Contributing](CONTRIBUTING.md) · [Roadmap](ROADMAP.md)
 
 ## Development
 
@@ -177,7 +177,7 @@ a `PostToolUse` hook (`.claude/hooks/biome-format.sh`) auto-formats each file as
 the agent edits it. The generated `docs/api-reference/openapi.json` snapshot is
 owned by `gen:openapi` and excluded from Biome.
 
-See [Contributing](docs/contributing.mdx) for the full testing guide (unit,
+See [Contributing](CONTRIBUTING.md) for the full testing guide (unit,
 LocalStack integration, and deployed end-to-end), which also runs in CI.
 
 ## License

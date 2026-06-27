@@ -1,28 +1,36 @@
 ---
-title: <Concept name>
-description: "<One sentence: what this concept is and why it matters. Feeds llms.txt.>"
+title: "About [concept or feature]"
+description: "Understand [concept] and how it works in Turjuman — ~130–160 chars, active voice, leads with the point."
 ---
 
-<!-- CONCEPT (explanation): the model and the *why*. No step-by-step. Open with a one-paragraph
-     definition the reader can quote, then expand. Diagrams and state/role tables are welcome. -->
+{/* CONCEPT / Explanation. Job: build understanding — the model and the *why*. No step-by-step (that's
+    a guide). Diagrams (<Frame>/Mermaid) and state/role tables belong here. See doc-types.md. */}
 
-<One-paragraph definition of the concept in plain language.>
+[One or two sentences defining the concept and why it matters. Lead with the answer.]
 
-## <The model>
+## How [concept] works
 
-<Explain how it works. Use a fenced code block for ASCII diagrams, or a table for states/roles.>
+[Explain the model. Use a diagram where it helps.]
 
-| Thing | Property | Notes |
-|---|---|---|
-| … | … | … |
+<Frame>
+  ![Descriptive alt text: what the diagram shows and why](/images/your-diagram.png)
+</Frame>
 
-## Design decisions
+## Why it works this way
 
-<Why it's built this way; trade-offs considered and rejected. This is the part that belongs in a
-concept page and nowhere else.>
+[The design rationale and trade-offs — the part that only belongs on a concept page.]
+
+## When it applies
+
+[When the reader encounters or should reason about this.]
+
+## Relationship to other concepts
+
+[How it connects to neighbouring ideas. Cross-link with root-relative paths, e.g.
+[the lifecycle](/concepts/lifecycle).]
+
+## Common misconceptions
 
 <Note>
-  Link to the relevant guide for "how do I use this?" (e.g. [Run quality checks](/guides/quality-checks))
-  and to the reference for exhaustive detail. Link repo-only files (ROADMAP.md) with
-  absolute GitHub URLs.
+  [Clear up a frequent misunderstanding.]
 </Note>

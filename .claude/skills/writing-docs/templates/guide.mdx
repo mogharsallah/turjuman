@@ -1,44 +1,56 @@
 ---
-title: <Verb-first task, e.g. "Sync files with the CLI">
-description: "<One sentence: the task this guide accomplishes. Feeds llms.txt.>"
+title: "[Verb-first task, e.g. Sync files with the CLI]"
+description: "[Do specific task] to [achieve outcome] — ~130–160 chars, active voice."
 ---
 
-<!-- GUIDE (how-to): a goal-oriented sequence. Show the minimum to accomplish the task; link to the
-     Reference for the exhaustive option list. Lead with what the reader does. -->
+{/* GUIDE / How-to. Job: get the reader through one task. Show the minimum to accomplish it; link the
+    reference for the exhaustive option list. Lead with what the reader does. See doc-types.md. */}
 
-<One or two sentences framing the task and when you'd do it. Link to the reference page for the full
-catalogue of options.>
+[One or two sentences framing the task and when you'd do it. Link to the reference page for the full
+catalogue of options.]
 
-## <Do the thing>
+## Prerequisites
+
+[Optional — what the reader needs first (an API key, a project, a role). Remove if none.]
+
+## [Action-oriented heading — the task]
 
 <Steps>
-  <Step title="<First action>">
+  <Step title="[First action]">
     ```bash
-    <command>
+    [command]
     ```
   </Step>
-  <Step title="<Next action>">
-    <Explanation + command.>
+  <Step title="[Next action]">
+    [Explanation + command.]
   </Step>
 </Steps>
 
-<!-- For per-surface variants (agent vs CLI vs REST), prefer <Tabs>: -->
+{/* For per-surface variants (agent vs CLI vs REST), prefer <Tabs>: */}
 
 <Tabs>
   <Tab title="MCP (agent)">
-    > "<example natural-language prompt>"
+    Ask the agent: "[example natural-language prompt]"
   </Tab>
   <Tab title="CLI">
     ```bash
-    <command>
+    [command]
     ```
   </Tab>
 </Tabs>
 
-<Warning>
-  Call out the one footgun for this task (e.g. round-trip caveats, destructive flags).
-</Warning>
+## Verify
 
-## Next steps
+[Optional — how the reader confirms it worked.]
 
-<Link to the related reference page and adjacent guides.>
+<Tip>
+  [A useful shortcut or the recommended way to do this faster.]
+</Tip>
+
+## Troubleshooting
+
+[Optional — the one or two failure modes and their fixes. An <AccordionGroup> works well here.]
+
+## Related
+
+[Link the matching reference page and adjacent guides, root-relative.]

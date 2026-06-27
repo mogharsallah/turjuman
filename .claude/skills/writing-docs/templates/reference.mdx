@@ -1,33 +1,45 @@
 ---
-title: <Reference subject, e.g. "MCP tools">
-description: "<One sentence: what this page lists exhaustively. Feeds llms.txt.>"
+title: "[Subject] reference"
+description: "Complete reference for [feature/API] — what it lists, ~130–160 chars, active voice."
 ---
 
-<!-- REFERENCE: exhaustive and dry. Tables, stable ordering, no narrative or opinions. This is what
-     agents scrape, so keep names verbatim from the source. Link to a guide for "how do I use this?". -->
+{/* REFERENCE. Job: exhaustive and dry — every item, default, limit, edge case. Tables or fields,
+    stable ordering, no narrative or opinions. Names verbatim from source (agents scrape this).
+    Point to the matching guide for "how do I use this?". See doc-types.md. */}
 
-<One sentence pointing to the matching guide for usage, and stating the auth/permission needed.>
+[One sentence stating what this lists and the auth/permission needed; link the matching guide for usage.]
 
-## <Group / category>
+## [Group / category]
 
-| Name | Purpose / parameters |
-|---|---|
-| `<exact_name>` | <what it does; params in `code`> |
-| `<exact_name>` | … |
+| Name | Purpose | Notes / limits |
+|---|---|---|
+| `[exact_name]` | [what it does] | [defaults, limits, edge cases] |
+| `[exact_name]` | … | … |
 
-## <Another group>
+## Parameters
 
-| … | … |
-|---|---|
+{/* For structured params/props/responses, use Fields rather than a hand-built table: */}
 
-<!-- For payload/response shapes use a jsonc block: -->
+<ParamField path="name" type="string" required>
+  [What it is, constraints, default.]
+</ParamField>
 
-```jsonc
+<ResponseField name="field" type="string">
+  [What the response field contains.]
+</ResponseField>
+
+## Examples
+
+```bash title="Basic"
+[minimal example]
+```
+
+```jsonc title="Response"
 {
-  "field": "value"   // comment
+  "field": "value"  // comment
 }
 ```
 
-<Note>
-  Note any stable-sort order, paging (`limit`/`cursor`), or error convention an agent needs.
-</Note>
+## Related references
+
+[Link sibling reference pages and the usage guide, root-relative.]
