@@ -1,0 +1,63 @@
+---
+title: "Configure a self-hosted Turjuman deployment"
+sidebarTitle: "Configuration"
+description: "Tune a Turjuman deployment with TurjumanStack props in your CDK app — Lambda memory and timeout, CORS, DynamoDB backups, which surfaces deploy, and VPC placement."
+---
+
+You configure a Turjuman deployment by passing props to `TurjumanStack` in your CDK app's `app.mjs` — composition in code, not CLI flags or a config file. Every prop is optional; the defaults reproduce the standard stack. This page is the reference for those props. For the deploy flow itself, see [Deploy to AWS](/self-hosting/deploy).
+
+## Set props in your CDK app
+
+Edit the `TurjumanStack` instantiation in `app.mjs`, then redeploy with `cdk deploy`:
+
+```js app.mjs
+import { App } from "aws-cdk-lib";
+import { TurjumanStack } from "@turjuman/aws-cdk";
+
+const app = new App();
+new TurjumanStack(app, "Turjuman", {
+  stackName: "turjuman",
+  corsAllowOrigins: ["https://app.example.com"],
+  functionDefaults: { memorySize: 512, timeout: 30 },
+  mcp: { memorySize: 1024 }, // per-function override
+  api: { enabled: true },
+  webhook: { enabled: true },
+  table: { pointInTimeRecovery: true, deletionProtection: true },
+});
+```
+
+## Props
+
+| Prop | Default | Description |
+|------|---------|-------------|
+| `stackName` | construct id | CloudFormation stack name. |
+| `corsAllowOrigins` | `["*"]` | Allowed origins for Function URL CORS. |
+| `functionDefaults.memorySize` | `256` | Lambda memory (MB) applied to every function. |
+| `functionDefaults.timeout` | `15` | Lambda timeout (seconds) applied to every function. |
+| `functionDefaults.architecture` | `"arm64"` | CPU architecture (`"arm64"` or `"x86_64"`). |
+| `mcp` / `api` / `webhook` | — | Per-function tuning that overrides `functionDefaults`. |
+| `api.enabled` / `webhook.enabled` | `true` | Deploy that surface. Set `false` to remove it. |
+| `webhook.streamStartingPosition` | `"LATEST"` | Where the Streams poller starts reading: `"LATEST"` (only changes made after deploy) or `"TRIM_HORIZON"` (from the shard start). |
+| `table.billingMode` | `"PAY_PER_REQUEST"` | `"PROVISIONED"` uses `readCapacity`/`writeCapacity`. |
+| `table.pointInTimeRecovery` | `false` | Continuous backups on the DynamoDB table. |
+| `table.deletionProtection` | `false` | Block table deletion at the DynamoDB API level. |
+| `vpc` | — | Run the functions inside an existing VPC (`subnetIds`, `securityGroupIds`). |
+
+<Tip>
+  For a production deployment, set `corsAllowOrigins` to your own origins instead of `*`, and enable `table.pointInTimeRecovery` so you have continuous backups. Both are operator responsibilities — see the [Overview](/self-hosting/overview).
+</Tip>
+
+## Disable a surface
+
+`api` and `webhook` are deployed by default. Set `enabled: false` to remove either — for example, an MCP-only deployment with no REST API:
+
+```js
+new TurjumanStack(app, "Turjuman", {
+  api: { enabled: false },
+  webhook: { enabled: false },
+});
+```
+
+<Note>
+  `turjuman bootstrap` and the developer CLI talk to the REST API. If you disable it (`api.enabled: false`), there is no bootstrap route — re-enable the REST API to create the first owner, then disable it again if you wish. See [Security & API keys](/self-hosting/security).
+</Note>

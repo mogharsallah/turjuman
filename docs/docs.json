@@ -22,18 +22,20 @@
 	"navigation": {
 		"tabs": [
 			{
-				"tab": "Documentation",
+				"tab": "Using Turjuman",
 				"groups": [
 					{
 						"group": "Get Started",
-						"pages": ["introduction", "quickstart", "self-hosting"]
+						"pages": ["introduction", "quickstart", "guides/try-it-locally"]
 					},
 					{
 						"group": "Concepts",
 						"pages": [
+							"concepts/why-mcp-first",
 							"concepts/architecture",
 							"concepts/lifecycle",
-							"concepts/roles-and-permissions"
+							"concepts/roles-and-permissions",
+							"concepts/how-agents-use-turjuman"
 						]
 					},
 					{
@@ -43,35 +45,55 @@
 							"guides/code-mode",
 							"guides/sync-with-cli",
 							"guides/quality-checks",
-							"guides/webhooks"
-						]
-					},
-					{
-						"group": "Reference",
-						"pages": [
-							"reference/mcp-tools",
-							"reference/cli-commands",
-							"reference/file-formats",
-							"reference/qa-checks"
+							"guides/webhooks",
+							"guides/connect-claude-code"
 						]
 					}
 				]
 			},
 			{
-				"tab": "API Reference",
+				"tab": "Reference",
 				"groups": [
 					{
-						"group": "REST API",
-						"pages": ["api-reference/overview"]
+						"group": "Reference",
+						"pages": [
+							"reference/mcp-tools",
+							"reference/cli-commands",
+							"reference/rest-api",
+							"reference/file-formats",
+							"reference/qa-checks",
+							"reference/glossary"
+						]
 					},
 					{
 						"group": "Endpoints",
 						"openapi": "api-reference/openapi.json"
 					}
 				]
+			},
+			{
+				"tab": "Self-hosting",
+				"groups": [
+					{
+						"group": "Self-hosting",
+						"pages": [
+							"self-hosting/overview",
+							"self-hosting/deploy",
+							"self-hosting/configuration",
+							"self-hosting/security"
+						]
+					}
+				]
 			}
 		]
 	},
+	"redirects": [
+		{ "source": "/self-hosting", "destination": "/self-hosting/overview" },
+		{
+			"source": "/api-reference/overview",
+			"destination": "/reference/rest-api"
+		}
+	],
 	"footer": {
 		"socials": {
 			"github": "https://github.com/mogharsallah/turjuman"

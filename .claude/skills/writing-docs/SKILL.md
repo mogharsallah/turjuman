@@ -101,7 +101,8 @@ When code changes, update the matching page(s) in the **same PR**. The durable p
 > documented **once at the reference level** (`reference/mcp-tools.mdx`) plus a workflow guide if it
 > enables a new task. The REST endpoint page is auto-generated from the operation's `http` binding —
 > never hand-written. Domain concepts (schema fields, RBAC) go to `concepts/`; CLI to
-> `reference/cli-commands.mdx`; formats and QA checks to their `reference/` page.
+> `reference/cli-commands.mdx`; formats and QA checks to their `reference/` page; operator and deploy
+> content to the `self-hosting/` tab.
 
 **First decide whether the change is a *content* edit or a *structural* one** — a new page, group, or
 tab, or splitting/moving/renaming a page (a new *domain* usually is structural; another operation in an
@@ -114,8 +115,9 @@ and the structural-change ripple checklist. Open it; don't re-derive the mapping
 
 Don't hand-write REST endpoint pages. The API serves its own OpenAPI 3.1 spec at
 `GET /v1/openapi.json` (hono-openapi + the shared zod schemas). `pnpm run gen:openapi` snapshots it
-to `docs/api-reference/openapi.json`, and the "Endpoints" group in `docs/docs.json` points its
-`openapi` field at that file, so Mintlify generates a page + interactive playground per endpoint.
+to `docs/api-reference/openapi.json`, and the "Endpoints" group in the **Reference** tab of
+`docs/docs.json` points its `openapi` field at that file, so Mintlify generates a page + interactive
+playground per endpoint.
 
 - A route that maps cleanly to an operation is generated via `projectOperation(...)` and carries the
   operation's `describeRoute({ summary, tags, ... })` annotation automatically; bespoke routes need

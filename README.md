@@ -84,7 +84,7 @@ talking to it.
 
 Instantiate the `TurjumanStack` in a tiny CDK app and deploy it with the AWS CDK CLI. The construct
 vendors its Lambda bundles, so there's no SAM CLI and no repo clone (see
-[Self-hosting](docs/self-hosting.mdx) for the full walkthrough and config):
+[Self-hosting](docs/self-hosting/overview.mdx) for the full walkthrough and config):
 
 ```bash
 npm install @turjuman/aws-cdk aws-cdk-lib constructs
@@ -146,10 +146,11 @@ The full documentation lives in [`docs/`](docs/) and is published as a documenta
 auto-generates `llms.txt` / `llms-full.txt` and an "open in Claude/ChatGPT" menu per page), and the
 agents working in this repo. Start here:
 
-- [Introduction](docs/introduction.mdx) · [Quickstart](docs/quickstart.mdx) (run locally, no AWS) · [Self-hosting](docs/self-hosting.mdx) (deploy on AWS)
-- [Architecture](docs/concepts/architecture.mdx) · [Roles & permissions](docs/concepts/roles-and-permissions.mdx) · [Lifecycle](docs/concepts/lifecycle.mdx)
-- [Translate with MCP](docs/guides/translate-with-mcp.mdx) · [Sync with the CLI](docs/guides/sync-with-cli.mdx) · [Quality checks](docs/guides/quality-checks.mdx) · [Webhooks](docs/guides/webhooks.mdx)
-- Reference: [MCP tools](docs/reference/mcp-tools.mdx) · [CLI commands](docs/reference/cli-commands.mdx) · [File formats](docs/reference/file-formats.mdx) · [QA checks](docs/reference/qa-checks.mdx)
+- Get started: [Introduction](docs/introduction.mdx) · [Quickstart](docs/quickstart.mdx) (deploy to AWS) · [Try it locally](docs/guides/try-it-locally.mdx) (no AWS)
+- Concepts: [Why MCP-first](docs/concepts/why-mcp-first.mdx) · [Architecture](docs/concepts/architecture.mdx) · [Lifecycle](docs/concepts/lifecycle.mdx) · [Roles & permissions](docs/concepts/roles-and-permissions.mdx) · [How agents use Turjuman](docs/concepts/how-agents-use-turjuman.mdx)
+- Guides: [Translate with MCP](docs/guides/translate-with-mcp.mdx) · [Code mode](docs/guides/code-mode.mdx) · [Sync with the CLI](docs/guides/sync-with-cli.mdx) · [Quality checks](docs/guides/quality-checks.mdx) · [Webhooks](docs/guides/webhooks.mdx) · [Connect Claude Code](docs/guides/connect-claude-code.mdx)
+- Reference: [MCP tools](docs/reference/mcp-tools.mdx) · [CLI commands](docs/reference/cli-commands.mdx) · [REST API](docs/reference/rest-api.mdx) · [File formats](docs/reference/file-formats.mdx) · [QA checks](docs/reference/qa-checks.mdx) · [Glossary](docs/reference/glossary.mdx)
+- Self-hosting: [Overview](docs/self-hosting/overview.mdx) · [Deploy to AWS](docs/self-hosting/deploy.mdx) · [Configuration](docs/self-hosting/configuration.mdx) · [Security & API keys](docs/self-hosting/security.mdx)
 - [Contributing](CONTRIBUTING.md) · [Roadmap](ROADMAP.md)
 
 ## Development

@@ -1,10 +1,10 @@
 ---
 title: "Turjuman REST API Reference: Endpoints, Auth, and Errors"
-sidebarTitle: "Overview"
-description: "Endpoint reference for the Turjuman self-hosted REST API — authentication, base URL, all supported routes, and the JSON error envelope."
+sidebarTitle: "REST API"
+description: "Endpoint reference for the Turjuman REST API — authentication, base URL, all supported routes, and the JSON error envelope."
 ---
 
-The Turjuman REST API is the backend that powers the `turjuman` CLI and your CI pipelines. It exposes a focused set of file-shaped operations — listing projects, exporting delivery bundles, and importing locale files — so that automated workflows always get predictable, deterministic responses. The base URL is the `ApiUrl` printed when you deploy your Turjuman instance.
+The Turjuman REST API is the backend that powers the `turjuman` CLI and your CI pipelines. It exposes a focused set of file-shaped operations — listing projects, exporting delivery bundles, and importing locale files — so that automated workflows always get predictable, deterministic responses. The base URL is your Turjuman instance's REST endpoint.
 
 <Note>
   The REST surface is intentionally narrow. It covers list, export, and import operations only. For full project management — creating or updating projects, translating strings, managing members, or working with your glossary — use the [MCP server](/reference/mcp-tools) instead.
@@ -33,7 +33,7 @@ The following endpoints are public and do not require authentication:
 
 ## Base URL
 
-Your base URL is the `ApiUrl` stack output printed by `cdk deploy` (see [Self-Hosting](/self-hosting)):
+Your base URL is your Turjuman instance's REST endpoint. When you self-host, it is the `ApiUrl` stack output printed by `cdk deploy` (see [Self-hosting](/self-hosting/overview)):
 
 ```
 Turjuman.ApiUrl = https://yyyy.lambda-url.us-east-1.on.aws/

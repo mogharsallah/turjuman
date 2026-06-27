@@ -43,47 +43,61 @@ rows commonly go structural.
 |---|---|
 | A **capability**: a service in `packages/core/src/services/` + its `Operation` in `packages/sdk/src/operations/` | `reference/mcp-tools.mdx` (row in the right group) + a workflow in `guides/translate-with-mcp.mdx` (and `guides/code-mode.mdx`) if it enables a new task. REST page auto-generated from the `http` binding. Use the operation name **verbatim**. |
 | A **brand-new domain** (`XService` + a new operations group) | **Usually structural** — a new Guide (the task) + a new Reference surface, registered in `docs.json`; a Concept page only if there's a non-obvious model. See *Structural changes*. |
-| A **CLI command or flag** (`packages/cli/src/`, commands in `src/commands/`) | `reference/cli-commands.mdx` (+ `guides/sync-with-cli.mdx` if the workflow changed; + `self-hosting.mdx` for deploy/teardown/status) |
+| A **CLI command or flag** (`packages/cli/src/`, commands in `src/commands/`) | `reference/cli-commands.mdx` (+ `guides/sync-with-cli.mdx` if the workflow changed; + `self-hosting/deploy.mdx` for deploy/teardown/status) |
 | A **file-format adapter** (`packages/formats/src/`, `ADAPTERS` in `formats/src/index.ts`) | `reference/file-formats.mdx` |
 | A **QA check** (`packages/schema/src/qa/checks/`, `CHECKS` in `qa/index.ts`) | `reference/qa-checks.mdx` (catalogue row + any limit); `guides/quality-checks.mdx` only if behaviour changed |
-| A **data-model / schema field** (`packages/schema/src/domain.ts`; repository in `packages/core/src/repository/`) | `concepts/architecture.mdx`; + `concepts/lifecycle.mdx` if it's lifecycle state (status, slots, `origin`, `stale`, `state`) |
-| **RBAC / permissions** (`packages/schema/src/rbac.ts`) | `concepts/roles-and-permissions.mdx` |
-| **CDK construct / deploy** (`packages/aws-cdk/src/`, deploy primitives in `packages/deploy-internal/src/`; first-owner `bootstrap` route/command) | `self-hosting.mdx` |
+| A **data-model / schema field** (`packages/schema/src/domain.ts`; repository in `packages/core/src/repository/`) | `concepts/architecture.mdx`; + `concepts/lifecycle.mdx` if it's lifecycle state (status, slots, `origin`, `stale`, `state`); + a `reference/glossary.mdx` term if it adds vocabulary |
+| **RBAC / permissions / roles** (`packages/schema/src/rbac.ts`) | `concepts/roles-and-permissions.mdx`; + a `reference/glossary.mdx` term if a role is added; + `self-hosting/security.mdx` if key scoping changes |
+| **MCP connection: modes, transport, or URL scoping** (`packages/mcp-server/src/scope.ts`, `codemode.ts`) | `reference/mcp-tools.mdx` (scoping/mode tables) + `guides/connect-claude-code.mdx` + `concepts/how-agents-use-turjuman.mdx` (+ `guides/code-mode.mdx` for code-mode behaviour) |
+| **CDK construct / deploy / config** (`packages/aws-cdk/src/`, deploy primitives in `packages/deploy-internal/src/`; first-owner `bootstrap` route/command) | `self-hosting/deploy.mdx` (flow, outputs, commands); + `self-hosting/configuration.mdx` for stack props/tuning; + `self-hosting/security.mdx` for auth/key/bootstrap changes |
+| **Product framing / MCP-first scope** (the non-goals: no web UI, no MT engine) | `concepts/why-mcp-first.mdx` |
 | **Tests / tiers** (`packages/*/`, `.github/workflows/`) | `CLAUDE.md` / `TESTING.md` (no docs-site page today) |
 | **Shipped/planned status** | `ROADMAP.md` at the repo root — not a docs page; refer to it in prose, don't link it |
 
 ## Structural changes (the docs shape itself)
 
+**Governing rule — live nav holds only real, substantial pages.** Never register an empty or
+placeholder page in `docs.json` to "reserve a slot," and never split a tab into stubs you intend to
+fill later. A page joins the navigation only when it has real content; until then it waits in the
+**Backlog map** below. This follows Diátaxis: an empty structure is worse than no structure. When a
+backlog page earns its content, promote it (write it, register it, cross-link it) in one change.
+
 ### The structure today (where things live, and why)
 
-`docs/` follows a Diátaxis-by-directory convention, surfaced as two `docs.json` tabs:
+`docs/` follows a Diátaxis-by-directory convention, surfaced as **three** `docs.json` tabs organized
+**by concern** — use the product, look up facts, run your own instance:
 
 ```
 docs/
-├── introduction.mdx          # landing/overview (root)
-├── quickstart.mdx            # the one tutorial (root)
-├── self-hosting.mdx          # deploy guide (root)
-├── concepts/                 # explanation pages — the model + the why
-├── guides/                   # how-to pages — task walkthroughs
-├── reference/                # exhaustive catalogues — tools, CLI, formats, QA
-└── api-reference/            # REST: overview.mdx + the auto-generated openapi.json
+├── introduction.mdx          # Using › Get Started — landing/overview (root)
+├── quickstart.mdx            # Using › Get Started — deploy-first tutorial (root)
+├── concepts/                 # Using › Concepts — explanation: the model + the why
+├── guides/                   # Using › Guides — how-to task walkthroughs (incl. try-it-locally, connect-claude-code)
+├── reference/                # Reference tab — exhaustive catalogues (tools, CLI, REST API, formats, QA, glossary)
+├── self-hosting/             # Self-hosting tab — operator how-tos (overview, deploy, configuration, security)
+└── api-reference/            # the auto-generated openapi.json only (powers the Reference tab's Endpoints group)
 ```
 
-- **Two tabs, by audience.** **Documentation** (concepts/guides/reference — the human + agent narrative
-  and catalogues) and **API Reference** (the generated REST endpoints for CLI/CI integrators). They're
-  split because they're genuinely different audiences and shouldn't blend (see
-  `navigation-and-settings.md`).
-- **Root pages** are the few cross-cutting entry points (intro, quickstart, self-hosting); everything
-  else lives under its type directory.
+- **Using Turjuman** — everything about *using the product*, deployment-agnostic: Get Started,
+  Concepts, Guides. Nothing here should assume self-hosting (see the SaaS note in the Backlog map).
+- **Reference** — *look up facts*: the Reference group (tools, CLI, REST API, formats, QA, glossary)
+  plus the auto-generated **Endpoints** group (OpenAPI).
+- **Self-hosting** — *operate your own instance*: overview, deploy, configuration, security. All
+  self-host specifics live here, not in Using/Reference.
+- **Root pages** are the two cross-cutting entry points (introduction, quickstart); everything else
+  lives under its directory.
 
 ### Decision rule — new page vs. group vs. tab
 
-1. **Does an existing page cover it?** Extend that page. Prefer this — don't spawn thin pages.
-2. **New page, existing area?** Add the `.mdx` under the matching type directory and register it in the
-   right `docs.json` group.
-3. **New area within the same audience?** Add a new **group** to the Documentation tab (keep the tab to
-   ≤7 groups; see `navigation-and-settings.md`).
-4. **Genuinely distinct audience or product surface?** A new **tab**. This is rare — justify it.
+1. **Does an existing page cover it?** Extend that page. Prefer this — don't spawn thin pages, and
+   don't register a stub (see the governing rule).
+2. **New page, existing area?** Add the `.mdx` under the matching directory and register it in the
+   right `docs.json` group (Concepts/Guides under *Using*, the Reference group, or *Self-hosting*).
+3. **New area within an existing tab?** Add a new **group** (keep each tab to ≤7 groups; see
+   `navigation-and-settings.md`). The "Connect" backlog cluster is the live example: it folds into
+   *Guides* until it reaches ≥2 pages, then graduates to its own group.
+4. **Genuinely distinct audience or product surface?** A new **tab**. This is rare — justify it. The
+   planned **Cloud/SaaS** tab is the one anticipated case; it slots in beside Self-hosting.
 
 Name files in kebab-case matching their nav path (`reference/mcp-tools.mdx` → `"reference/mcp-tools"`).
 
@@ -92,19 +106,39 @@ Name files in kebab-case matching their nav path (`reference/mcp-tools.mdx` → 
 Every structural move has consequences beyond the page itself. Do the whole ripple, or you ship broken
 nav/links. (The pieces live in other reference files; this is the one place that sequences them.)
 
-- **Add a page** → create it under the right type dir · `title` + a tight `description`
+- **Add a page** → create it under the right directory · `title` + a tight `description`
   (`pages-and-frontmatter.md`) · **register it in the right `docs.json` group** or it won't appear ·
   cross-link from neighbouring pages (and any `<Card>` hub) · add it to the page list below.
 - **Add a group / tab** → apply nav strategy — ≤7 per level, label by user goal, a new tab only for a
   distinct audience (`navigation-and-settings.md`) · update the structure tree above.
 - **Move / rename a page** → add a `redirects` entry in `docs.json` (old → new) · fix every inbound
-  link · rename it in the page list · run `mint broken-links`.
+  link (including repo files outside `docs/`, which the CI link check does **not** cover) · rename it
+  in the page list · run `mint broken-links`.
 - **Split an overgrown page** (a rewrite trigger: mixed topics, or >50% caveats — `writing-craft.md`) →
   create the new pages · redirect/anchor the old URLs · cross-link the set · register all in `docs.json`.
 - **Remove a page** → deprecate first if it's user-facing (`deprecated` frontmatter + migration note) ·
   redirect old → replacement · fix inbound links · drop it from `docs.json` **and** the page list below.
 
 After any structural change, `mint broken-links` is the backstop — run it before pushing.
+
+## Backlog map (future pages — record here, do NOT create as stubs)
+
+The home for pages we know we'll want but that don't have real content yet. Keeping them here (not in
+`docs.json`) is how we honour the no-stub governing rule. Promote an item to a live page only when you
+can write it in full. Group it where shown; create a new group/tab only at the thresholds above.
+
+- **Concepts (Using):** Data model deep-dive · ICU message format & plurals · Security model · Multi-tenancy & orgs
+- **Guides (Using):** CI/CD workflows · Manage a glossary · Import/export & bundles · Migrate from another TMS · Agent recipes & examples
+- **Connect (folds into Guides until ≥2 pages, then its own group):** Other MCP clients · REST for CI · per-client guides (Cursor, …)
+- **Reference:** Configuration reference · Webhook events · Data-model / schema reference
+- **Self-hosting:** Upgrades & migrations · Monitoring & alerting · Cost & scaling · Backups & DR · Troubleshooting · Operator topology · Changelog / Releases
+- **Footer / GitHub (not docs-site pages):** Development (dev-loop deep-dive) · expanded Contributing · Roadmap
+
+**Deployment-agnostic rule (for the planned SaaS tab).** A hosted/Cloud offering is on the roadmap.
+Keep **Using** and **Reference** free of self-host assumptions so a future **Cloud/SaaS** tab can slot
+in beside **Self-hosting** without rewriting them. Push deploy/account/billing specifics into the
+Self-hosting tab; phrase shared concepts (base URLs, keys, endpoints) neutrally — e.g. "your Turjuman
+instance's REST endpoint," noting the self-host way to obtain it rather than assuming it.
 
 ## Keeping this current (self-maintenance)
 
@@ -124,8 +158,14 @@ Quick drift check before relying on it: confirm the source paths in the table st
 
 ### Current docs pages (extend, don't duplicate)
 
-`introduction` · `quickstart` · `self-hosting` · `concepts/architecture` · `concepts/lifecycle` ·
-`concepts/roles-and-permissions` · `guides/translate-with-mcp` · `guides/code-mode` ·
-`guides/sync-with-cli` · `guides/quality-checks` · `guides/webhooks` · `reference/mcp-tools` ·
-`reference/cli-commands` · `reference/file-formats` · `reference/qa-checks` · `api-reference/overview`
-(+ the auto-generated `Endpoints` group).
+**Using Turjuman** — `introduction` · `quickstart` · `guides/try-it-locally` · `concepts/why-mcp-first` ·
+`concepts/architecture` · `concepts/lifecycle` · `concepts/roles-and-permissions` ·
+`concepts/how-agents-use-turjuman` · `guides/translate-with-mcp` · `guides/code-mode` ·
+`guides/sync-with-cli` · `guides/quality-checks` · `guides/webhooks` · `guides/connect-claude-code`
+
+**Reference** — `reference/mcp-tools` · `reference/cli-commands` · `reference/rest-api` ·
+`reference/file-formats` · `reference/qa-checks` · `reference/glossary` (+ the auto-generated
+`Endpoints` group from `api-reference/openapi.json`)
+
+**Self-hosting** — `self-hosting/overview` · `self-hosting/deploy` · `self-hosting/configuration` ·
+`self-hosting/security`
