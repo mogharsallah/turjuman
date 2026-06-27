@@ -44,12 +44,6 @@ is declared once in `@turjuman/sdk` (`OPERATIONS`), so the MCP and REST surfaces
 Transports only translate HTTP ↔ operation calls — never put auth or domain logic in a transport, and
 never hand-write an MCP tool or REST route that bypasses `OPERATIONS`.
 
-```
-Claude Code / agent ──Streamable HTTP + Bearer key──► McpFunction ─┐
-Developer CLI / CI ──REST + Bearer key──────────────► ApiFunction ─┤──► @turjuman/core ──► DynamoDB
-                                          DynamoDB Streams ─────────┴──► WebhookFunction (HMAC POSTs)
-```
-
 | Package | Role (key file/export) |
 |---|---|
 | `packages/schema` | AWS-free base: domain model (`domain.ts`), `validation`, `wire` shapes, `rbac` policy, ICU plurals (`plural.ts`), QA engine (`qa/`). |
@@ -113,13 +107,6 @@ Static `Authorization: Bearer <api-key>` on every request; keys are stored as a 
 resolved by `authenticate()` in core. Lambda Function URLs use `AuthType: NONE` **by design** —
 Turjuman validates its own keys (no API Gateway, no Cognito). Never commit `.env` or real credentials
 (`.env.example` ships dummy creds only); the `.turjuman-dev` marker is gitignored.
-
-## Commit & PR
-
-Branch off `main` and open a PR — CI (`build + typecheck + unit`, docs link check, integration +
-deployed e2e on LocalStack) is the verification gate. The `.githooks/pre-commit` hook (installed by
-`pnpm install`) rebuilds, regenerates, and stages `docs/api-reference/openapi.json` when API/core
-source is staged, and CI fails on drift — never hand-edit that file.
 
 ## Documentation
 
