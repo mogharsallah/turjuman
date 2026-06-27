@@ -1,13 +1,11 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## What this is
 
 Turjuman is open-source, self-hosted translation management driven primarily through an **MCP server**
 (an LLM/agent does the translating) with a thin **developer CLI** for deterministic locale-file work.
-It runs serverless on AWS (Lambda Function URLs + a single DynamoDB table). No web UI and no built-in
-machine-translation engine — both are deliberate non-goals (see `ROADMAP.md`).
+It runs serverless on AWS (Lambda Function URLs + a single DynamoDB table). Deliberate non-goals: no
+web UI, no built-in machine-translation engine, no vendor marketplace (see `ROADMAP.md`).
 
 ## Commands
 
@@ -39,9 +37,6 @@ Gotchas worth knowing up front:
   stack, named from a persisted, gitignored `.turjuman-dev` marker. `dev:teardown` deletes just this
   copy's stack; `localstack:down` wipes the whole emulator and **every** session — never use it to
   clean up one session.
-- For end-to-end verification, push the branch / open the PR and read the GitHub Actions checks as the
-  source of truth (every PR runs `build + typecheck + unit`, docs link check, and integration +
-  deployed e2e on LocalStack).
 
 ## Architecture
 
@@ -109,11 +104,10 @@ Read `docs/concepts/architecture.mdx` (PK/SK/GSI layout) before changing `reposi
   `pnpm test` stays hermetic.
 - **Biome owns formatting + linting** (`biome.json`: tabs, double quotes, 80-col). The
   `.claude/hooks/biome-format.sh` PostToolUse hook auto-formats every file you edit — don't hand-fix
-  style. The generated `docs/api-reference/openapi.json` is Biome-excluded; never reformat it by hand.
+  style.
 - **Node ≥ 24**, Lambda runtime `nodejs24.x`, default arch `arm64`.
 - Treat any **Mintlify** PR check failure (preview deploy / docs build) as non-blocking — note it,
   don't try to fix it.
-- Keep scope: no web UI, no MT engine, no vendor marketplace (see ROADMAP "Explicitly out of scope").
 
 ## Security
 
