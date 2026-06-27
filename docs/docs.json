@@ -1,6 +1,6 @@
 {
 	"$schema": "https://mintlify.com/docs.json",
-	"theme": "luma",
+	"theme": "mint",
 	"name": "Turjuman",
 	"description": "Open-source, self-hosted translation management driven by AI agents over MCP, with a developer CLI for deterministic locale-file sync.",
 	"logo": {
@@ -14,10 +14,23 @@
 		"dark": "#0C6B6B"
 	},
 	"navbar": {
+		"links": [
+			{
+				"label": "Get help",
+				"href": "https://github.com/mogharsallah/turjuman/issues"
+			}
+		],
 		"primary": {
-			"type": "github",
-			"href": "https://github.com/mogharsallah/turjuman"
+			"type": "button",
+			"label": "Get Started",
+			"href": "https://mogharsallah.github.io/turjuman/quickstart"
 		}
+	},
+	"search": {
+		"prompt": "Search Turjuman docs..."
+	},
+	"contextual": {
+		"options": ["assistant", "copy", "view"]
 	},
 	"navigation": {
 		"tabs": [
