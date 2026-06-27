@@ -1,7 +1,7 @@
 ---
 title: "Deploy Turjuman to your own AWS account"
-sidebarTitle: "Self-Hosting"
-description: "Self-host Turjuman on AWS with the @turjuman/aws-cdk construct: one DynamoDB table and up to three Lambda Function URLs, deployed with cdk deploy, then turjuman bootstrap for the first owner."
+sidebarTitle: "Self-hosting"
+description: "Self-host Turjuman on AWS with the @turjuman/aws-cdk construct — one DynamoDB table and Lambda Function URLs — then bootstrap the first owner."
 ---
 
 Self-hosting Turjuman means running it in your own AWS account: one DynamoDB table and up to three Lambda Function URLs (MCP server, REST API, and webhook dispatcher). Turjuman ships as a standalone AWS CDK construct, **`@turjuman/aws-cdk`**, with the Lambda handlers pre-bundled and vendored into the package. You deploy it with the AWS CDK CLI (`cdk deploy`) — no SAM CLI and no clone of the Turjuman repo — then create the first owner over HTTP with `turjuman bootstrap`.
@@ -126,6 +126,7 @@ new TurjumanStack(app, "Turjuman", {
 | `functionDefaults.architecture` | `"arm64"` | CPU architecture (`"arm64"` or `"x86_64"`). |
 | `mcp` / `api` / `webhook` | — | Per-function tuning that overrides `functionDefaults`. |
 | `api.enabled` / `webhook.enabled` | `true` | Deploy that surface. Set `false` to remove it. |
+| `webhook.streamStartingPosition` | `"LATEST"` | Where the Streams poller starts reading: `"LATEST"` (only changes made after deploy) or `"TRIM_HORIZON"` (from the shard start). |
 | `table.billingMode` | `"PAY_PER_REQUEST"` | `"PROVISIONED"` uses `readCapacity`/`writeCapacity`. |
 | `table.pointInTimeRecovery` | `false` | Continuous backups on the DynamoDB table. |
 | `table.deletionProtection` | `false` | Block table deletion at the DynamoDB API level. |
