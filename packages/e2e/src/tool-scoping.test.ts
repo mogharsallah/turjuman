@@ -1,20 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { loadEnv } from "./helpers/env.js";
+import { loadEnv, modeOf } from "./helpers/env.js";
 import { uniq } from "./helpers/fixtures.js";
 import { makeMcpClient, mcpListTools } from "./helpers/mcp.js";
+import { request } from "./helpers/transport.js";
 
 /**
- * P1 — MCP tool-surface scoping, confirmed through the deployed path (the layer
- * unit tests can't: the real read-only-key actor and the Function URL's
- * query-string parsing). Both layers only narrow what `tools/list` advertises;
- * RBAC still authorizes every call.
+ * P1 — MCP tool-surface scoping, confirmed through the transport (the layer unit
+ * tests can't: the real read-only-key actor and the query-string parsing). Both
+ * layers only narrow what `tools/list` advertises; RBAC still authorizes every
+ * call.
  *  - Per-key: a read-only key sees only read tools.
  *  - Per-URL: `?groups=` narrows further; an unknown group fails loud with 400.
  */
 const env = loadEnv();
+const mode = modeOf(env);
 const e = env ?? { mcpUrl: "", apiUrl: "", tableName: "", apiKey: "" };
 
-describe.skipIf(!env)("P1 MCP tool scoping (deployed)", () => {
+describe.skipIf(mode !== "inprocess")("P1 MCP tool scoping", () => {
 	const ownerMcp = makeMcpClient(e.mcpUrl, e.apiKey);
 
 	it("advertises only read tools to a read-only key", async () => {
@@ -40,7 +42,7 @@ describe.skipIf(!env)("P1 MCP tool scoping (deployed)", () => {
 		expect(scoped).not.toContain("delete_key");
 
 		// An unknown group fails loud (not a silent empty toolset).
-		const res = await fetch(`${e.mcpUrl}?groups=bogus`, {
+		const res = await request(`${e.mcpUrl}?groups=bogus`, {
 			method: "POST",
 			headers: {
 				"content-type": "application/json",

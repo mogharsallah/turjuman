@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { loadEnv } from "./helpers/env.js";
+import { loadEnv, modeOf } from "./helpers/env.js";
 import { uniq } from "./helpers/fixtures.js";
 import { makeMcpClient } from "./helpers/mcp.js";
 
 /**
- * P1 — the core LLM/agent workflow, driven entirely through the deployed MCP
- * Function URL. Proves the tools an agent uses to
- * fill and review translations survive the deployment boundary, not just the
- * unit-tested service logic.
+ * P1 — the core LLM/agent workflow, driven through the MCP transport. Proves the
+ * tools an agent uses to fill and review translations work through the real
+ * transport projection + core + DynamoDB, not just the unit-tested service logic.
  */
 const env = loadEnv();
+const mode = modeOf(env);
 const e = env ?? { mcpUrl: "", apiUrl: "", tableName: "", apiKey: "" };
 
 interface Translation {
@@ -27,7 +27,7 @@ interface UntranslatedList {
 	keys: KeyMeta[];
 }
 
-describe.skipIf(!env)("P1 agent translation loop (MCP)", () => {
+describe.skipIf(mode !== "inprocess")("P1 agent translation loop (MCP)", () => {
 	const mcp = makeMcpClient(e.mcpUrl, e.apiKey);
 
 	it("creates a project, finds untranslated keys, bulk-fills, and confirms values", async () => {

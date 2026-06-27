@@ -1,27 +1,28 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { type E2EEnv, loadEnv } from "./helpers/env.js";
+import { type E2EEnv, loadEnv, modeOf } from "./helpers/env.js";
 import { makeMcpClient } from "./helpers/mcp.js";
 import { type CapturedRequest, startReceiver } from "./helpers/receiver.js";
 
 /**
- * Full deployed end-to-end test. The CDK stack is deployed into
- * LocalStack by `scripts/e2e-deploy.mjs`, which writes the resolved Function URLs
- * and a seeded API key to .e2e/env.json. This spec is a black box: it only talks
- * HTTP to the deployed Lambda Function URLs and asserts that the real
- * DynamoDB Streams -> WebhookFunction event-source-mapping delivers a signed
- * webhook. Skipped (not failed) when the env file is absent, so it stays out of
- * the default `npm test` run.
+ * Full deployed end-to-end test — deployed mode only (it needs the real Function
+ * URLs and DynamoDB Streams → webhook ESM, which the in-process mode can't
+ * provide). The CDK stack is deployed into LocalStack by `scripts/e2e-deploy.mjs`,
+ * which writes the resolved Function URLs and a seeded API key to .e2e/env.json.
+ * This spec is a black box: it only talks HTTP to the deployed Lambda Function
+ * URLs and asserts that the real DynamoDB Streams -> WebhookFunction
+ * event-source-mapping delivers a signed webhook.
  *
  *   npm run localstack:up && npm run e2e:deploy && npm run e2e:test
  */
 const env = loadEnv();
+const mode = modeOf(env);
 
 // `skipIf` still evaluates this callback at collection time, so fall back to a
 // blank env to avoid dereferencing null when the deploy step hasn't run.
 const e: E2EEnv = env ?? { mcpUrl: "", apiUrl: "", tableName: "", apiKey: "" };
 
-describe.skipIf(!env)("deployed e2e against LocalStack", () => {
+describe.skipIf(mode !== "deployed")("deployed e2e against LocalStack", () => {
 	const mcp = makeMcpClient(e.mcpUrl, e.apiKey);
 
 	it("serves the REST API meta endpoint over its Function URL", async () => {

@@ -1,3 +1,5 @@
+import { request } from "./transport.js";
+
 export class McpError extends Error {}
 
 interface JsonRpcResult {
@@ -8,14 +10,14 @@ interface JsonRpcResult {
 /**
  * List the tool names the server advertises at `url` through the real
  * `tools/list` path. `url` may carry a tool-scoping query string
- * (e.g. `?groups=read`), so this also exercises the Function URL's query
- * parsing end-to-end.
+ * (e.g. `?groups=read`), so this also exercises the transport's query parsing
+ * end-to-end (Function URL in deployed mode, the handler in in-process mode).
  */
 export async function mcpListTools(
 	url: string,
 	apiKey: string,
 ): Promise<string[]> {
-	const res = await fetch(url, {
+	const res = await request(url, {
 		method: "POST",
 		headers: {
 			"content-type": "application/json",
@@ -35,9 +37,10 @@ export async function mcpListTools(
 }
 
 /**
- * Minimal MCP-over-HTTP client for the deployed MCP Function URL. The server is
- * stateless, so we POST a single `tools/call` JSON-RPC message per call and
- * parse the tool's text content back into an object.
+ * Minimal MCP client over the transport seam. The server is stateless, so we
+ * POST a single `tools/call` JSON-RPC message per call and parse the tool's text
+ * content back into an object. `url` is the deployed MCP Function URL in deployed
+ * mode, or the `mcp.inproc` sentinel in in-process mode.
  */
 export function makeMcpClient(url: string, apiKey: string) {
 	let id = 0;
@@ -45,7 +48,7 @@ export function makeMcpClient(url: string, apiKey: string) {
 		name: string,
 		args: Record<string, unknown> = {},
 	): Promise<T> {
-		const res = await fetch(url, {
+		const res = await request(url, {
 			method: "POST",
 			headers: {
 				"content-type": "application/json",
@@ -91,10 +94,10 @@ export interface SandboxRunResult<T = unknown> {
 }
 
 /**
- * A code-mode client for the deployed MCP Function URL. Connects with
- * `?mode=code` (where the server advertises only `search` + `describe` +
- * `run_code`), so calling `runCode` exercises the full sandbox → bridge → core
- * path end to end over the real Function URL.
+ * A code-mode client over the MCP transport. Connects with `?mode=code` (where
+ * the server advertises only `search` + `describe` + `run_code`), so calling
+ * `runCode` exercises the full sandbox → bridge → core path end to end (over the
+ * real Function URL in deployed mode, or the in-process handler otherwise).
  */
 export function makeCodeClient(mcpUrl: string, apiKey: string) {
 	const call = makeMcpClient(`${mcpUrl}?mode=code`, apiKey);

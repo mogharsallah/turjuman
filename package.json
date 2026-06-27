@@ -27,7 +27,8 @@
 		"localstack:up": "docker compose up -d localstack && node scripts/wait-for-localstack.mjs",
 		"localstack:down": "docker compose down -v",
 		"e2e:deploy": "node scripts/e2e-deploy.mjs",
-		"e2e:test": "pnpm --filter @turjuman/e2e run test",
+		"e2e:test": "TURJUMAN_E2E_MODE=deployed pnpm --filter @turjuman/e2e run test",
+		"e2e:inprocess": "TURJUMAN_E2E_MODE=inprocess AWS_ENDPOINT_URL_DYNAMODB=http://localhost:4566 AWS_REGION=us-east-1 AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test TURJUMAN_TABLE=TurjumanInprocessE2E pnpm --filter @turjuman/e2e run test",
 		"e2e:teardown": "node scripts/e2e-teardown.mjs",
 		"test:e2e": "pnpm run localstack:up && pnpm run e2e:deploy && pnpm run e2e:test; code=$?; pnpm run localstack:down; exit $code"
 	},

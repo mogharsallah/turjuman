@@ -105,6 +105,7 @@ writeFileSync(
 	envFile,
 	JSON.stringify(
 		{
+			mode: "deployed",
 			mcpUrl,
 			apiUrl,
 			tableName,
