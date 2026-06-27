@@ -181,38 +181,17 @@ validates its own keys (no API Gateway, no Cognito).
 ## Documentation
 
 The docs in `docs/` are the **single source of truth**, published as a Mintlify site (`docs/docs.json`
-defines the structure and is the Mintlify content root). One source serves three audiences: human
-readers (the site), external agents (Mintlify auto-generates `llms.txt`/`llms-full.txt` and a per-page
-"open in Claude/ChatGPT" menu), and you. **There is no separate agent doc** — so keep these accurate.
+is the content root). One source serves humans (the site), agents (`llms.txt`/`llms-full.txt` + per-page
+`.md` exports), and you — **there is no separate agent doc.**
 
-- **At the end of a task, suggest updating the docs.** When you finish a feature, refactor, or other
-  piece of work and it's working, use your judgment — if anything user-visible changed, suggest (in a
-  line or two) updating the docs via the `writing-docs` skill before wrapping up.
-- **Update docs in the same change as the code.** A new MCP tool, REST route, CLI flag, format
-  adapter, QA check, service, or schema field is not done until its page is updated.
-- **Use the `writing-docs` skill** (`.claude/skills/writing-docs/`) when adding or revising a page —
-  it encodes Mintlify's craft (content types, components, frontmatter, navigation, SEO/GEO, AI-native
-  docs) and the Turjuman code→docs map.
-- Author pages as `.mdx` with `title` + a tight, front-loaded `description` (it's the SEO snippet and
-  the `llms.txt`/agent line — ~130–160 chars, no line break). Reach for the right Mintlify component
-  for each intent (Steps, Tabs, Callouts, Cards, Fields, Frame) — don't avoid them — while keeping the
-  page readable when flattened to Markdown (the `.md`/`llms.txt` view). New pages must be added to the
-  `navigation` in `docs/docs.json` to appear on the site.
-- **The REST API reference is auto-generated** from the OpenAPI spec the API serves at
-  `GET /v1/openapi.json`. Annotate every route with `describeRoute({ summary, tags, ... })` so it
-  appears in the spec; the committed snapshot `docs/api-reference/openapi.json` (which Mintlify
-  renders) is refreshed by `pnpm run gen:openapi`. A **pre-commit hook** (`.githooks/pre-commit`,
-  installed by `pnpm install` via the `prepare` script) rebuilds + regenerates + stages it
-  automatically whenever API/core source is staged, so you rarely run it by hand; CI also fails on
-  drift. Never hand-write endpoint pages.
-
-Docs map (in `docs/`, all published): `index.mdx` (intro) · `quickstart.mdx` (run locally) ·
-`self-hosting.mdx` (deploy) · `concepts/architecture.mdx` (data model, single-table, request flow) ·
-`concepts/roles-and-permissions.mdx` (RBAC) · `concepts/lifecycle.mdx` (the usage lifecycle: stages,
-key/translation state model, dual-slot delivery) · `guides/translate-with-mcp.mdx` ·
-`guides/code-mode.mdx` (the two MCP modes, `search`/`describe`/`run_code`, the sandbox) ·
-`guides/sync-with-cli.mdx` · `guides/quality-checks.mdx` · `guides/webhooks.mdx` ·
-`reference/mcp-tools.mdx` · `reference/cli-commands.mdx` (commands, multi-target config, push/pull
-semantics) · `reference/file-formats.mdx` · `reference/qa-checks.mdx` (the QA check catalogue, config,
-surfaces) · `contributing.mdx` (the three test tiers + where to make changes). Plus `ROADMAP.md`
-(what's built / what's next) at the repo root.
+- **Update docs in the same change as the code.** A new operation/MCP tool, CLI flag, format adapter,
+  QA check, service, or schema field isn't done until its page is updated — and when you finish such a
+  task, suggest the doc update before wrapping up.
+- **Use the `writing-docs` skill** (`.claude/skills/writing-docs/`) for all docs work. It is the source
+  of truth for Mintlify craft (content types, components, frontmatter, navigation, SEO/GEO, AI-native),
+  the code→docs map, the `docs/` structure, and how to make content vs. structural changes. Don't
+  duplicate that guidance back here — the skill's `element-map.md` carries the current docs-page list.
+- **REST endpoint pages are auto-generated — never hand-written.** Annotate each route with
+  `describeRoute({ summary, tags, ... })`; the `.githooks/pre-commit` hook (installed by `pnpm install`)
+  rebuilds + regenerates + stages `docs/api-reference/openapi.json` (Biome-excluded) when API/core
+  source is staged, and CI fails on drift. Full detail: the skill's OpenAPI section.
