@@ -161,10 +161,13 @@ keys by name; the service layer maps name → id.
   opt-in context carrier; the "voice" tier.
 - **Locale** — `{ id, projectId, code, lifecycle }`. Plural-category set derives from `code`.
 - **TranslationKey** — `{ id, projectId, namespaceId?, name, description, tags, plural,
-  lifecycle(active|deprecated), sourceRevision, introducedOnBranchId }`. A key introduced on a
-  branch is invisible to `main` until merged. `sourceRevision` = content hash +
-  timestamp of the base value; it bumps when the base string is edited and fires the forward
-  loop. `namespaceId` is nullable.
+  lifecycle(active|deprecated), sourceRevision, introducedOnBranchId, noTranslate?,
+  placements[] }`. A key introduced on a branch is invisible to `main` until merged.
+  `sourceRevision` = content hash + timestamp of the base value; it bumps when the base string
+  is edited and fires the forward loop. `namespaceId` is nullable. `noTranslate?` marks a
+  whole key that must survive verbatim (brand names, codes). `placements` is a flat list of
+  `{ surface, screen, role, order? }` situating the key in the UI — **briefing data only,
+  never a `Scope`** (the manifest, below).
 
 `lifecycle` on Namespace/Locale/Key is **soft-delete** (active|deprecated/retired) so `Scope`
 coordinates never dangle. Retiring cascades: dependent Translations go `stale` (not deleted),
@@ -342,6 +345,16 @@ FieldReport ──► Translation (neg. evidence) ──► Example | GlossaryTe
 ```
 
 ## Cross-cutting mechanisms
+
+### Situational awareness — the TranslationManifest
+
+The agent learns *where* a string sits in the UI from `Key.placements`. The
+**TranslationManifest** is the projection of those placements + the resolved cascade into one
+legible, token-lean briefing — rendered on demand at a configurable radius, never stored.
+Placement is **briefing data only**: it never enters a `Scope` and never carries authoring
+power, because a second containment chain would break `override` (which needs a total order).
+It earns its keep for the consumers that lack the repo — merge runs, field-report
+re-translations, cheap reviewer models, CI export. Full model in `translation-manifest.md`.
 
 ### Staleness — one mechanism, three triggers
 
