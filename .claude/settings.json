@@ -23,6 +23,18 @@
 					}
 				]
 			}
+		],
+		"WorktreeRemove": [
+			{
+				"hooks": [
+					{
+						"type": "command",
+						"command": "$CLAUDE_PROJECT_DIR/.claude/hooks/worktree-teardown.sh",
+						"timeout": 150,
+						"statusMessage": "Stopping this session's dev services…"
+					}
+				]
+			}
 		]
 	}
 }
