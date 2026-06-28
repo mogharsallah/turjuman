@@ -348,13 +348,16 @@ FieldReport ──► Translation (neg. evidence) ──► Example | GlossaryTe
 
 ### Situational awareness — the TranslationManifest
 
-The agent learns *where* a string sits in the UI from `Key.placements`. The
-**TranslationManifest** is the projection of those placements + the resolved cascade into one
-legible, token-lean briefing — rendered on demand at a configurable radius, never stored.
-Placement is **briefing data only**: it never enters a `Scope` and never carries authoring
-power, because a second containment chain would break `override` (which needs a total order).
-It earns its keep for the consumers that lack the repo — merge runs, field-report
-re-translations, cheap reviewer models, CI export. Full model in `translation-manifest.md`.
+The agent learns *where* a string sits in the UI from `Key.placements` (a flat
+`{ surface, screen, role, order? }` list). The agent briefing is a **projection** of those
+placements + the resolved cascade into one legible, token-lean view — rendered on demand at a
+configurable radius, never stored. Placement is **briefing data only**: it never enters a
+`Scope` and never carries authoring power (see *Outside this model's boundary* for why a
+presentation scope axis breaks `override`). It earns its keep for the consumers that lack the
+repo — merge runs, field-report re-translations, cheap reviewer models, CI export — and is
+biased to under-claim: a missing placement degrades to the plain cascade briefing, a `stale`
+one is demoted to a hint (never fed to the constraint machinery), and a deleted key surfaces
+as an orphan warning rather than a dangling pointer.
 
 ### Staleness — one mechanism, three triggers
 
@@ -473,6 +476,16 @@ pipeline — rather than this data model. Noted so the boundary is explicit:
 - **Branch-scoped context** — per-branch `ContextRule` overrides. In this model context is shared
   across branches (industry keeps glossary global); `Scope` has a clean place to add a `branchId` if
   the concept ever needs the branch axis.
+- **Presentation as a stored UI model / scope axis** — a nested interface tree
+  (`surface ⊃ screen ⊃ region ⊃ component`) maintained inside Turjuman, or a presentation tier added
+  to `Scope`. **Cut.** A second containment chain breaks `override`: `namespace:checkout` and
+  `screen:payment` are *incomparable* (neither contains the other), so "narrowest wins" has no
+  defined winner and the precedence ladder loses its total order. (Locale survives as a second axis
+  only because it is a point-selector, not a chain.) Where a string sits in the UI is therefore
+  **briefing data, never an override target** — captured as the flat `Key.placements` hint and
+  rendered into the agent briefing (see *Situational awareness*), not modeled as structure. The
+  agent-facing briefing *format* (the `surface/screen/role` vocabulary and its serialization) is a
+  rendering spec to pin down when the projection is built, not data-model state.
 - **Agent-driven auto-merge** — a *capability*, not model state: merge conflicts are surfaced as
   escalations (or re-loops); how they get resolved is the service layer's concern.
 - **NamespaceMembership** — an optional third RBAC tier for shared-namespace ownership across
