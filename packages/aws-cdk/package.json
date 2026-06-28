@@ -1,6 +1,6 @@
 {
 	"name": "@turjuman/aws-cdk",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"description": "Turjuman AWS CDK construct: a composable serverless stack (single-table DynamoDB + Lambda Function URLs) with pre-bundled handlers.",
 	"license": "MIT",
 	"author": "Turjuman contributors",

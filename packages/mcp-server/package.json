@@ -1,6 +1,6 @@
 {
 	"name": "@turjuman/mcp-server",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"description": "Turjuman MCP server (stateless Streamable HTTP) for AWS Lambda.",
 	"license": "MIT",
 	"author": "Turjuman contributors",

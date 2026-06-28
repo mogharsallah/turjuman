@@ -1,6 +1,6 @@
 {
 	"name": "@turjuman/core",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"description": "Turjuman server core: the single-table DynamoDB repository and the domain services (built on @turjuman/schema).",
 	"license": "MIT",
 	"author": "Turjuman contributors",
