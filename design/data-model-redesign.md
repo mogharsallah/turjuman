@@ -13,9 +13,12 @@
 > consistency, a definition of "good"). An LLM translates fluently with zero context and
 > is fluently wrong. The quality ceiling is how much tacit knowledge you've externalized.
 
-**Center of gravity:** *context + judgment manager*. Strings are the cheap part. The moat
-is the institutional-knowledge layer and the self-reviewing loop. The human's role is to
-**curate context and resolve exceptions**, not to translate or review line by line.
+**Center of gravity:** *context manager*. Strings are the cheap part. The moat is the
+institutional-knowledge (context) layer that feeds the agent — glossary, voice, examples, do-not-translate.
+The human's role is to **curate that context and resolve the exceptions an agent escalates**, not to
+translate or review line by line. (Quality control itself stays deliberately boring — see pillar 2;
+the elaborate "measured-trust" machinery an earlier draft carried was cut, *Outside this model's
+boundary*.)
 
 ## Project constraints (the shape the model must fit)
 
@@ -35,7 +38,7 @@ is the institutional-knowledge layer and the self-reviewing loop. The human's ro
 - **Auth:** static `Authorization: Bearer <api-key>` (SHA-256 hashed). RBAC: global
   OWNER/ADMIN/MEMBER + per-project MANAGER/EDITOR/DEVELOPER/VIEWER.
 
-## The three pillars
+## The two pillars
 
 ### 1. Context cascade
 
@@ -60,7 +63,7 @@ runs across them.
 
 | Operator | Behavior | Used by |
 |---|---|---|
-| **override** (narrowest-wins) | the most specific tier replaces the value | voice/tone, formality, length limit, stakes |
+| **override** (narrowest-wins) | the most specific tier replaces the value | voice/tone, formality, length limit |
 | **union** (collect all tiers) | every tier contributes | glossary, do-not-translate, examples |
 | **restrict** (most-restrictive, AND) | a parent rule a child can't loosen | compliance/legal, safety |
 
@@ -80,54 +83,50 @@ per-operator → overlay locale cells → apply the locale-shaping post-step →
 provenance`. A cross-tier override is recorded in provenance and **raises review depth** (a
 deliberate exception deserves more scrutiny); a `restrict` conflict is a structural **escalation**.
 
-### 2. Review/QA, from first principles
+### 2. Review/QA — just a status flag
 
-Review answers one question: *"can we trust this string enough to ship?"* The human
-pipeline's stages (separate reviewer; post-hoc inspection; batch; approval gates) are
-artifacts of human constraints that don't hold for agents.
+Review answers one question: *"can we ship this string?"* The answer is **a lifecycle state, not a
+number.** There is no quality score and no threshold: a persisted 0..1 produced by an external model
+the app doesn't own is a frozen opinion, and the agent in the loop re-judges faithfulness/tone for
+free against the *current* value every time it looks. So we store the **outcome of that judgment, not
+the judgment.**
 
-- **Axis is verifiable-vs-judgmental, not mechanical-vs-semantic.**
-  - **Verifiable** (placeholders, ICU, length, glossary, round-trip) → not QA at all.
-    **Constraints enforced *inside* generation** (reject-and-retry), like a compiler — never
-    a post-hoc check.
-  - **Judgmental** (faithfulness, tone, naturalness) → the real review problem.
-- **Review is a router, not a gate** — three exits: *accept* / *re-loop with the objection as
-  new context* / *escalate*. Cheap re-translation means most "failures" re-enter the loop; the
-  human is the **terminal** exit, for irreducible judgment only.
-- **Trust is measured, not declared** — from independent *behavioral* signals, ranked by
-  independence: `real user / UI render > deterministic constraints > cross-FAMILY model
-  disagreement > same-model consensus > self-report (~worthless)`. Same-model consensus
-  measures *stability, not correctness* (shared blind spots).
-- **Trust is a living signal that moves both directions.** Ship = trust ≥ threshold; field
-  reports are *negative evidence* (corroborated, never auto-retire — griefing guard).
-- **Humans audit calibration, not coverage** — keep the judge honest; one mis-calibrated-judge
-  fix repairs thousands of strings.
+- **Two kinds of check, handled differently.**
+  - **Verifiable** (placeholders, ICU, length, glossary survival, round-trip) → **not QA at all.**
+    **Constraints enforced *inside* generation** (reject-and-retry), like a compiler — never a
+    post-hoc gate. This is the real product, already half-built in `packages/schema/qa/`.
+  - **Judgmental** (faithfulness, tone, naturalness) → the agent's in-context call at write time; its
+    result is recorded as the cell's **lifecycle**, nothing more.
+- **Review is a router, not a gate** — the agent picks the exit as it writes: *accept* (confident →
+  `accepted`) / *re-loop* (feed the objection back as new context and re-translate) / *escalate*
+  (unsure → `escalated`, a human decides). Cheap re-translation means most "failures" re-enter the
+  loop; the human is the **terminal** exit, for irreducible judgment only. This router is the one
+  genuinely AI-native move: when regeneration is ~free you loop, you don't gate. (A project may
+  instead require a human to flip `proposed → accepted` rather than letting the agent self-accept —
+  one boolean, not a scoring subsystem.)
+- **Effort allocation is the agent's call, bounded by money.** "Be thorough on a legal line, one-shot
+  a tooltip" is a *prompt instruction* the agent acts on with its own model; the app supplies only a
+  per-run **budget ceiling** (`TranslationRun.budgetSpent`, a cost guard the agent won't self-enforce).
+  No threshold, no `requiredSignals` matrix, no stakes knob — the agent judges stakes from context.
 
-### 3. Economics layer (makes pillar 2 affordable)
-
-Every failure mode of the review model reduces to *cost* (5–10× LLM calls/string).
-
-> **Review depth scales with the stakes of the string** — full consensus + round-trip +
-> multi-round critique for a legal line or headline; one shot + constraints for a tooltip.
-
-**Stakes are context.** They live on the cascade as an override-type value resolvable at any
-scope (a namespace default, overridable down to one key×locale). The context grid does double
-duty: it feeds *quality* and allocates the *budget* for verifying quality.
+The signal-independence wisdom (a real user or a human decision outweighs same-model self-report)
+survives as a **prompt-engineering note** for whoever drives the agent — *not* schema.
 
 ## The root design principle
 
 Almost every hard problem in this domain is **one mutable slot conflating distinct things**:
-*identity* vs *display-name*, *last-accepted* vs *currently-live*, *trust-now* vs *the basis
-trust was earned against*. The model is built on one principle:
+*identity* vs *display-name*, *last-accepted* vs *currently-live*, *the current value* vs *the
+base revision it was translated from*. The model is built on one principle:
 
 > **Separate the immutable/historical from the living/mutable, and separate identity from
 > label.**
 
-Two consequences fall directly out of the living-trust decision (pillar 2): a trust score
-that can **drop** means "live" can't be a per-cell predicate — it must be an immutable
-**Release**; and a score **earned against context** means a context edit must be able to
-**invalidate** it — so context is **versioned**. These aren't extras; they're the price of
-measured trust.
+The principle still earns two structures after the trust machinery is cut, on simpler grounds.
+"Live" is not a per-cell predicate — it's an immutable **Release**, so a reopened cell or a
+re-export never silently changes what's deployed; the Release is also the anchor for rollback and
+field reports. And a translation records the base revision it was made *from* (`sourceRef`), so a
+later edit to the source can mark it **stale** — the immutable-vs-living split applied to the one
+staleness trigger that's unambiguously real.
 
 ## Entity model
 
@@ -154,8 +153,7 @@ Every structural entity has an **immutable opaque `id`**; its human coordinates
 reference ids, so a rename or move is a metadata update that preserves history. Import/export
 keys by name; the service layer maps name → id.
 
-- **Project** — `{ id, name, slug, baseLocale, targetLocales[], contextRevision }`. Holds the
-  default review-control context (project-scoped `ContextRule`s — see below). `contextRevision`
+- **Project** — `{ id, name, slug, baseLocale, targetLocales[], contextRevision }`. `contextRevision`
   is a monotonic counter bumped on any scoped context write (drives staleness, below).
 - **Namespace** *(optional)* — `{ id, projectId, name, title, description, lifecycle }`. An
   opt-in context carrier; the "voice" tier.
@@ -206,11 +204,13 @@ parallel lines. (So the two are not redundant: branch = which line, commit chain
 that line.)
 
 - **Translation** — the living cell per `(branchId, keyId, locale)`:
-  `{ branchId, keyId, locale, value, head, origin, trust: Trust,
+  `{ branchId, keyId, locale, value, head, origin,
      lifecycle(untranslated|proposed|accepted|escalated|retired), stale,
      sourceRef, lockedByRunId? }`. **Copy-on-write:** a cell exists only on the branch that wrote
   it; an unwritten cell resolves by falling through to the parent branch (→ `main`).
   - `value` — the working draft (the only mutable text).
+  - `lifecycle` — the **entire** review verdict: the agent self-accepts (`accepted`), flags for a
+    human (`escalated`), or leaves `proposed` for a human to flip. No score field.
   - `head` — pointer to the current accepted **TranslationVersion** (the cell's branch-head;
     replaces any `approvedValue` slot — accepted text lives in history, not a mutable field). It
     **doubles as the concurrency + merge token**: an accept is a compare-and-swap on `head`, and a
@@ -222,7 +222,7 @@ that line.)
   - `lockedByRunId?` — set while a run or escalation owns the cell (in-flight exclusivity).
 - **TranslationVersion** *(append-only — a commit)* — the accepted-value chain per
   `(branchId, keyId, locale)`: `{ keyId, locale, value, origin, acceptedAt, acceptedBy|runRef,
-     trustAtAccept, sourceRevision, prevVersionRef, supersededBy? }`. `prevVersionRef` links the
+     sourceRevision, prevVersionRef, supersededBy? }`. `prevVersionRef` links the
   chain; `revert` repoints the cell's `head` and links the triggering FieldReport. This is what
   makes "accepted" non-destructive.
 
@@ -231,9 +231,9 @@ that line.)
 - **Release** *(immutable)* — the snapshot of what's live, written by the export path. **Pins
   one branch** and materializes its full resolved view (own cells + fall-through) at a moment in
   time: `{ id, projectId, branchId, label, locales[], status(open|frozen|superseded), createdBy,
-     createdAt, entries:{ keyId, locale, versionRef, trustAtShip, calibrationVersion }[] }`.
-  **"Live" = the latest Release**, never a per-cell predicate — so a trust score dropping after
-  ship doesn't silently change what's deployed. **Selection happens here, at the edge** — the
+     createdAt, entries:{ keyId, locale, versionRef }[] }`.
+  **"Live" = the latest Release**, never a per-cell predicate — so a reopened cell or a re-export
+  doesn't silently change what's deployed. **Selection happens here, at the edge** — the
   store manages branches; the deploy pipeline decides which branch/Release bundles into which
   build (A/B routing and OTA/unreleased gating are export-stage choices, never state on the key).
   Enables rollback, reproducible CI export, and field-report anchoring (a report names the
@@ -252,7 +252,7 @@ that line.)
   cancelation, and a per-run budget ceiling.
   - **A merge is just a run** with `trigger=merge` and `valueSource=branch:<child>` — it
     *transports* already-accepted values from a sibling branch instead of *generating* them, so it
-    spends no budget and re-anchors trust rather than earning it. Same apply-and-conflict machinery;
+    spends no budget and transports accepted values rather than earning them fresh. Same apply-and-conflict machinery;
     not a separate entity.
 
 ### Context layer (each carries a `Scope` + a `lifecycle`)
@@ -267,11 +267,7 @@ a Scope points at an archived or absent coordinate.
   kinds span the cascade:
   - `voice` (tone / formality / register / audience / guidance) → **override**
   - `length`, `placeholdersRequired`, `format` (verifiable constraints, enforced inside generation) → **override** (**restrict** when `hard`)
-  - `stakes` (drives review depth — the economics hook) → **override**, namespace cell as default
   - `compliance` (must-include / must-avoid, legal / safety) → **restrict**
-  - review-control kinds — `trustThreshold`, `escalateBelow`, `maxLoopRounds`, `requiredSignals`,
-    `corroborationThreshold` → **override** (the resolved set at a scope *is* the effective review
-    policy — see Review economics)
 - **GlossaryTerm** *(kept distinct — typed per-locale payload)* —
   `{ scope, term, translations{locale→value}, doNotTranslate, caseSensitive }`. merge: **union**.
   (Do-not-translate is a flag on this entity.)
@@ -280,53 +276,39 @@ a Scope points at an archived or absent coordinate.
   few-shot corpus. merge: **union** with deterministic retrieval (scope-proximity + quality +
   recency — **no embeddings**, per the constraints).
 
-### Review economics
+### Review records
 
-- **Effective review policy** is *not its own entity* — it's the resolved set of review-control
-  `ContextRule`s (`trustThreshold`, `escalateBelow`, `maxLoopRounds`, `requiredSignals`,
-  `corroborationThreshold`) at a given scope, defaulted at **Project** and overridden by narrower
-  scopes through the same cascade as everything else. `stakes` is just another rule in that set, so
-  "how important is this string" and "how hard to review it" resolve through one mechanism.
+The whole subsystem is two small things — a human exit and a comment thread; the cell's **lifecycle**
+is the entire "is it good enough to ship" answer. No score, no ledger, no derived trust, no versioned
+judge (see *Outside this model's boundary* for why those were cut).
 
-### Trust & review records
-
-- **Trust** *(derived — a projection of the ReviewSignal ledger, cached on the cell; not authored)*
-  — `{ score 0..1, threshold, lastEvaluatedAt, basisRef, contextRevisionAtEval, calibrationRef }`.
-  `score` is the **fold of the cell's ReviewSignal ledger** (the ledger is the sole record of
-  truth; recalibration is a re-fold, never an overwrite). It is the *living* projection of the
-  *immutable* ledger — the spine's two-sidedness in one place. The ship gate treats trust as
-  **invalid** until re-eval when the base revision (`basisRef`), resolved context
-  (`contextRevisionAtEval`), or judge (`calibrationRef`) has drifted.
-- **ReviewSignal** *(append-only ledger entry)* — `{ kind(constraint|round-trip|consensus|
-  critic|render|field-report|human-decision), independence(ground-truth|deterministic|
-  cross-model|same-model), dimension(faithfulness|tone|naturalness), score, weight, at,
-  calibrationRef, detail }`.
-- **ReviewRound** *(derived — a view over the ledger, not a stored record)* — one
-  generate→critique→revise iteration, reconstructed as the span between successive `critic` /
-  `constraint` signals on a cell; a round's objections are those signals' `detail`. The only
-  durable artifact is `roundsToConverge` (a count), which is itself a trust signal.
-- **Calibration** *(versioned)* — the record of the judge: `{ scope(project|namespace|locale),
-  version, judgeMethodologyRef, auditSetRef?, exemplars:{ value, humanScore, rationale }[],
-  agreementMetrics?, activatedAt, createdBy, supersededBy? }`. A new version invalidates
-  scores computed under the old one (via staleness). `ReviewSignal.calibrationRef` and
-  `Trust.calibrationRef` point here.
-- **Escalation** — the open human decision: `{ target(translationRef|scopeRef),
-  reason(deadlock|restrict-conflict|low-trust|budget-exhausted|context-conflict),
-  assigneeUserId? (default project MANAGER), claimedBy?, claimedAt?, openedAt, resolvedBy?,
-  resolvedAt?, priority,
-  resolution:{ decision(accept-value|new-value|new-rule), valueChosen?, spawnedExampleRef?,
-  spawnedGlossaryRef? } }`. On resolve it **writes a `ReviewSignal{kind: human-decision,
-  independence: ground-truth}`** onto the Translation's Trust — human judgment becomes reusable
-  context, not a dead-end approval. Claiming is a compare-and-swap on `claimedBy` (claim only if
-  unclaimed); emits an `escalation.*` webhook.
+- **Escalation** *(slim)* — the human terminal exit: `{ target(translationRef|scopeRef),
+  reason, assigneeUserId? (default project MANAGER), claimedBy?, claimedAt?, status(open|resolved),
+  openedAt, resolvedAt?, resolution:{ valueChosen?, spawnedExampleRef?, spawnedGlossaryRef? } }`.
+  Resolving sets the cell value + accepts, and may **spawn an `Example`/`GlossaryTerm`** so a human
+  decision becomes reusable context rather than a dead-end approval. Claiming is a compare-and-swap on
+  `claimedBy`; emits an `escalation.*` webhook.
+- **Comment** *(the market's actual judgment-capture mechanism — threaded discussion)* —
+  `{ target(keyRef + locale | scopeRef), authorId, body, at, parentId? }`. Where humans record the
+  judgment a status flag can't carry (why a string is off, an agreed phrasing). **Shared across
+  branches** — a comment attaches to the string `(key, locale)`, not to one branch's cell, exactly
+  like glossary/voice/examples (context is global in this model). So there is one thread per string
+  on every line, nothing to "merge", and threads graduate into shared `Example`s/`GlossaryTerm`s
+  when confirmed. Every shipping TMS has this, and the trust ledger was, in part, a baroque
+  substitute for it.
 
 ### Feedback loop
 
-- **FieldReport** — `{ locale, target(keyRef|text|scope), releaseRef?, description, reporterId
-  (opaque dedup token), status }`. Negative evidence: lowers the target Translation's trust
-  **only when corroborated** — count of distinct `reporterId`s with open reports on the same
-  `(keyId, locale)` crossing `ReviewPolicy.corroborationThreshold`. A confirmed report may
-  spawn an `Example` (a correction) or a `GlossaryTerm` (a rule). This is how the system learns.
+- **FieldReport** *(slim)* — `{ locale, target(keyRef|text|scope), releaseRef?, description, status }`.
+  Production saying "this shipped string is wrong" — the one fact the in-loop agent provably cannot
+  know from its own context. Its `releaseRef` names the branch+version that was live, so the report
+  is **branch-aware by reference**: the fix is a normal `TranslationRun` on whichever branch you
+  choose (hotfix `main`, or a fix branch that merges), and copy-on-write carries a `main` fix to every
+  open branch that never overrode the cell. It **reopens the targeted cell for review**
+  (`accepted → proposed`, re-entering the router) and may spawn an `Example` (a correction) or a
+  `GlossaryTerm` (a rule). No corroboration math, no dedup token, no trust fold — a self-hosted,
+  API-key-gated tool has no anonymous mob to guard against; add a corroboration threshold only if a
+  real install ever needs one.
 - **Webhook** — `{ url, events, projectId }`. Drives the forward loop (new key / context change
   / field report → TranslationRun) and notifies on escalations and runs.
 
@@ -334,14 +316,14 @@ a Scope points at an archived or absent coordinate.
 
 ```
 Org ─< Project ─< Namespace? ─< TranslationKey ─< Translation ─< TranslationVersion (commit chain)
-                     │                                  │           └─ head ──► current commit
-                     │                                  ├─ Trust (derived) ── folds ── ReviewSignal (ledger)
-                     │                                  └─ Escalation
+                     │                  │               │           └─ head ──► current commit
+                     │                  │               └─ Escalation     (cell-scoped; lifecycle = the verdict)
+                     │                  └─ Comment (per key+locale; shared across branches)
                      ├─ Branch (main + parallel lines) ──(copy-on-write)── Translation/Key cells
                      └─ Release (pins ONE Branch; immutable shipped snapshot) ─► TranslationVersion
 Project/Namespace/Key ──(Scope)── ContextRule · GlossaryTerm · Example
-Calibration ──► Trust/ReviewSignal     TranslationRun ──(one branch; trigger=generate|merge)──► Translation cells
-FieldReport ──► Translation (neg. evidence) ──► Example | GlossaryTerm
+TranslationRun ──(one branch; trigger=generate|merge)──► Translation cells
+FieldReport ──(via releaseRef → branch)──► reopen cell + fix-run ──► Example | GlossaryTerm
 ```
 
 ## Cross-cutting mechanisms
@@ -359,19 +341,19 @@ biased to under-claim: a missing placement degrades to the plain cascade briefin
 one is demoted to a hint (never fed to the constraint machinery), and a deleted key surfaces
 as an orphan warning rather than a dangling pointer.
 
-### Staleness — one mechanism, three triggers
+### Staleness — base changes invalidate, mainly
 
-Three independent changes can invalidate a translation; all feed **one** invalidation
-fan-out over the affected cells:
+The dominant trigger is the only one incumbents bother with; a second is kept because the cascade is
+the product. Both feed **one** invalidation fan-out over the affected cells:
 
-1. **Base string changed** — `TranslationKey.sourceRevision` bumps; cells where
-   `sourceRef != sourceRevision` go `stale`.
-2. **Context changed** — `Project.contextRevision` bumps on any scoped context write; cells
-   resolving through a changed scope re-eval (`Trust.contextRevisionAtEval` lags).
-3. **Judge changed** — a new `Calibration` version invalidates scores carrying an older
-   `calibrationRef`.
+1. **Base string changed** *(primary)* — `TranslationKey.sourceRevision` bumps; cells where
+   `sourceRef != sourceRevision` go `stale` and re-enter the router.
+2. **Context changed** *(secondary)* — `Project.contextRevision` bumps on any scoped context write;
+   cells resolving through a changed scope may re-flag. Collapse to one trigger if the re-flagging
+   proves noisy.
 
-One path; three sources wired into it.
+The third trigger an earlier draft carried — **judge changed** — is gone with `Calibration`. One
+path; one-or-two sources wired into it.
 
 ### Branching mechanics
 
@@ -408,24 +390,22 @@ entities use soft-delete `lifecycle`; context entities use `proposed|active|reti
 
 ### Retention
 
-Three append-only histories share the table — `TranslationVersion`, the `ReviewSignal`
-ledger, and `Release`. The compaction rule is part of the model: keep the latest-N detailed
-rounds per cell and compact older signals into the `roundsToConverge` counter that trust
-reads, so an active cell can't grow an unbounded hot partition.
+Two append-only histories share the table — `TranslationVersion` and `Release`. Each is bounded by
+its natural grain (one version per accept, one Release per export), so no cell grows an unbounded hot
+partition. With the `ReviewSignal` ledger cut, the old signal-compaction rule is gone — there is no
+per-cell signal stream left to compact.
 
 ### Recurring patterns
 
 Two shapes recur across the model; naming them removes special-casing and reveals the spine.
 
-- **Judgment → signal → fan-out.** Whenever an *external* judgment lands — an Escalation resolved,
-  a FieldReport corroborated, a Calibration re-versioned — the same three things happen: an
-  append-only **ReviewSignal** (or staleness stamp) is written, optional **context** is spawned (an
-  Example or GlossaryTerm), and the **staleness fan-out** re-enters affected cells. One verb, many
-  triggers.
-- **Append-only history.** `TranslationVersion`, `Release`, `Calibration`, and the `ReviewSignal`
-  ledger share one *shape*: immutable, monotonic `seq`/`version`, `supersededBy`, never rewritten.
-  They stay distinct entities (different grain and queries), but they're the immutable half of the
-  governing principle applied four times.
+- **Judgment → context → fan-out.** When an *external* judgment lands — an Escalation resolved, a
+  FieldReport filed — the same two things happen: optional **context** is spawned (an Example or
+  GlossaryTerm), and the affected cells **re-enter the router** (reopen + re-stale). One verb, two
+  triggers. (No signal ledger in the middle — the cut removed it.)
+- **Append-only history.** `TranslationVersion` and `Release` share one *shape*: immutable, monotonic
+  `seq`/`version`, `supersededBy`, never rewritten. They stay distinct entities (different grain and
+  queries), but they're the immutable half of the governing principle applied twice.
 
 ## Physical layout — single DynamoDB table
 
@@ -438,10 +418,10 @@ locales. Branching threads in as **one extra segment** in those same keys.
 Branch (config)     PK = PROJECT#<pid>      SK = BRANCH#<branchId>   (parent, forkPoint, status)
 Translation cell    PK = PROJ#<pid>#BR#<branchId>#LOC#<code>   SK = KEY#<ns>#<name>
 GSI3 (key→locales)  GSI3PK = PROJ#<pid>#BR#<branchId>#KEY#<ns>#<name>   GSI3SK = LOC#<code>
-History + ledger    same cell partition, SK-prefixed:
-                      SK = KEY#<ns>#<name>            ← live cell (mutable)
+History             same cell partition, SK-prefixed:
+                      SK = KEY#<ns>#<name>            ← live cell (mutable; lifecycle state lives here)
                       SK = KEY#<ns>#<name>#VER#<seq>  ← TranslationVersion (append-only)
-                      SK = KEY#<ns>#<name>#SIG#<seq>  ← ReviewSignal ledger (append-only)
+Comment (branch-free) PK = PROJ#<pid>#CMT#LOC#<code>   SK = KEY#<ns>#<name>#<seq>   ← shared across branches
 Release (immutable)  PK = PROJ#<pid>#REL#<releaseId>   SK = META | KEY#<ns>#<name>#<code>
 ```
 
@@ -461,7 +441,8 @@ Release (immutable)  PK = PROJ#<pid>#REL#<releaseId>   SK = META | KEY#<ns>#<nam
 | COW fall-through | ≤ depth point-reads up the parent chain | no |
 | Key across locales on a branch | GSI3 + `BR#` segment | reuses GSI3 |
 | All cells on a branch (merge/export) | query the branch's locale partitions | no |
-| Cell history / trust ledger | query cell partition by SK prefix | no |
+| Cell history (versions) | query cell partition by SK prefix | no |
+| Comments on a (key, locale) | query `PROJ#pid#CMT#LOC#code` `begins_with KEY#ns#name` | no |
 | List branches | query project partition `begins_with BRANCH#` | no |
 | What shipped | query the Release partition | no |
 
@@ -473,9 +454,10 @@ Release (immutable)  PK = PROJ#<pid>#REL#<releaseId>   SK = META | KEY#<ns>#<nam
 Concepts that are real but belong to a *different* model — a capability, an RBAC tier, an external
 pipeline — rather than this data model. Noted so the boundary is explicit:
 
-- **Branch-scoped context** — per-branch `ContextRule` overrides. In this model context is shared
-  across branches (industry keeps glossary global); `Scope` has a clean place to add a `branchId` if
-  the concept ever needs the branch axis.
+- **Branch-scoped context (and comments)** — per-branch `ContextRule` overrides, or a comment pinned
+  to one branch's value. In this model both context and comments are **shared across branches**
+  (industry keeps glossary global); `Scope` and the comment target each have a clean place to add a
+  `branchId` if either ever needs the branch axis.
 - **Presentation as a stored UI model / scope axis** — a nested interface tree
   (`surface ⊃ screen ⊃ region ⊃ component`) maintained inside Turjuman, or a presentation tier added
   to `Scope`. **Cut.** A second containment chain breaks `override`: `namespace:checkout` and
@@ -486,12 +468,31 @@ pipeline — rather than this data model. Noted so the boundary is explicit:
   rendered into the agent briefing (see *Situational awareness*), not modeled as structure. The
   agent-facing briefing *format* (the `surface/screen/role` vocabulary and its serialization) is a
   rendering spec to pin down when the projection is built, not data-model state.
+- **Measured-trust subsystem** — a folded `Trust` score over an append-only `ReviewSignal` ledger,
+  signal-independence ranking, a versioned `Calibration` (judge-of-the-judge), `ReviewRound` /
+  `roundsToConverge`, and the stakes-buy-depth **economics layer**. **Cut** after four independent
+  reviews (customer job-to-be-done, "the LLM already does it", YAGNI, market reality) converged. Why:
+  (1) the judge is an *external* model the app doesn't own, so a persisted `0..1` is a frozen opinion,
+  invalid the moment base/context drift — an agent in the loop re-derives faithfulness/tone for free
+  against the *current* value; (2) `Calibration`'s premise (a human hand-builds and version-maintains
+  gold exemplars per scope) reintroduces the very labor the product removes, so it ships empty and
+  makes every score it backs meaningless; (3) independence ranking assumes multiple frontier vendors
+  per string, but self-hosters run one model family; (4) no shipping TMS
+  (Crowdin/Lokalise/Phrase/Locize/Weblate/Tolgee) models the heavy version — they converge on *status
+  + QA checks + comments + approve + a single AI-confidence-score-with-threshold*, and we go one notch
+  **leaner than even that**: the residue kept here is a **3-state cell lifecycle**
+  (`proposed → accepted | escalated`), the accept/re-loop/escalate router, slim `Escalation`, slim
+  `FieldReport`, `Comment`, and verifiable-constraints-in-generation — **no score, no threshold.** The
+  agent's confidence sets the lifecycle at write time; the app stores the outcome, not the number. Add
+  a score only the day a human genuinely can't tell the iffy strings from the good ones without one,
+  and rebuild the ledger only when there is a second, *independent* signal to rank — not one paragraph
+  sooner.
 - **Agent-driven auto-merge** — a *capability*, not model state: merge conflicts are surfaced as
   escalations (or re-loops); how they get resolved is the service layer's concern.
 - **NamespaceMembership** — an optional third RBAC tier for shared-namespace ownership across
   teams.
-- **Reporter** as a full entity (vs the `reporterId` dedup token), per-plural-category trust
-  and constraints, and Example retrieval ranking beyond the deterministic default.
+- **Reporter** as a full entity, per-plural-category review state and constraints, and Example
+  retrieval ranking beyond the deterministic default.
 - **Hard rule:** any retrieval or ranking reaching for embeddings breaches *no in-app model*.
   Retrieval stays deterministic (scope-proximity + quality + recency).
 
