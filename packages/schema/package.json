@@ -1,6 +1,6 @@
 {
 	"name": "@turjuman/schema",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"description": "Turjuman shared domain model, zod schemas, RBAC policy, QA checks and ICU plural helpers — the pure, AWS-free core shared by the CLI, services and transports.",
 	"license": "MIT",
 	"author": "Turjuman contributors",

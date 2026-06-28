@@ -1,6 +1,6 @@
 {
 	"name": "@turjuman/formats",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"description": "Turjuman localization file-format adapters (JSON, YAML, .properties, ARB, CSV, Android XML, iOS .strings/.stringsdict, gettext PO, XLIFF 1.2/2.0) over a canonical ICU representation.",
 	"license": "MIT",
 	"author": "Turjuman contributors",
