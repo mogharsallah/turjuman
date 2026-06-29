@@ -29,10 +29,10 @@ export const qaOps: Operation[] = [
 					"Limit to specific check ids; omit to run all enabled checks.",
 				),
 			slot: z
-				.enum(["working", "approved"])
+				.enum(["working", "accepted"])
 				.optional()
 				.describe(
-					'Which value to check: the working draft (default) or the "approved" snapshot.',
+					"Which value to check: the working draft (default) or the accepted head.",
 				),
 		}),
 		output: qaReportSchema,

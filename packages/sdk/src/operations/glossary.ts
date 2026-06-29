@@ -1,13 +1,12 @@
 import {
 	glossaryTermSchema,
-	localeCode,
 	type Operation,
 	op,
 	projectId,
 	z,
 } from "../base.js";
 
-/** Glossary terms and translation-memory lookups. */
+/** Glossary terms (preferred renderings + do-not-translate). */
 export const glossaryOps: Operation[] = [
 	op({
 		name: "list_glossary",
@@ -60,18 +59,5 @@ export const glossaryOps: Operation[] = [
 			await service.glossary.remove(actor, a.projectId, a.termId);
 			return { removed: a.termId };
 		},
-	}),
-	op({
-		name: "lookup_translation_memory",
-		description:
-			"Find prior translations for a source string in a locale (exact, normalized and fuzzy matches), so you can reuse existing phrasing for consistency before translating.",
-		input: z.object({
-			projectId,
-			locale: localeCode,
-			text: z.string().describe("Source (base-locale) text to look up"),
-			limit: z.number().int().positive().max(20).optional(),
-		}),
-		handler: (a, { service, actor }) =>
-			service.tm.lookup(actor, a.projectId, a.locale, a.text, a.limit),
 	}),
 ];

@@ -43,12 +43,15 @@ export const projectOps: Operation[] = [
 	}),
 	op({
 		name: "update_project",
-		description: "Update a project's name, description, or base locale.",
+		description:
+			"Update a project's name, description, base locale, or accept policy " +
+			"(requireHumanAccept: when true, a run cannot self-accept — only a human can).",
 		input: z.object({
 			projectId,
 			name: z.string().optional(),
 			description: z.string().optional(),
 			baseLocale: localeCodeSchema.optional(),
+			requireHumanAccept: z.boolean().optional(),
 		}),
 		output: projectSchema,
 		handler: ({ projectId: id, ...patch }, { service, actor }) =>
