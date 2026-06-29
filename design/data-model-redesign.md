@@ -533,6 +533,24 @@ These were open in the prior draft; resolved so this version is final.
    op or a `push --rename` directive, applied to the target branch); auto-detection by source text is
    avoided as non-deterministic.
 
+## Adjacent changes folded into this rebuild
+
+Not data-model changes — surface simplifications that share the redesign's thesis (*delete the
+classical-TMS weight; simplicity is the feature*) and ride along because the rebuild already touches
+everything. The operation registry stays the single source of capability throughout; these only
+change how it's *projected*.
+
+- **Collapse the two MCP surfaces into one — drop classic, keep code, call it just "the MCP."**
+  Today `mcp-server` projects two surfaces: *classic* (default — one flat tool per operation) and
+  *code* (`?mode=code` — the agent writes JS/TS against the SDK registry in a QuickJS sandbox, with
+  `search`/`describe` for discovery). **Cut classic. The code surface becomes the only one, and stops
+  being a "mode" — there is just the MCP.** The `?mode=` switch and the "classic/code" naming go
+  away; `packages/sandbox` (`runCode`) and `packages/knowledge` (`search`/`describe`) become the
+  non-optional core of the one server, not an opt-in. Why: a single composable surface — write code
+  over the whole registry — strictly dominates N flat tools for an agent, it's the natural fit for the
+  translate-and-judge loop, and one projection can't drift from a second. The per-operation tool
+  list, the mode router, and every doc/CLI reference to modes are deleted with it.
+
 ## Outside this model's boundary
 
 Concepts that are real but belong to a *different* model — a capability, an RBAC tier, an external
