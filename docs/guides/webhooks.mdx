@@ -28,12 +28,14 @@ Manage your webhooks with:
 
 | Event | Fired when |
 |---|---|
-| `translation.updated` | A translation's value or status changes |
+| `translation.updated` | A translation cell's value or lifecycle changes |
 | `translation.stale` | A base value changes and dependent translations are flagged stale |
 | `key.created` | A new key is added to the project |
 | `key.updated` | A key's metadata (name, namespace, description) is edited |
 | `key.deleted` | A key is deleted from the project |
 | `locale.added` | A new locale is added to the project |
+| `run.started` | A translation run (the agent write primitive) starts |
+| `run.finished` | A translation run finishes |
 
 ## Payload format
 
@@ -44,7 +46,7 @@ Every event delivers a JSON payload with the same envelope:
   "event": "translation.updated",
   "projectId": "proj_x",
   "timestamp": "2024-01-15T10:30:00Z",
-  "data": { "key": "greeting", "locale": "fr", "status": "translated" }
+  "data": { "keyId": "key_3f9c", "branchId": "main", "locale": "fr", "lifecycle": "proposed" }
 }
 ```
 

@@ -1,10 +1,10 @@
 ---
 title: "Connect Claude Code to Turjuman's MCP server"
 sidebarTitle: "Connect Claude Code"
-description: "Connect Claude Code (or any MCP client) to your Turjuman instance — register the server, pick classic or code mode, scope the toolset, and verify the connection."
+description: "Connect Claude Code (or any MCP client) to your Turjuman instance — register the server, verify the connection, and scope access with the key's roles."
 ---
 
-Connect Claude Code to your Turjuman instance and your agent can manage projects, locales, keys, and translations in natural language. The connection is plain Streamable HTTP with a bearer key, so the same pattern works for any MCP-compatible client. This guide registers the server, selects a mode, and verifies it works.
+Connect Claude Code to your Turjuman instance and your agent can manage projects, locales, keys, and translations in natural language. The connection is plain Streamable HTTP with a bearer key, so the same pattern works for any MCP-compatible client. This guide registers the server and verifies it works.
 
 ## Prerequisites
 
@@ -47,37 +47,9 @@ Connect Claude Code to your Turjuman instance and your agent can manage projects
   </Step>
 </Steps>
 
-## Choose a mode
+## Drive the MCP
 
-Turjuman offers two mutually exclusive connection modes, selected with a URL parameter. For the model behind them, see [How agents use Turjuman](/concepts/how-agents-use-turjuman).
-
-<Tabs>
-  <Tab title="Classic (default)">
-    Every operation is its own tool; the agent calls them one at a time. Use the `McpUrl` as-is — no parameter needed. Best for interactive work and one-off actions.
-
-    ```
-    <McpUrl>
-    ```
-  </Tab>
-  <Tab title="Code mode">
-    The server advertises only `search`, `describe`, and `run_code`; the agent writes a TypeScript program that runs in a sandbox. Append `?mode=code` to the URL. Best for multi-step jobs and minimizing context tokens — see [Code mode](/guides/code-mode).
-
-    ```
-    <McpUrl>/?mode=code
-    ```
-  </Tab>
-</Tabs>
-
-## Scope the toolset
-
-In classic mode you can narrow which tools the agent sees by appending query parameters to the URL — useful for a least-privilege or single-purpose agent:
-
-```
-<McpUrl>/?groups=read,translations
-<McpUrl>/?tools=list_keys,get_key,set_translation
-```
-
-The toolset is always also constrained by the API key's permissions. See [Toolset scoping](/reference/mcp-tools) for the full parameter and group list. (`?mode=code` can't be combined with `?tools=` / `?groups=`.)
+There is one connection surface — three tools (`search`, `describe`, `run_code`) over the full operation catalogue, with no modes or scoping parameters to choose. The agent discovers operations with `search`/`describe` and runs them from `run_code`. See [Drive the MCP](/guides/code-mode) for the mechanics, and [How agents use Turjuman](/concepts/how-agents-use-turjuman) for the interaction model.
 
 ## Other MCP clients
 
@@ -96,13 +68,13 @@ Any client that speaks the MCP Streamable HTTP transport connects the same way: 
   <Accordion title="Calls fail with 401 Unauthorized">
     The key is missing, malformed, expired, or revoked. Check the `Authorization` header reads `Bearer <key>` exactly, and that the key hasn't passed its `expiresAt`. Issue a fresh key if needed — see [Security & API keys](/self-hosting/security).
   </Accordion>
-  <Accordion title="The agent can't see a tool it needs">
-    The key's roles or a `?tools=`/`?groups=` scope may be filtering it out. Remove the URL scoping or use a key with the required role. See [Roles & permissions](/concepts/roles-and-permissions).
+  <Accordion title="An operation fails with a permission error">
+    The key's roles don't permit that operation, or it's a `readOnly` key attempting a write. Use a key with the required role. See [Roles & permissions](/concepts/roles-and-permissions).
   </Accordion>
 </AccordionGroup>
 
 ## Related
 
 - [Translate with MCP](/guides/translate-with-mcp) — workflows to run once you're connected.
-- [Code mode](/guides/code-mode) — the `search` / `describe` / `run_code` surface.
-- [MCP tools reference](/reference/mcp-tools) — the full tool catalogue and scoping parameters.
+- [Drive the MCP](/guides/code-mode) — the `search` / `describe` / `run_code` surface.
+- [MCP reference](/reference/mcp-tools) — the full operation catalogue.

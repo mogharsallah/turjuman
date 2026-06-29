@@ -1,48 +1,54 @@
 ---
-title: "Turjuman architecture: MCP server, REST API, and data model"
+title: "Turjuman architecture: the MCP, the REST API, and the data model"
 sidebarTitle: "Architecture"
-description: "Turjuman runs two surfaces — an MCP server for AI agents and a REST API for CI — over one shared service layer and a single DynamoDB table."
+description: "Turjuman runs two surfaces — an MCP for AI agents and a narrow REST API for CI — over one shared service layer and a single DynamoDB table."
 ---
 
-Turjuman exposes two surfaces for interacting with your translation data: an **MCP server** designed for AI agents and agentic IDEs like Claude Code, and a **REST API** designed for deterministic CLI and CI workflows. Both surfaces are thin transport adapters — they translate incoming requests into calls against the same shared service layer, which owns all business logic, authorization, and persistence. There is no way for the two surfaces to drift out of sync because neither contains logic of its own.
+Turjuman exposes two surfaces for working with your translation data: an **MCP** designed for AI agents and agentic IDEs like Claude Code, and a **REST API** designed for deterministic CLI and CI workflows. Both surfaces are thin transport adapters — they translate incoming requests into calls against the same shared service layer, which owns all business logic, authorization, and persistence. The two surfaces cannot drift out of sync because neither contains logic of its own.
 
 ## Request flow
 
 ```
-Claude Code / agent ──Streamable HTTP + Bearer key──► MCP Server ─┐
-Developer CLI / CI ──REST + Bearer key──────────────► REST API ───┤
-                                                                   └─► Service layer → DynamoDB
+Claude Code / agent ──Streamable HTTP + Bearer key──► MCP ─────┐
+Developer CLI / CI ──REST + Bearer key────────────────► REST API ┤
+                                                                 └─► Service layer → DynamoDB
 ```
 
-Every inbound request — whether it arrives as an MCP tool call or a REST request — carries a `Bearer` API key in the `Authorization` header. The service layer resolves that key to a user and their roles before any operation runs.
+Every inbound request — an MCP tool call or a REST request — carries a `Bearer` API key in the `Authorization` header. The service layer resolves that key to a user and their roles before any operation runs.
 
 The infrastructure is entirely serverless: Turjuman runs on **AWS Lambda Function URLs** (no API Gateway in the path) backed by a **single DynamoDB table**. A `/health` endpoint is available for uptime checks and deployment verification.
 
 ## Two surfaces, one brain
 
-Between the transports and the service layer sits a single **operation layer**: every capability is declared once — its typed inputs and outputs, its description, and a handler that calls the service. The MCP server projects each operation as a tool, the REST API projects the applicable ones as routes, and code mode (below) exposes them to a sandbox. Because all three are projections of the same declarations, a capability behaves and authorizes identically no matter which surface reaches it.
+Between the transports and the service layer sits a single **operation layer**: every capability is declared once — its typed inputs and outputs, its description, and a handler that calls the service. The MCP and the REST API are both projections of those same declarations, so a capability behaves and authorizes identically no matter which surface reaches it.
 
-The MCP server and the REST API are deliberately kept as thin as possible. All business logic — including RBAC enforcement, translation state transitions, staleness detection, and glossary lookups — lives exclusively in the shared service layer. This means:
+The transports are deliberately thin. All business logic — RBAC enforcement, lifecycle transitions, staleness detection, glossary lookups — lives exclusively in the shared service layer. This means:
 
-- A bug fix or a new permission rule lands in one place and takes effect across both surfaces simultaneously.
-- Adding a new MCP tool never risks introducing a parallel code path with different authorization behavior.
-- You can call either surface interchangeably and always get the same result for the same operation.
+- A bug fix or a new permission rule lands in one place and takes effect across both surfaces at once.
+- Adding a capability never risks introducing a parallel code path with different authorization behavior.
+- You can call either surface and get the same result for the same operation.
 
 <Note>
-  If you are integrating Turjuman into an AI agent workflow, prefer the MCP server — it gives your agent access to the full 40+ tool catalog. Use the REST API when you need file-shaped, deterministic operations in a script or CI pipeline.
+  If you are integrating Turjuman into an AI agent workflow, use the MCP — it exposes the full operation catalogue. Use the REST API when you need file-shaped, deterministic operations in a script or CI pipeline.
 </Note>
+
+## The MCP is a code surface
+
+The MCP does not advertise one tool per operation. It exposes exactly three tools and asks the agent to write code against the catalogue:
+
+- `search` — find what exists, across both the operations (returned with typed signatures) and the documentation (guides, concepts, reference), so an agent learns *how the system works*, not just which functions exist.
+- `describe` — return the full detail for one result: an operation's typed inputs, output, and hints, or a whole docs page.
+- `run_code` — run TypeScript that calls `await turjuman.<operation>(args)` and returns a value.
+
+The code runs in an isolated **QuickJS-WASM sandbox** whose only capability is the operation layer — no network, filesystem, or environment access, and the discovery tools are not reachable from inside it. Each `turjuman.<operation>(args)` call is dispatched in-process to the very same handler a normal request runs, with the request's authenticated context, so authorization is unchanged; only the final result returns.
+
+This collapses a multi-step job into a single round-trip and keeps the operation catalogue out of the model's context, a large token saving on a big toolset. See the [MCP guide](/guides/code-mode) for how to drive it.
 
 ## Why the REST surface is narrow
 
-The REST API is intentionally scoped to a small set of **file-shaped, automatable operations**: listing projects and locales, exporting translation files, and importing them back. These are the actions a CI job or a developer script needs to run reliably without any interactive decision-making.
+The REST API is intentionally scoped to a small set of **file-shaped, automatable operations**: listing projects and locales, exporting translation files, and importing them back. These are the actions a CI job or a developer script needs to run reliably without interactive decision-making.
 
-Everything else — creating and managing projects, inviting members, writing translations, managing glossary terms, configuring webhooks — is exposed exclusively through the MCP server. This keeps the REST API predictable and easy to integrate into shell scripts and pipelines, while giving agents a rich, expressive surface to work with.
-
-## Code mode and the sandbox
-
-The MCP server can run in **code mode** (`?mode=code`), an alternative to advertising the full tool catalogue. Instead of one tool per operation, it exposes three: `search` and `describe` to discover capability, and `run_code` to execute TypeScript that calls it. `search` queries one knowledge index spanning both the operations (with typed signatures) and the documentation (guides, concepts, reference), so an agent can learn how the system works, not just which functions exist; `describe` returns the full detail for a chosen result. The code runs in an isolated **QuickJS-WASM sandbox** whose only capability is the operation layer — there is no network, filesystem, or environment access, and the discovery tools are not reachable from inside the sandbox. Each `turjuman.<operation>(args)` call is dispatched in-process to the very same handler a normal MCP tool call runs, with the request's authenticated context, so authorization is unchanged; only the final result returns.
-
-This collapses a multi-step job into a single round-trip and keeps the tool catalogue out of the model's context, which is a large token saving on big toolsets. The two modes are mutually exclusive per connection. See the [Code mode guide](/guides/code-mode) for details.
+Everything else — creating and managing projects, writing and accepting translations, managing glossary terms, configuring webhooks — is reached through the MCP. This keeps the REST API predictable and easy to script, while giving agents a rich, expressive surface.
 
 ## Domain model
 
@@ -50,27 +56,42 @@ These are the core entities you interact with when using Turjuman.
 
 | Entity | Key fields | Notes |
 |---|---|---|
-| **Project** | `id`, `name`, `slug`, `baseLocale` | The top-level container. `baseLocale` is the source language (e.g. `en`). |
-| **Locale** | `code`, `projectId` | A target language added to a project (e.g. `fr`, `ja`). |
-| **TranslationKey** | `namespace`, `name`, `description`, `tags`, `plural`, `state` | Identifies a single string within a project. Namespaces group related keys together. `state` is `active` or `deprecated`. |
-| **Translation** | `value`, `approvedValue`, `status`, `stale`, `origin` | The actual string data for a key in a specific locale. See below. |
-| **Glossary term** | `term`, `translations`, `doNotTranslate`, `projectId` | A preferred translation or do-not-translate entry used to guide AI translation. |
+| **Project** | `id`, `name`, `slug`, `baseLocale`, `contextRevision`, `requireHumanAccept` | The top-level container. `baseLocale` is the source language. `requireHumanAccept` gates whether a run may accept its own work. |
+| **Branch** | `id`, `name`, `parentBranchId`, `forkPoint`, `status` | A copy-on-write line of work. `main` always exists with `parentBranchId = null`. |
+| **Namespace** | `id`, `projectId`, `name`, `lifecycle` | An optional grouping of keys by feature-area. An opaque-id entity; `name` is a renamable label. |
+| **Locale** | `code`, `projectId`, `lifecycle` | A target language added to a project (e.g. `fr`, `ja`). |
+| **TranslationKey** | `id`, `namespaceId`, `name`, `description`, `tags`, `plural`, `state`, `sourceRevision` | Identifies a single string. `id` is stable identity; `(namespaceId, name)` are renamable labels. `state` is `active` or `deprecated`. |
+| **Translation** (cell) | `branchId`, `keyId`, `locale`, `value`, `head`, `lifecycle`, `stale`, `sourceRef`, `origin` | The living draft for a key in one locale. See [Lifecycle](/concepts/lifecycle). |
+| **TranslationVersion** | `keyId`, `locale`, `seq`, `value`, `acceptedBy` \| `runRef`, `prevVersionRef` | An immutable accepted-value commit. The cell's `head` points at the current one. |
+| **TranslationRun** | `id`, `branchId`, `trigger`, `valueSource`, `status`, `budgetSpent` | The write primitive that records what an agent did across a set of cells. |
+| **Glossary term** | `term`, `translations`, `doNotTranslate`, `caseSensitive` | A preferred translation or do-not-translate entry that guides AI translation. |
 | **Webhook** | `url`, `events`, `projectId` | An outbound notification sent when translation events occur. |
 | **User** | `id`, `email`, `globalRole` | A person or service account with a global org role. |
 | **Membership** | `userId`, `projectId`, `role` | Grants a user a role on a specific project. |
 | **API key** | `id`, `userId`, `readOnly`, `expiresAt` | A bearer token scoped to a user. `readOnly` and `expiresAt` are set at creation and cannot be changed. |
 
-### The Translation entity in detail
+### Keys carry a stable identity
 
-A Translation holds two string slots:
+A key's identity is its opaque `id`; its `(namespace, name)` are *display labels*, not identity. Renaming or moving a key is a small metadata change to the key's own row — and because every translation cell and version references the `keyId`, **a rename moves no translation data**. Imports and file exports still address keys by name through a per-branch `name → id` lookup, so the label stays ergonomic while the identity stays stable. This is why `rename_key` preserves a key's entire translation history.
 
-- **`value`** — the working draft. This is updated whenever a translation is written, whether by a human editor, an AI agent, or an import.
-- **`approvedValue`** — a stable snapshot of the last approved version. This is only updated when a translation moves to the `approved` status.
+### The cell and its version chain
 
-The `status` field follows a linear progression: `untranslated` → `translated` → `approved`. A translation can also carry a `stale` flag, which is set automatically when the base-locale value for that key changes — signaling that the translation may no longer be accurate.
+A **Translation** is the living cell for one `(branchId, keyId, locale)`: a mutable working `value`, a `lifecycle` state, and a `head` pointer. Accepting a value appends an immutable **TranslationVersion** and advances `head` — accepted text lives in that append-only chain, never in a mutable field. This separation of the *living* draft from the *historical* accepted values is what makes acceptance non-destructive and gives every string a full, auditable history. The mechanics — the five states, the head compare-and-swap, staleness — are covered in [Lifecycle](/concepts/lifecycle).
 
-The `origin` field records how a translation was produced: `human`, `llm`, `tm` (translation memory), `mt` (machine translation), or `import`.
+## Single-table layout
 
-<Tip>
-  Because `approvedValue` is a stable snapshot, you can always deliver approved translations to your app even while editors are actively revising the working `value`. The two slots let review workflows run in parallel with delivery.
-</Tip>
+Turjuman stores everything in one DynamoDB table with three global secondary indexes (GSI1–GSI3). Records are grouped into three partition families plus the identity singletons:
+
+| Partition (PK) | Sort key (SK) | Holds |
+|---|---|---|
+| `USER#<id>`, `USEREMAIL#<email>`, `APIKEY#<hash>` | — | Identity and access singletons (GSI1 `ORG#<orgId>` lists them per org). |
+| `PROJECT#<id>` | `LOCALE#`, `MEMBER#`, `GLOSSARY#`, `WEBHOOK#`, `QACONFIG`, `BRANCH#`, `NS#`, `RUN#` | The project record and its singletons: locales, members, glossary, webhooks, QA config, branches, namespaces, runs. |
+| `PROJ#<id>#BR#<branch>` | `KEY#<keyId>`, `KEYNAME#<ns>#<name>` | A branch's key definitions and the `name → id` lookup rows. |
+| `PROJ#<id>#BR#<branch>#LOC#<code>` | `KEY#<keyId>`, `VER#<keyId>#<seq>` | A branch × locale's live cells and their append-only version chains. |
+
+Two design choices fall out of this layout:
+
+- **Branching is one PK segment.** `#BR#<branchId>` scopes both key definitions and cells. `main` is not special — it is `branchId = "main"` baked into the key. A copy-on-write read is at most a few point-reads up the parent chain; in this release the chain is just `main`, so it collapses to a single read.
+- **`GSI3` flips locale-partitioned cells to key-major.** Indexed by `PROJ#<id>#BR#<branch>#KEY#<keyId>` → `LOC#<code>` and set on live cells only, it reads one key across every locale without scanning. Because cells are keyed by `keyId`, this index is rename-safe.
+
+Read [the lifecycle](/concepts/lifecycle) for how cells move through their states, and [Roles & permissions](/concepts/roles-and-permissions) for how the service layer authorizes each call.

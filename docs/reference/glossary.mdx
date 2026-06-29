@@ -1,10 +1,10 @@
 ---
-title: "Turjuman glossary: terms, roles, states, and surfaces"
+title: "Turjuman glossary: terms, roles, states, and entities"
 sidebarTitle: "Glossary"
-description: "Definitions of Turjuman terms — roles, translation states, surfaces, and domain entities — each linked to the concept or reference page that covers it in depth."
+description: "Definitions of Turjuman terms — roles, lifecycle states, and domain entities — each linked to the concept or reference page that covers it in depth."
 ---
 
-This page defines the terms used throughout Turjuman's documentation and tools. Field names (`baseLocale`, `approvedValue`, `stale`) are written exactly as they appear in the API. Each definition links to the page that explains the concept in full.
+This page defines the terms used throughout Turjuman's documentation and tools. Field names (`baseLocale`, `sourceRevision`, `head`) are written exactly as they appear in the API. Each definition links to the page that explains the concept in full.
 
 <Note>
   "Glossary" is also a Turjuman **feature** — a per-project list of preferred translations and do-not-translate terms that guides AI translation. This page is the documentation glossary; for the feature, see the **Glossary** entry below.
@@ -12,45 +12,50 @@ This page defines the terms used throughout Turjuman's documentation and tools. 
 
 | Term | Definition |
 |---|---|
+| **Accept** | The transition that signs off a translation: `accept_translation` appends an immutable version and advances the cell's `head` (a compare-and-swap). Honors `requireHumanAccept`. See [Lifecycle](/concepts/lifecycle). |
 | **ADMIN** | A global role with broad administrative access to projects and users, but which cannot change OWNER-level roles. Acts as MANAGER on every project. See [Roles & permissions](/concepts/roles-and-permissions). |
 | **API key** | A bearer token sent as `Authorization: Bearer <key>` on every request. Tied to a user, it inherits that user's roles and can be further scoped read-only or given an expiry. Stored as a SHA-256 hash. See [Security & API keys](/self-hosting/security). |
-| **`approvedValue`** | The stable, delivery-ready snapshot of a translation, updated only when a translation is approved. `turjuman pull` exports this by default. See [Lifecycle](/concepts/lifecycle). |
 | **Base locale** (`baseLocale`) | The source language a project's strings are authored in (e.g. `en`). Set when the project is created. See [Architecture](/concepts/architecture). |
-| **Classic mode** | The default MCP connection mode, where every operation is advertised as its own tool. Contrast with code mode. See [How agents use Turjuman](/concepts/how-agents-use-turjuman). |
-| **Code mode** | An MCP connection mode (`?mode=code`) that advertises only `search`, `describe`, and `run_code`, letting an agent run a sandboxed TypeScript program instead of many tool calls. See [Code mode](/guides/code-mode). |
-| **Continuous localization** | The practice of moving translations with your code — pushing source strings and pulling approved translations on every relevant change, rather than in a separate release cycle. See [Lifecycle](/concepts/lifecycle). |
-| **Delivery bundle** | The set of approved translations for a locale, exported as locale files by `turjuman pull` or the REST bundle endpoint. See [REST API](/reference/rest-api). |
-| **Deprecated** | A key state meaning the key was absent from the most recent push for its namespace. Deprecated keys and their translations are retained, and restored to `active` if the key reappears. See [Lifecycle](/concepts/lifecycle). |
-| **DEVELOPER** | A per-project role that can push and pull files, manage keys and locales, and write translations, but cannot approve them. Designed for CI pipelines. See [Roles & permissions](/concepts/roles-and-permissions). |
-| **EDITOR** | A per-project role that can write and approve translations, manage keys and glossary terms, and add context. Designed for translators and AI agents. See [Roles & permissions](/concepts/roles-and-permissions). |
-| **Glossary** | A per-project list of preferred translations and do-not-translate terms used to guide AI translation. Managed through the glossary MCP tools. See [MCP tools](/reference/mcp-tools). |
+| **Branch** | A named, copy-on-write line of work over a project's keys and translations. `main` always exists (`parentBranchId = null`) and is the safe root. See [Lifecycle](/concepts/lifecycle#branches-and-namespaces). |
+| **Cell** | See **Translation** — the living record for one string in one locale. |
+| **Continuous localization** | The practice of moving translations with your code — pushing source strings and pulling accepted translations on every relevant change, rather than in a separate release cycle. See [Lifecycle](/concepts/lifecycle). |
+| **Delivery bundle** | The set of accepted translations for a locale, exported as locale files by `turjuman pull` or the REST bundle endpoint. See [REST API](/reference/rest-api). |
+| **Deprecated** | A key state meaning the key was absent from the most recent source import. Deprecated keys and their translations are retained, and restored to `active` if the key reappears. See [Lifecycle](/concepts/lifecycle#keys-active-and-deprecated). |
+| **DEVELOPER** | A per-project role that can push and pull files, manage keys and locales, and write draft translations, but cannot accept them. Designed for CI pipelines. See [Roles & permissions](/concepts/roles-and-permissions). |
+| **EDITOR** | A per-project role that can write and accept translations, manage keys and glossary terms, and add context. Designed for translators and AI agents. See [Roles & permissions](/concepts/roles-and-permissions). |
+| **Escalated** | A lifecycle state routing an irreducible judgment to a human, who makes the call. See [Lifecycle](/concepts/lifecycle#the-five-lifecycle-states). |
+| **Glossary** | A per-project list of preferred translations and do-not-translate terms used to guide AI translation. Managed through the glossary operations. See [MCP reference](/reference/mcp-tools). |
+| **`head`** | A pointer on a translation cell to its current accepted version (a version `seq`). It doubles as the compare-and-swap token for acceptance. Absent until the first accept. See [Lifecycle](/concepts/lifecycle#accepting-appends-a-version). |
 | **ICU MessageFormat** | The canonical format Turjuman stores translation values in, including plurals. Format adapters convert to and from each file format's native plural form. See [File formats](/reference/file-formats). |
-| **Ingest** | The lifecycle stage where source strings are pushed into Turjuman (`turjuman push` or the REST import endpoint). New keys are created `untranslated`; changed base values flag translations `stale`. See [Lifecycle](/concepts/lifecycle). |
-| **Key** (TranslationKey) | A single translatable string within a project, identified by its `namespace` and `name`. Carries metadata like `description`, `tags`, `maxLength`, and `plural`. See [Architecture](/concepts/architecture). |
+| **Import** | Pushing source strings into Turjuman (`turjuman push` or the REST import endpoint). New keys are created `untranslated`; a changed base value re-stales its translations. See [Lifecycle](/concepts/lifecycle). |
+| **Key** (TranslationKey) | A single translatable string within a project, with a stable opaque `id` and a renamable `(namespace, name)` label. Carries `description`, `tags`, `maxLength`, `plural`, and `sourceRevision`. See [Architecture](/concepts/architecture#keys-carry-a-stable-identity). |
+| **Lifecycle** | A translation cell's state — the entire review verdict, with no score: `untranslated` → `proposed` → `accepted`, plus `escalated` and `retired`. See [Lifecycle](/concepts/lifecycle#the-five-lifecycle-states). |
 | **Locale** | A target language added to a project (e.g. `fr`, `ja`), identified by its `code`. See [Architecture](/concepts/architecture). |
-| **MANAGER** | A per-project role with full control of the project, including members, locales, and keys, plus writing and approving translations. See [Roles & permissions](/concepts/roles-and-permissions). |
-| **MCP** (Model Context Protocol) | The protocol Turjuman's primary surface speaks. The MCP server exposes Turjuman's full management capability as tools an AI agent calls. See [Why MCP-first](/concepts/why-mcp-first). |
+| **MANAGER** | A per-project role with full control of the project, including members, locales, and keys, plus writing and accepting translations. See [Roles & permissions](/concepts/roles-and-permissions). |
+| **MCP** (Model Context Protocol) | The protocol Turjuman's primary surface speaks. The MCP exposes three tools — `search`, `describe`, `run_code` — over the full operation catalogue. See [Why MCP-first](/concepts/why-mcp-first) and [MCP reference](/reference/mcp-tools). |
 | **MEMBER** | The standard global role: can work within projects the user is explicitly added to, with no org-wide administrative privileges. See [Roles & permissions](/concepts/roles-and-permissions). |
 | **Membership** | A record linking a user to a project with a specific per-project role. A user can hold different roles on different projects. See [Architecture](/concepts/architecture). |
-| **Namespace** | A grouping of related keys within a project. Ingest and deprecation are namespace-scoped, so you can push one namespace at a time. See [Lifecycle](/concepts/lifecycle). |
-| **Operation** | A single capability declared once in the shared service layer and projected to both the MCP tool surface and the REST API, so behaviour and permissions never diverge. See [Architecture](/concepts/architecture). |
-| **Origin** | Read-only provenance on a translation recording how it was produced: `human`, `llm`, `tm`, `mt`, or `import`. See [Lifecycle](/concepts/lifecycle). |
+| **Namespace** | An optional grouping of keys by feature-area within a project. A first-class entity with a stable opaque `id` and a renamable `name`. A key with no namespace is distinct from one of the same name under a namespace. See [Lifecycle](/concepts/lifecycle#branches-and-namespaces). |
+| **Operation** | A single capability declared once in the shared service layer and projected to both the MCP and the REST API, so behaviour and permissions never diverge. See [Architecture](/concepts/architecture). |
+| **Origin** | Read-only provenance on a translation value recording how it was produced: `human`, `agent`, or `import`. See [Lifecycle](/concepts/lifecycle#origin-where-a-value-came-from). |
 | **OWNER** | The highest global role: full control of all projects, users, and settings, and the only role that can grant privileged global roles. At least one OWNER must always exist. See [Roles & permissions](/concepts/roles-and-permissions). |
 | **Plural** | A key marked as having plural forms, stored canonically in ICU MessageFormat and converted to each format's native plural representation on export. See [File formats](/reference/file-formats). |
-| **Project** | The top-level container for a set of translations, with an `id`, `name`, `slug`, and `baseLocale`. See [Architecture](/concepts/architecture). |
+| **Project** | The top-level container for a set of translations, with an `id`, `name`, `slug`, `baseLocale`, and `requireHumanAccept`. See [Architecture](/concepts/architecture). |
 | **QA check** | A deterministic, advisory check (e.g. missing placeholders, length violations) run over translations. See [QA checks](/reference/qa-checks). |
 | **Read-only key** | An API key created with `readOnly: true`, which can perform read operations only, regardless of the user's roles. Set at creation and immutable. See [Security & API keys](/self-hosting/security). |
-| **REST API** | The narrow, file-shaped surface that backs the CLI and CI — list, export, and import operations only. Full management lives on the MCP server. See [REST API](/reference/rest-api). |
-| **Stale** | A flag set automatically on every translation for a key when its base-locale value changes, signaling the translation may no longer match the source. Cleared on approval. See [Lifecycle](/concepts/lifecycle). |
-| **Status** | A translation's workflow state, advancing `untranslated` → `translated` → `approved`. Editing an approved translation returns it to `translated`. See [Lifecycle](/concepts/lifecycle). |
-| **Translation** | The string data for a key in a specific locale, holding the working `value` and the approved `approvedValue` plus `status`, `stale`, and `origin`. See [Architecture](/concepts/architecture). |
-| **Translation memory** (TM) | A store of prior phrasings, searched (exact, normalized, and fuzzy) so previously approved translations can be reused. See [Translate with MCP](/guides/translate-with-mcp). |
-| **`value`** | The working draft slot of a translation, updated on every write — by a human, an agent, or an import — independent of the approved snapshot. See [Lifecycle](/concepts/lifecycle). |
+| **`requireHumanAccept`** | A project flag. When `true`, a run cannot accept its own work (it leaves cells `proposed`); only a human-attributed accept may flip `proposed → accepted`. See [Lifecycle](/concepts/lifecycle#who-may-accept-requirehumanaccept). |
+| **REST API** | The narrow, file-shaped surface that backs the CLI and CI — list, export, and import operations only. Full management lives on the MCP. See [REST API](/reference/rest-api). |
+| **Run** (TranslationRun) | The controlled write primitive that records what an agent did across a set of cells, giving idempotency, resumability, and a recorded budget. See [MCP reference](/reference/mcp-tools#runs). |
+| **`sourceRevision`** / **`sourceRef`** | `sourceRevision` is a key's base-value revision token; it bumps on a base edit. A cell's `sourceRef` is the revision it was translated against. A cell is `stale` when they differ. See [Lifecycle](/concepts/lifecycle#staleness-when-the-source-moves). |
+| **Stale** | A derived flag on a cell, `true` when its `sourceRef` no longer matches the key's `sourceRevision` — the source has changed since the cell was written. Cleared by accepting against the current source. See [Lifecycle](/concepts/lifecycle#staleness-when-the-source-moves). |
+| **Translation** (cell) | The living record for a key in one locale and branch, holding the working `value`, the `lifecycle` state, the `head` pointer, `stale`, `sourceRef`, and `origin`. See [Architecture](/concepts/architecture#the-cell-and-its-version-chain). |
+| **TranslationVersion** | An immutable accepted-value commit in a cell's history. The cell's `head` points at the current one; accepting appends a new one. See [Lifecycle](/concepts/lifecycle#accepting-appends-a-version). |
+| **`value`** | The working draft slot of a translation cell, updated on every write — by a human, an agent, or an import. Distinct from the accepted versions in history. See [Lifecycle](/concepts/lifecycle#the-cell-one-living-record-per-locale). |
 | **VIEWER** | A read-only per-project role: can read all project content but modify nothing. See [Roles & permissions](/concepts/roles-and-permissions). |
 | **Webhook** | An outbound, HMAC-signed HTTP notification sent when translation events occur, dispatched from DynamoDB Streams. See [Webhooks & events](/guides/webhooks). |
 
 ## Related references
 
-- [MCP tools](/reference/mcp-tools) — the full catalogue of operations these terms appear in.
+- [MCP reference](/reference/mcp-tools) — the full operation catalogue these terms appear in.
 - [CLI commands](/reference/cli-commands) — the `turjuman` commands for file sync.
 - [Architecture](/concepts/architecture) and [Lifecycle](/concepts/lifecycle) — the concepts most of these terms come from.

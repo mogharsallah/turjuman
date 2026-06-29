@@ -4,7 +4,7 @@ sidebarTitle: "QA Checks"
 description: "All 12 Turjuman QA checks — ICU syntax, placeholders, plural forms, glossary, length, and more — with severities, report format, and config."
 ---
 
-Turjuman's QA engine validates translations deterministically and reports findings without making any changes to your data. It never auto-approves a translation or modifies statuses — every finding is advisory, and your team decides how to act on the results.
+Turjuman's QA engine validates translations deterministically and reports findings without making any changes to your data. It never auto-accepts a translation or modifies its lifecycle — every finding is advisory, and your team decides how to act on the results.
 
 ---
 
@@ -19,7 +19,7 @@ Turjuman's QA engine validates translations deterministically and reports findin
 | `length` | warning | The translated value exceeds the key's configured `maxLength` character limit |
 | `whitespace` | warning | Leading or trailing whitespace mismatch compared to the base, or consecutive whitespace characters in the value |
 | `punctuation` | info | The terminal punctuation of the translation differs from the base (e.g. base ends with `.`, translation does not) |
-| `empty` | error | A translation that has been written or approved has a blank value |
+| `empty` | error | A translation expected to carry a value (`proposed` or `accepted`) is blank |
 | `glossary` | error / warning | A do-not-translate term was not preserved as-is in the translation (error); a preferred term from the glossary was not used (warning) |
 | `duplicate` | info | Two or more keys share an identical non-empty value for the same locale |
 | `stale` | info | The base (source) value has changed since this translation was last written |
@@ -34,8 +34,8 @@ You can run QA checks from three surfaces:
 | Surface | How |
 |---|---|
 | MCP | Call `run_qa_checks` with `{ projectId, locale?, checks?, slot? }` |
-| CLI | Run `turjuman check [--locale <code>] [--check <id...>] [--approved]` |
-| REST API | `POST /api/projects/{projectId}/qa` |
+| CLI | Run `turjuman check [--locale <code>] [--check <id...>]` |
+| REST API | `POST /v1/projects/{id}/checks` |
 
 The CLI exits with code `1` when any error-severity findings are present, making it easy to fail a CI step on quality regressions. You can also pass `--check` to `turjuman push` to run QA automatically after uploading.
 

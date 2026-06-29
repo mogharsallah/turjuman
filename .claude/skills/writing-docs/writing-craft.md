@@ -14,7 +14,7 @@ accessibility, media, and maintenance guides.
   users use ("webhook" if they say webhook). Define a new term in context rather than linking away.
 - **Cut filler:** "it's worth noting that", "in order to", "simply", "please". Don't editorialize
   ("this powerful feature") — show, don't sell.
-- **Headings are intent phrases**, not topic labels: "Connect in code mode", not "Code mode
+- **Headings are intent phrases**, not topic labels: "Connect your MCP client", not "MCP client
   configuration". Sentence case. Don't skip levels (H2 → H3). Never write a manual H1 — the `title`
   frontmatter generates it.
 - **Calibrate tone to the page's audience:** warmer and more guided for getting-started; dense and
