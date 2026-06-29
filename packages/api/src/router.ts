@@ -623,7 +623,7 @@ export function createApp(deps: RouterDeps): Hono<Env> {
 		describeRoute({
 			summary: "Export a delivery bundle for a locale",
 			description:
-				"Approved values by default; pass slot=working to ship drafts. Paginate with limit + cursor.",
+				"Accepted values by default; pass slot=working to ship drafts. Paginate with limit + cursor.",
 			tags: ["Translations"],
 			parameters: [
 				{
@@ -637,7 +637,7 @@ export function createApp(deps: RouterDeps): Hono<Env> {
 					in: "query",
 					name: "slot",
 					schema: { type: "string", enum: ["working"] },
-					description: "working = ship drafts instead of approved",
+					description: "working = ship drafts instead of accepted",
 				},
 				{
 					in: "query",
