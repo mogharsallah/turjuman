@@ -6,7 +6,6 @@ import { LocalesService } from "./locales.js";
 import { MembersService } from "./members.js";
 import { ProjectsService } from "./projects.js";
 import { QaService } from "./qa.js";
-import { ScoringService } from "./scoring.js";
 import { TranslationMemoryService } from "./tm.js";
 import { TranslationsService } from "./translations.js";
 import { UsersService } from "./users.js";
@@ -28,7 +27,6 @@ export class TurjumanService {
 	readonly glossary: GlossaryService;
 	readonly tm: TranslationMemoryService;
 	readonly qa: QaService;
-	readonly scoring: ScoringService;
 	readonly webhooks: WebhooksService;
 	readonly members: MembersService;
 	readonly users: UsersService;
@@ -42,7 +40,6 @@ export class TurjumanService {
 		this.glossary = new GlossaryService(repo);
 		this.tm = new TranslationMemoryService(repo);
 		this.qa = new QaService(repo);
-		this.scoring = new ScoringService(repo);
 		this.webhooks = new WebhooksService(repo);
 		this.members = new MembersService(repo);
 		this.users = new UsersService(repo);

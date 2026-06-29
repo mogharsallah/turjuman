@@ -5,7 +5,6 @@ import { keyOps } from "./keys.js";
 import { lifecycleOps } from "./lifecycle.js";
 import { projectOps } from "./projects.js";
 import { qaOps } from "./qa.js";
-import { scoringOps } from "./scoring.js";
 import { translationOps } from "./translations.js";
 
 /** Every Turjuman operation, grouped by domain in ./operations/*. This is the
@@ -19,7 +18,6 @@ export const OPERATIONS: Operation[] = [
 	...glossaryOps,
 	...lifecycleOps,
 	...qaOps,
-	...scoringOps,
 	...adminOps,
 ];
 
@@ -46,7 +44,6 @@ export const OPERATION_GROUPS: Record<string, Operation[]> = {
 	glossary: glossaryOps,
 	webhooks: webhookOps,
 	qa: qaOps,
-	scoring: scoringOps,
 	admin: adminOps,
 };
 

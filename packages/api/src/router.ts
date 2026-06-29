@@ -23,13 +23,8 @@ import {
 	projectSchema,
 	qaConfigBodySchema,
 	type Repository,
-	reviewTranslationsBodySchema,
 	runChecksBodySchema,
-	scoreConfigBodySchema,
-	scorePromptSchema,
-	scoreTranslationBodySchema,
 	type TurjumanService,
-	translationKeySchema,
 	translationSchema,
 	type User,
 	validation,
@@ -142,12 +137,6 @@ const bundleResponseSchema = z.object({
 	entries: z.array(bundleEntrySchema),
 	nextCursor: z.string().optional(),
 });
-const forReviewResponseSchema = z.object({
-	locale: z.string(),
-	keys: z.array(translationKeySchema),
-	nextCursor: z.string().optional(),
-});
-
 // REST list envelopes for projects/locales: the same core entity schemas wrapped
 // in the `{ projects }` / `{ locales }` object the REST routes return (MCP returns
 // the bare arrays). Composed from core schemas so the entities never drift.
@@ -770,160 +759,6 @@ export function createApp(deps: RouterDeps): Hono<Env> {
 		tags: ["QA"],
 		body: qaConfigBodySchema,
 		responseDescription: "The updated QA configuration",
-	});
-
-	// ---- AI scoring + review --------------------------------------------------
-	// The grading runs in the connected agent; these REST routes let a non-MCP CI
-	// agent fetch the methodology (score-prompt) and submit scores, in parity with
-	// the MCP tools/prompts.
-
-	projectOperation("score_translation", {
-		summary: "Submit an AI quality score for one translation",
-		description:
-			"Record an MQM 0–100 score and route the translation (needs_review / translated / approved).",
-		tags: ["Scoring"],
-		body: scoreTranslationBodySchema,
-		responseDescription:
-			"The updated translation, with its new status and score",
-	});
-
-	projectOperation("review_translations", {
-		summary: "Submit AI quality scores for many translations in a locale",
-		tags: ["Scoring"],
-		body: reviewTranslationsBodySchema,
-		responseDescription:
-			"Review summary (written/approved/flagged + skipped keys)",
-	});
-
-	projects.get(
-		"/:id/translations/for-review",
-		describeRoute({
-			summary: "List keys flagged needs_review for a locale",
-			description:
-				"Keys whose translation scored below the project threshold. Paginate with limit + cursor.",
-			tags: ["Scoring"],
-			parameters: [
-				{
-					in: "query",
-					name: "locale",
-					required: true,
-					schema: { type: "string" },
-					description: "Locale code",
-				},
-				{
-					in: "query",
-					name: "limit",
-					schema: { type: "integer" },
-					description: "Page size; enables pagination",
-				},
-				{
-					in: "query",
-					name: "cursor",
-					schema: { type: "string" },
-					description: "Opaque cursor from a previous page",
-				},
-			],
-			responses: {
-				200: jsonResponse(
-					forReviewResponseSchema,
-					"Flagged keys (and nextCursor when paginated)",
-				),
-				...errorResponses,
-			},
-		}),
-		async (c) => {
-			const actor = c.get("actor");
-			const projectId = c.req.param("id");
-			const locale = c.req.query("locale");
-			if (!locale) throw validation("Missing required query parameter: locale");
-			const cursor = c.req.query("cursor");
-			const limit = queryLimit(c.req.query("limit"));
-			const page = await svc.scoring.listForReviewPage(
-				actor,
-				projectId,
-				locale,
-				{ limit, cursor },
-			);
-			return c.json({ locale, keys: page.keys, nextCursor: page.nextCursor });
-		},
-	);
-
-	projects.get(
-		"/:id/translations/score-prompt",
-		describeRoute({
-			summary: "Fetch the assembled MQM scoring prompt for a locale",
-			description:
-				"Returns the rubric + project guidance + glossary + source/target for one key (pass name) or a page of the locale (omit name). Grade it, then POST the score back.",
-			tags: ["Scoring"],
-			parameters: [
-				{
-					in: "query",
-					name: "locale",
-					required: true,
-					schema: { type: "string" },
-					description: "Locale code",
-				},
-				{
-					in: "query",
-					name: "name",
-					schema: { type: "string" },
-					description: "Key name (single-string prompt); omit for a page",
-				},
-				{
-					in: "query",
-					name: "namespace",
-					schema: { type: "string" },
-					description: "Key namespace (with name)",
-				},
-				{
-					in: "query",
-					name: "limit",
-					schema: { type: "integer" },
-					description: "Page size for the batch form",
-				},
-				{
-					in: "query",
-					name: "cursor",
-					schema: { type: "string" },
-					description: "Opaque cursor for the batch form",
-				},
-			],
-			responses: {
-				200: jsonResponse(
-					scorePromptSchema,
-					"The assembled scoring prompt (messages + promptVersion)",
-				),
-				...errorResponses,
-			},
-		}),
-		async (c) => {
-			const actor = c.get("actor");
-			const projectId = c.req.param("id");
-			const locale = c.req.query("locale");
-			if (!locale) throw validation("Missing required query parameter: locale");
-			const name = c.req.query("name");
-			const cursor = c.req.query("cursor");
-			const limit = queryLimit(c.req.query("limit"));
-			const sel = name
-				? { name, namespace: c.req.query("namespace") }
-				: { limit, cursor };
-			return c.json(
-				await svc.scoring.buildScorePrompt(actor, projectId, locale, sel),
-			);
-		},
-	);
-
-	projectOperation("get_score_config", {
-		summary: "Get the project's AI-scoring configuration",
-		tags: ["Scoring"],
-		responseDescription: "The project's AI-scoring configuration",
-	});
-
-	projectOperation("set_score_config", {
-		summary: "Set the project's AI-scoring configuration",
-		tags: ["Scoring"],
-		body: scoreConfigBodySchema,
-		responseDescription: "The updated AI-scoring configuration",
 	});
 
 	app.route("/v1/projects", projects);
