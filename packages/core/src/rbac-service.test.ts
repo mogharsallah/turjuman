@@ -173,6 +173,59 @@ const DENIED: DeniedCase[] = [
 		action: "glossary.manage",
 		call: (s, ro, p) => s.glossary.remove(ro, p, "tid"),
 	},
+	// ---- context rules + examples ------------------------------------------------
+	{
+		op: "create_context_rule",
+		action: "glossary.manage",
+		call: (s, ro, p) => s.context.createRule(ro, p, { kind: "voice" }),
+	},
+	{
+		op: "update_context_rule",
+		action: "glossary.manage",
+		call: (s, ro, p) => s.context.updateRule(ro, p, "ctx_x", { hard: true }),
+	},
+	{
+		op: "delete_context_rule",
+		action: "glossary.manage",
+		call: (s, ro, p) => s.context.deleteRule(ro, p, "ctx_x"),
+	},
+	{
+		op: "add_example",
+		action: "glossary.manage",
+		call: (s, ro, p) =>
+			s.examples.add(ro, p, {
+				locale: "en",
+				sourceText: "s",
+				targetText: "t",
+			}),
+	},
+	{
+		op: "remove_example",
+		action: "glossary.manage",
+		call: (s, ro, p) => s.examples.remove(ro, p, "ex_x"),
+	},
+	// ---- escalations -------------------------------------------------------------
+	{
+		op: "escalate_translation",
+		action: "translation.review",
+		call: (s, ro, p) => s.escalations.open(ro, p, "en", "k", { reason: "r" }),
+	},
+	{
+		op: "claim_escalation",
+		action: "translation.review",
+		call: (s, ro, p) => s.escalations.claim(ro, p, "esc_x"),
+	},
+	{
+		op: "resolve_escalation",
+		action: "translation.review",
+		call: (s, ro, p) => s.escalations.resolve(ro, p, "esc_x", {}),
+	},
+	// ---- comments ----------------------------------------------------------------
+	{
+		op: "add_comment",
+		action: "translation.write",
+		call: (s, ro, p) => s.comments.add(ro, p, "en", "k", { body: "b" }),
+	},
 	// ---- webhooks ----------------------------------------------------------------
 	{
 		op: "add_webhook",

@@ -34,6 +34,19 @@ interface BundleCtx {
 	excludeStale?: boolean;
 }
 
+/**
+ * Whether a target cell is stale — the **union** of the two invalidation
+ * triggers: an explicit `stale` flag (set by the context-change fan-out) or a
+ * base revision that has since moved on (`sourceRef !== key.sourceRevision`).
+ * The base locale is the source and is never evaluated here.
+ */
+function isStale(cell: Translation, key: TranslationKey): boolean {
+	return (
+		cell.stale ||
+		(cell.sourceRef !== undefined && cell.sourceRef !== key.sourceRevision)
+	);
+}
+
 export class TranslationsService extends BaseService {
 	constructor(
 		repo: RepositoryApi,
@@ -342,9 +355,7 @@ export class TranslationsService extends BaseService {
 			cells
 				.filter((c) => {
 					const k = keyById.get(c.keyId);
-					return (
-						k && c.sourceRef !== undefined && c.sourceRef !== k.sourceRevision
-					);
+					return k !== undefined && isStale(c, k);
 				})
 				.map((c) => c.keyId),
 		);
@@ -376,7 +387,7 @@ export class TranslationsService extends BaseService {
 		);
 		const keys = active.filter((k, i) => {
 			const c = cells[i];
-			return c?.sourceRef !== undefined && c.sourceRef !== k.sourceRevision;
+			return c !== undefined && isStale(c, k);
 		});
 		return { keys, nextCursor: page.nextCursor };
 	}

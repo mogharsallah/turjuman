@@ -59,6 +59,28 @@ untranslated ──► proposed ──► accepted
   The states form a router, not a one-way gate. An `accepted` cell whose source later changes is re-flagged `stale` and re-enters at `proposed`; an `escalated` cell returns to `proposed` or `accepted` once a human decides. Regeneration is cheap, so most "failures" simply loop again rather than blocking.
 </Note>
 
+### Escalations resolve the `escalated` state
+
+`escalated` is the agent's *terminal* exit — reserved for an irreducible judgment it can't settle by re-looping (a legal nuance, a [restrict conflict](/concepts/context-cascade#cross-tier-overrides-raise-the-review-depth) the cascade surfaced). It opens a small escalation record and routes the cell to a human, who resolves it:
+
+<Steps>
+
+<Step title="Open">
+The agent calls `escalate_translation` with a reason. The cell flips to `escalated`, and an escalation opens against it (assigned to the project MANAGER by default). An `escalation.opened` [webhook](/guides/webhooks) fires.
+</Step>
+
+<Step title="Claim">
+A human calls `claim_escalation` to take ownership. Claiming is a **compare-and-swap** on the assignee — if two people claim at once, the first wins and the second is rejected — so no two reviewers work the same cell.
+</Step>
+
+<Step title="Resolve and accept">
+`resolve_escalation` accepts the chosen value (the cell's draft by default), which advances the cell to `accepted` exactly like a normal accept. Resolving may also **spawn a gold [example](/concepts/context-cascade#examples-are-retrieved-deterministically) or a glossary term**, so the human's decision becomes reusable context the next brief draws on.
+</Step>
+
+</Steps>
+
+This is the whole human-review subsystem: a routed exit and a comment thread (`add_comment` / `list_comments`), with the cell's lifecycle as the entire verdict — no score, no review rounds.
+
 ## Accepting appends a version
 
 Accepting a translation does **not** overwrite anything. It appends an immutable **TranslationVersion** — a commit — to the cell's history and advances the cell's `head` to point at it. The accepted text lives in that version chain; the cell's mutable `value` is only ever the working draft.
@@ -106,15 +128,19 @@ Every value records its `origin` — read-only provenance you can use to audit h
 
 A merge keeps a transported value's original origin, so there is no separate `merge` origin.
 
-## Staleness: when the source moves
+## Staleness: when the source — or the context — moves
 
-Each key carries a `sourceRevision` — a revision token derived from its base value. When you edit the base string, `sourceRevision` bumps. Every dependent cell stores the `sourceRef` it was translated against, and `stale` is simply the comparison:
+A cell goes `stale` when the translation may no longer match what it should be. There are **two** triggers, and staleness is their union.
+
+**1. The base string changed (primary).** Each key carries a `sourceRevision` — a revision token derived from its base value. When you edit the base string, `sourceRevision` bumps. Every dependent cell stores the `sourceRef` it was translated against, and `stale` is simply the comparison:
 
 ```
 stale  ⇔  cell.sourceRef ≠ key.sourceRevision
 ```
 
-A stale translation is not blocked from delivery — you can still ship it — but the flag tells the loop the translation may no longer match its source, so the cell re-enters at `proposed`. List the affected cells with `list_stale`, and re-translate them inside a [run](/reference/mcp-tools#runs). Accepting against the current source clears the flag.
+**2. The context changed (secondary).** Because the [context cascade](/concepts/context-cascade) is the product, a change to it invalidates translations too. Any scoped context write — a new voice rule, a glossary term, a length constraint — bumps the project's `contextRevision` and marks the in-scope cells `stale`, so a string re-translates against the context it should now honour.
+
+A stale translation is not blocked from delivery — you can still ship it — but the flag tells the loop the translation may be out of date, so the cell re-enters at `proposed`. List the affected cells with `list_stale`, and re-translate them inside a budgeted [run](/reference/mcp-tools#runs) — the run's budget ceiling is the natural back-pressure, so staleness only ever *marks* cells, never auto-translates. Accepting against the current source and context clears the flag.
 
 ## Delivery: accepted values, with a working slot
 

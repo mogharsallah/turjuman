@@ -62,6 +62,25 @@ export async function handler(event: {
 				events.push({ event: "run.started", data: summarizeRun(item) });
 			else if (record.eventName === "MODIFY" && item.finishedAt)
 				events.push({ event: "run.finished", data: summarizeRun(item) });
+		} else if (item.entityType === "Escalation") {
+			// Opened once (INSERT), then claimed and/or resolved (MODIFY).
+			if (record.eventName === "INSERT")
+				events.push({
+					event: "escalation.opened",
+					data: summarizeEscalation(item),
+				});
+			else if (record.eventName === "MODIFY") {
+				if (item.status === "resolved")
+					events.push({
+						event: "escalation.resolved",
+						data: summarizeEscalation(item),
+					});
+				else if (item.claimedBy)
+					events.push({
+						event: "escalation.claimed",
+						data: summarizeEscalation(item),
+					});
+			}
 		} else {
 			const mapped = mapEvent(String(item.entityType), record.eventName);
 			if (mapped) events.push({ event: mapped, data: summarize(item) });
@@ -163,6 +182,18 @@ function summarizeRun(item: Record<string, unknown>): Record<string, unknown> {
 		branchId: item.branchId,
 		status: item.status,
 		trigger: item.trigger,
+	};
+}
+
+function summarizeEscalation(
+	item: Record<string, unknown>,
+): Record<string, unknown> {
+	return {
+		escalationId: item.id,
+		branchId: item.branchId,
+		keyId: item.keyId,
+		locale: item.locale,
+		status: item.status,
 	};
 }
 

@@ -10,6 +10,15 @@ import type {
 	Branch,
 	BranchStatus,
 	CellLifecycle,
+	Comment,
+	ContextLifecycle,
+	ContextOperator,
+	ContextRule,
+	ContextRuleKind,
+	Escalation,
+	EscalationStatus,
+	Example,
+	ExampleQuality,
 	GlobalRole,
 	GlossaryTerm,
 	KeyState,
@@ -23,6 +32,7 @@ import type {
 	QaIgnoreRule,
 	RunStatus,
 	RunTrigger,
+	Scope,
 	Translation,
 	TranslationKey,
 	TranslationOrigin,
@@ -213,13 +223,80 @@ export function toGlossaryTerm(i: Item): GlossaryTerm {
 	return {
 		projectId: i.projectId as string,
 		id: i.id as string,
+		scope: i.scope as Scope | undefined,
 		term: i.term as string,
 		translations: (i.translations as Record<string, string> | undefined) ?? {},
 		caseSensitive: Boolean(i.caseSensitive),
 		doNotTranslate: Boolean(i.doNotTranslate),
 		notes: i.notes as string | undefined,
+		lifecycle: (i.lifecycle as ContextLifecycle | undefined) ?? "active",
 		createdAt: i.createdAt as string,
 		updatedAt: i.updatedAt as string,
+	};
+}
+
+// ---- context layer + review records -----------------------------------------
+
+export function toContextRule(i: Item): ContextRule {
+	return {
+		id: i.id as string,
+		projectId: i.projectId as string,
+		scope: i.scope as Scope,
+		kind: i.kind as ContextRuleKind,
+		operator: i.operator as ContextOperator,
+		payload: (i.payload as Record<string, unknown> | undefined) ?? {},
+		hard: i.hard as boolean | undefined,
+		lifecycle: (i.lifecycle as ContextLifecycle | undefined) ?? "active",
+		createdBy: i.createdBy as string,
+		createdAt: i.createdAt as string,
+		updatedAt: i.updatedAt as string,
+	};
+}
+
+export function toExample(i: Item): Example {
+	return {
+		id: i.id as string,
+		projectId: i.projectId as string,
+		scope: i.scope as Scope,
+		locale: i.locale as string,
+		sourceText: i.sourceText as string,
+		targetText: i.targetText as string,
+		quality: i.quality as ExampleQuality,
+		origin: i.origin as TranslationOrigin | undefined,
+		lifecycle: (i.lifecycle as ContextLifecycle | undefined) ?? "active",
+		createdAt: i.createdAt as string,
+		updatedAt: i.updatedAt as string,
+	};
+}
+
+export function toComment(i: Item): Comment {
+	return {
+		id: i.id as string,
+		projectId: i.projectId as string,
+		keyId: i.keyId as string,
+		locale: i.locale as string,
+		authorId: i.authorId as string,
+		body: i.body as string,
+		parentId: i.parentId as string | undefined,
+		createdAt: i.createdAt as string,
+	};
+}
+
+export function toEscalation(i: Item): Escalation {
+	return {
+		id: i.id as string,
+		projectId: i.projectId as string,
+		branchId: i.branchId as string,
+		keyId: i.keyId as string,
+		locale: i.locale as string,
+		reason: i.reason as string,
+		assigneeUserId: i.assigneeUserId as string | undefined,
+		claimedBy: i.claimedBy as string | undefined,
+		claimedAt: i.claimedAt as string | undefined,
+		status: i.status as EscalationStatus,
+		openedAt: i.openedAt as string,
+		resolvedAt: i.resolvedAt as string | undefined,
+		resolution: i.resolution as Escalation["resolution"],
 	};
 }
 

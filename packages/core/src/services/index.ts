@@ -1,5 +1,19 @@
 export { ApiKeysService } from "./api-keys.js";
 export { BranchService } from "./branches.js";
+export { type AddCommentInput, CommentService } from "./comments.js";
+export {
+	ContextService,
+	type CreateContextRuleInput,
+	type KeyRefOpts,
+	type ScopeInput,
+	type UpdateContextRuleInput,
+} from "./context.js";
+export {
+	EscalationService,
+	type OpenEscalationInput,
+	type ResolveEscalationInput,
+} from "./escalations.js";
+export { type AddExampleInput, ExampleService } from "./examples.js";
 export { GlossaryService } from "./glossary.js";
 export { KeysService } from "./keys.js";
 export { LocalesService } from "./locales.js";

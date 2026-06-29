@@ -1,6 +1,10 @@
 import type { Operation } from "../base.js";
 import { adminOps } from "./admin.js";
 import { branchOps } from "./branches.js";
+import { commentOps } from "./comments.js";
+import { contextOps } from "./context.js";
+import { escalationOps } from "./escalations.js";
+import { exampleOps } from "./examples.js";
 import { glossaryOps } from "./glossary.js";
 import { keyOps } from "./keys.js";
 import { lifecycleOps } from "./lifecycle.js";
@@ -21,6 +25,10 @@ export const OPERATIONS: Operation[] = [
 	...keyOps,
 	...translationOps,
 	...runOps,
+	...contextOps,
+	...exampleOps,
+	...escalationOps,
+	...commentOps,
 	...glossaryOps,
 	...lifecycleOps,
 	...qaOps,
@@ -50,6 +58,10 @@ export const OPERATION_GROUPS: Record<string, Operation[]> = {
 	keys: keyOps,
 	translations: translationOps,
 	runs: runOps,
+	context: contextOps,
+	examples: exampleOps,
+	escalations: escalationOps,
+	comments: commentOps,
 	glossary: glossaryOps,
 	webhooks: webhookOps,
 	qa: qaOps,

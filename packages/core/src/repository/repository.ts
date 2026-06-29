@@ -13,6 +13,10 @@ import {
 import type {
 	ApiKey,
 	Branch,
+	Comment,
+	ContextRule,
+	Escalation,
+	Example,
 	GlobalRole,
 	GlossaryTerm,
 	Locale,
@@ -36,7 +40,12 @@ import {
 	cellGSI3PK,
 	cellPK,
 	cellSK,
+	commentPrefix,
+	commentSK,
+	contextRuleSK,
 	emailPK,
+	escalationSK,
+	exampleSK,
 	glossarySK,
 	keyDefPK,
 	keyDefSK,
@@ -62,6 +71,10 @@ import {
 	toApiKey,
 	toBranch,
 	toCell,
+	toComment,
+	toContextRule,
+	toEscalation,
+	toExample,
 	toGlossaryTerm,
 	toKey,
 	toLocale,
@@ -991,6 +1004,199 @@ export class Repository {
 		await this.deleteItem(projectPK(projectId), glossarySK(termId));
 	}
 
+	// ---- context rules --------------------------------------------------------
+
+	async putContextRule(rule: ContextRule): Promise<ContextRule> {
+		await this.putItem({
+			PK: projectPK(rule.projectId),
+			SK: contextRuleSK(rule.id),
+			entityType: "ContextRule",
+			...rule,
+		});
+		return rule;
+	}
+
+	async getContextRule(
+		projectId: string,
+		id: string,
+	): Promise<ContextRule | undefined> {
+		return this.getItem(projectPK(projectId), contextRuleSK(id), toContextRule);
+	}
+
+	async listContextRules(projectId: string): Promise<ContextRule[]> {
+		return this.listByPrefix(projectPK(projectId), "CTXRULE#", toContextRule);
+	}
+
+	async deleteContextRule(projectId: string, id: string): Promise<void> {
+		await this.deleteItem(projectPK(projectId), contextRuleSK(id));
+	}
+
+	// ---- examples (the few-shot / translation-memory corpus) ------------------
+
+	async putExample(example: Example): Promise<Example> {
+		await this.putItem({
+			PK: projectPK(example.projectId),
+			SK: exampleSK(example.id),
+			entityType: "Example",
+			...example,
+		});
+		return example;
+	}
+
+	async getExample(
+		projectId: string,
+		id: string,
+	): Promise<Example | undefined> {
+		return this.getItem(projectPK(projectId), exampleSK(id), toExample);
+	}
+
+	async listExamples(projectId: string): Promise<Example[]> {
+		return this.listByPrefix(projectPK(projectId), "EXAMPLE#", toExample);
+	}
+
+	async deleteExample(projectId: string, id: string): Promise<void> {
+		await this.deleteItem(projectPK(projectId), exampleSK(id));
+	}
+
+	// ---- comments (branch-free, per (key, locale) string) ---------------------
+
+	async putComment(comment: Comment): Promise<Comment> {
+		await this.putItem({
+			PK: projectPK(comment.projectId),
+			SK: commentSK(comment.keyId, comment.locale, comment.id),
+			entityType: "Comment",
+			...comment,
+		});
+		return comment;
+	}
+
+	async listComments(
+		projectId: string,
+		keyId: string,
+		locale: string,
+	): Promise<Comment[]> {
+		return this.listByPrefix(
+			projectPK(projectId),
+			commentPrefix(keyId, locale),
+			toComment,
+		);
+	}
+
+	async deleteComment(
+		projectId: string,
+		keyId: string,
+		locale: string,
+		id: string,
+	): Promise<void> {
+		await this.deleteItem(projectPK(projectId), commentSK(keyId, locale, id));
+	}
+
+	// ---- escalations (the review router's human exit) -------------------------
+
+	async putEscalation(escalation: Escalation): Promise<Escalation> {
+		await this.putItem({
+			PK: projectPK(escalation.projectId),
+			SK: escalationSK(escalation.id),
+			entityType: "Escalation",
+			...escalation,
+		});
+		return escalation;
+	}
+
+	async getEscalation(
+		projectId: string,
+		id: string,
+	): Promise<Escalation | undefined> {
+		return this.getItem(projectPK(projectId), escalationSK(id), toEscalation);
+	}
+
+	async listEscalations(projectId: string): Promise<Escalation[]> {
+		return this.listByPrefix(projectPK(projectId), "ESC#", toEscalation);
+	}
+
+	/**
+	 * Claim an open, unclaimed escalation — a compare-and-swap on `claimedBy`, so
+	 * two reviewers racing for the same one can't both win. Throws CONFLICT if it
+	 * was already claimed or resolved.
+	 */
+	async claimEscalation(
+		projectId: string,
+		id: string,
+		userId: string,
+		at: string,
+	): Promise<Escalation> {
+		try {
+			await this.doc.send(
+				new UpdateCommand({
+					TableName: this.table,
+					Key: { PK: projectPK(projectId), SK: escalationSK(id) },
+					UpdateExpression: "SET claimedBy = :u, claimedAt = :t",
+					ConditionExpression:
+						"attribute_exists(PK) AND attribute_not_exists(claimedBy) AND #s = :open",
+					ExpressionAttributeNames: { "#s": "status" },
+					ExpressionAttributeValues: {
+						":u": userId,
+						":t": at,
+						":open": "open",
+					},
+				}),
+			);
+		} catch (err) {
+			if (isConditionalFailure(err))
+				throw conflict("Escalation already claimed or resolved");
+			throw err;
+		}
+		const updated = await this.getEscalation(projectId, id);
+		if (!updated) throw conflict(`Escalation ${id} not found`);
+		return updated;
+	}
+
+	// ---- context staleness fan-out --------------------------------------------
+
+	/** Atomically increment the project's context revision; returns the new value.
+	 * Bumped on any scoped context write (drives context-staleness). */
+	async bumpContextRevision(projectId: string): Promise<number> {
+		const res = await this.doc.send(
+			new UpdateCommand({
+				TableName: this.table,
+				Key: { PK: projectPK(projectId), SK: projectPK(projectId) },
+				UpdateExpression:
+					"SET contextRevision = if_not_exists(contextRevision, :z) + :one, updatedAt = :t",
+				ConditionExpression: "attribute_exists(PK)",
+				ExpressionAttributeValues: {
+					":z": 0,
+					":one": 1,
+					":t": new Date().toISOString(),
+				},
+				ReturnValues: "UPDATED_NEW",
+			}),
+		);
+		return (res.Attributes?.contextRevision as number | undefined) ?? 0;
+	}
+
+	/**
+	 * Mark every live, translated cell of one key (all locales on one branch)
+	 * `stale = true` — the context-change fan-out. Dependents re-enter the router
+	 * and are re-translated inside a budgeted run. Returns the count touched.
+	 */
+	async markCellsStaleByKey(
+		projectId: string,
+		branchId: string,
+		keyId: string,
+	): Promise<number> {
+		const cells = await this.listCellsByKey(projectId, branchId, keyId);
+		const touched = cells
+			.filter(
+				(c) =>
+					!c.stale &&
+					c.lifecycle !== "untranslated" &&
+					c.lifecycle !== "retired",
+			)
+			.map((c) => ({ ...c, stale: true }));
+		await this.putCells(touched);
+		return touched.length;
+	}
+
 	// ---- webhooks -------------------------------------------------------------
 
 	async putWebhook(webhook: Webhook): Promise<Webhook> {
@@ -1066,8 +1272,8 @@ export class Repository {
 	/**
 	 * Delete a project and every item beneath it: the `PROJECT#<id>` partition
 	 * (locales, members, glossary, webhooks, qa-config, branches, namespaces,
-	 * runs), every branch's key-definition partition, and every branch×locale
-	 * cell/version partition.
+	 * runs, context rules, examples, escalations, comments), every branch's
+	 * key-definition partition, and every branch×locale cell/version partition.
 	 */
 	async deleteProjectCascade(
 		projectId: string,

@@ -1,4 +1,9 @@
-import type { TranslationOrigin, WebhookEvent } from "@turjuman/schema";
+import type {
+	ContextLifecycle,
+	TranslationOrigin,
+	WebhookEvent,
+} from "@turjuman/schema";
+import type { ScopeInput } from "./context.js";
 
 // Aggregate/page/result shapes the services return are defined once in `wire.ts`
 // (the transport-facing schemas) and re-exported here as their inferred types,
@@ -50,13 +55,17 @@ export interface SetTranslationInput {
 
 export interface AddGlossaryTermInput {
 	term: string;
+	/** Cascade coordinate; absent = project-wide. */
+	scope?: ScopeInput;
 	translations?: Record<string, string>;
 	caseSensitive?: boolean;
 	doNotTranslate?: boolean;
 	notes?: string;
 }
 
-export type UpdateGlossaryTermInput = Partial<AddGlossaryTermInput>;
+export type UpdateGlossaryTermInput = Partial<AddGlossaryTermInput> & {
+	lifecycle?: ContextLifecycle;
+};
 
 export interface AddWebhookInput {
 	url: string;

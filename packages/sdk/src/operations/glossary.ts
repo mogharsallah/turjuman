@@ -1,8 +1,10 @@
 import {
+	contextLifecycleSchema,
 	glossaryTermSchema,
 	type Operation,
 	op,
 	projectId,
+	scopeInputSchema,
 	z,
 } from "../base.js";
 
@@ -19,10 +21,11 @@ export const glossaryOps: Operation[] = [
 	op({
 		name: "add_glossary_term",
 		description:
-			"Add a glossary term. Use doNotTranslate for brand/product names that must stay verbatim, and translations for preferred per-locale renderings.",
+			"Add a glossary term. Use doNotTranslate for brand/product names that must stay verbatim, and translations for preferred per-locale renderings. `scope` narrows it to a namespace/key (absent = project-wide); glossary merges by union across the cascade.",
 		input: z.object({
 			projectId,
 			term: z.string(),
+			scope: scopeInputSchema.optional(),
 			translations: z
 				.record(z.string())
 				.optional()
@@ -37,15 +40,18 @@ export const glossaryOps: Operation[] = [
 	}),
 	op({
 		name: "update_glossary_term",
-		description: "Update a glossary term's translations, flags, or notes.",
+		description:
+			"Update a glossary term's translations, flags, notes, scope, or lifecycle (retire it with lifecycle `retired`/`archived`).",
 		input: z.object({
 			projectId,
 			termId: z.string(),
 			term: z.string().optional(),
+			scope: scopeInputSchema.optional(),
 			translations: z.record(z.string()).optional(),
 			caseSensitive: z.boolean().optional(),
 			doNotTranslate: z.boolean().optional(),
 			notes: z.string().optional(),
+			lifecycle: contextLifecycleSchema.optional(),
 		}),
 		output: glossaryTermSchema,
 		handler: ({ projectId: id, termId, ...patch }, { service, actor }) =>

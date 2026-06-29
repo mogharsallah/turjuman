@@ -2,6 +2,10 @@ import type {
 	Actor,
 	ApiKey,
 	Branch,
+	Comment,
+	ContextRule,
+	Escalation,
+	Example,
 	GlobalRole,
 	GlossaryTerm,
 	Locale,
@@ -60,6 +64,10 @@ export class FakeRepo implements RepositoryApi {
 	webhooks = new Map<string, Map<string, Webhook>>(); // projectId -> id -> webhook
 	qaConfigs = new Map<string, QaConfig>(); // projectId -> config
 	runs = new Map<string, TranslationRun>(); // `${projectId}#${runId}`
+	contextRules = new Map<string, ContextRule>(); // `${projectId}#${id}`
+	examples = new Map<string, Example>(); // `${projectId}#${id}`
+	escalations = new Map<string, Escalation>(); // `${projectId}#${id}`
+	comments = new Map<string, Comment>(); // `${projectId}#${keyId}#${locale}#${id}`
 
 	// ---- composite-key helpers -------------------------------------------------
 	private defK = (p: string, b: string, id: string) => `${p}#${b}#${id}`;
@@ -519,6 +527,135 @@ export class FakeRepo implements RepositoryApi {
 		this.glossaryMap(projectId).delete(termId);
 	}
 
+	// ---- context rules --------------------------------------------------------
+	async putContextRule(rule: ContextRule): Promise<ContextRule> {
+		this.contextRules.set(`${rule.projectId}#${rule.id}`, rule);
+		return rule;
+	}
+	async getContextRule(
+		projectId: string,
+		id: string,
+	): Promise<ContextRule | undefined> {
+		return this.contextRules.get(`${projectId}#${id}`);
+	}
+	async listContextRules(projectId: string): Promise<ContextRule[]> {
+		return [...this.contextRules.values()].filter(
+			(r) => r.projectId === projectId,
+		);
+	}
+	async deleteContextRule(projectId: string, id: string): Promise<void> {
+		this.contextRules.delete(`${projectId}#${id}`);
+	}
+
+	// ---- examples -------------------------------------------------------------
+	async putExample(example: Example): Promise<Example> {
+		this.examples.set(`${example.projectId}#${example.id}`, example);
+		return example;
+	}
+	async getExample(
+		projectId: string,
+		id: string,
+	): Promise<Example | undefined> {
+		return this.examples.get(`${projectId}#${id}`);
+	}
+	async listExamples(projectId: string): Promise<Example[]> {
+		return [...this.examples.values()].filter((e) => e.projectId === projectId);
+	}
+	async deleteExample(projectId: string, id: string): Promise<void> {
+		this.examples.delete(`${projectId}#${id}`);
+	}
+
+	// ---- comments -------------------------------------------------------------
+	async putComment(comment: Comment): Promise<Comment> {
+		this.comments.set(
+			`${comment.projectId}#${comment.keyId}#${comment.locale}#${comment.id}`,
+			comment,
+		);
+		return comment;
+	}
+	async listComments(
+		projectId: string,
+		keyId: string,
+		locale: string,
+	): Promise<Comment[]> {
+		return [...this.comments.values()]
+			.filter(
+				(c) =>
+					c.projectId === projectId && c.keyId === keyId && c.locale === locale,
+			)
+			.sort((a, b) => compareSk(a.id, b.id));
+	}
+	async deleteComment(
+		projectId: string,
+		keyId: string,
+		locale: string,
+		id: string,
+	): Promise<void> {
+		this.comments.delete(`${projectId}#${keyId}#${locale}#${id}`);
+	}
+
+	// ---- escalations ----------------------------------------------------------
+	async putEscalation(escalation: Escalation): Promise<Escalation> {
+		this.escalations.set(
+			`${escalation.projectId}#${escalation.id}`,
+			escalation,
+		);
+		return escalation;
+	}
+	async getEscalation(
+		projectId: string,
+		id: string,
+	): Promise<Escalation | undefined> {
+		return this.escalations.get(`${projectId}#${id}`);
+	}
+	async listEscalations(projectId: string): Promise<Escalation[]> {
+		return [...this.escalations.values()].filter(
+			(e) => e.projectId === projectId,
+		);
+	}
+	/** Mirrors the real repo's claim CAS: only an open, unclaimed escalation can be
+	 * claimed; a racing second claim loses with CONFLICT. */
+	async claimEscalation(
+		projectId: string,
+		id: string,
+		userId: string,
+		at: string,
+	): Promise<Escalation> {
+		const e = this.escalations.get(`${projectId}#${id}`);
+		if (!e) throw conflict(`Escalation ${id} not found`);
+		if (e.claimedBy || e.status !== "open")
+			throw conflict("Escalation already claimed or resolved");
+		const updated: Escalation = { ...e, claimedBy: userId, claimedAt: at };
+		this.escalations.set(`${projectId}#${id}`, updated);
+		return updated;
+	}
+
+	// ---- context staleness fan-out --------------------------------------------
+	async bumpContextRevision(projectId: string): Promise<number> {
+		const p = this.projects.get(projectId);
+		if (!p) throw conflict(`Project ${projectId} not found`);
+		const next = (p.contextRevision ?? 0) + 1;
+		this.projects.set(projectId, {
+			...p,
+			contextRevision: next,
+			updatedAt: new Date().toISOString(),
+		});
+		return next;
+	}
+	async markCellsStaleByKey(
+		projectId: string,
+		branchId: string,
+		keyId: string,
+	): Promise<number> {
+		const cells = await this.listCellsByKey(projectId, branchId, keyId);
+		const touched = cells.filter(
+			(c) =>
+				!c.stale && c.lifecycle !== "untranslated" && c.lifecycle !== "retired",
+		);
+		for (const c of touched) await this.putCell({ ...c, stale: true });
+		return touched.length;
+	}
+
 	// ---- webhooks -------------------------------------------------------------
 	private webhookMap(projectId: string): Map<string, Webhook> {
 		let m = this.webhooks.get(projectId);
@@ -591,6 +728,10 @@ export class FakeRepo implements RepositoryApi {
 		dropByPrefix(this.cells);
 		dropByPrefix(this.versions);
 		dropByPrefix(this.runs);
+		dropByPrefix(this.contextRules);
+		dropByPrefix(this.examples);
+		dropByPrefix(this.escalations);
+		dropByPrefix(this.comments);
 		for (const [k, m] of this.memberships)
 			if (m.projectId === projectId) this.memberships.delete(k);
 	}

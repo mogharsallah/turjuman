@@ -673,6 +673,291 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 		calls: [{ method: "runs.cancel", args: [ACTOR, "P_projectId", "R_runId"] }],
 	},
 
+	// ---- context ---------------------------------------------------------------
+	list_context_rules: {
+		input: { projectId: "P_projectId" },
+		calls: [{ method: "context.listRules", args: [ACTOR, "P_projectId"] }],
+	},
+	create_context_rule: {
+		input: {
+			projectId: "P_projectId",
+			scope: { keyId: "K_keyId" },
+			kind: "voice",
+			operator: "override",
+			payload: { tone: "T_tone" },
+			hard: false,
+		},
+		calls: [
+			{
+				method: "context.createRule",
+				args: [
+					ACTOR,
+					"P_projectId",
+					{
+						scope: { keyId: "K_keyId" },
+						kind: "voice",
+						operator: "override",
+						payload: { tone: "T_tone" },
+						hard: false,
+					},
+				],
+			},
+		],
+	},
+	update_context_rule: {
+		input: {
+			projectId: "P_projectId",
+			ruleId: "CR_ruleId",
+			payload: { tone: "T_tone" },
+			operator: "union",
+			hard: true,
+			lifecycle: "active",
+		},
+		calls: [
+			{
+				method: "context.updateRule",
+				args: [
+					ACTOR,
+					"P_projectId",
+					"CR_ruleId",
+					{
+						payload: { tone: "T_tone" },
+						operator: "union",
+						hard: true,
+						lifecycle: "active",
+					},
+				],
+			},
+		],
+	},
+	delete_context_rule: {
+		input: { projectId: "P_projectId", ruleId: "CR_ruleId" },
+		calls: [
+			{
+				method: "context.deleteRule",
+				args: [ACTOR, "P_projectId", "CR_ruleId"],
+			},
+		],
+		result: { removed: "CR_ruleId" },
+	},
+	resolve_context: {
+		input: {
+			projectId: "P_projectId",
+			locale: "zz",
+			name: "N_name",
+			namespace: "NS_ns",
+			branch: "BR_branch",
+		},
+		calls: [
+			{
+				method: "context.resolve",
+				args: [
+					ACTOR,
+					"P_projectId",
+					"zz",
+					"N_name",
+					{ namespace: "NS_ns", branch: "BR_branch" },
+				],
+			},
+		],
+	},
+	get_brief: {
+		input: {
+			projectId: "P_projectId",
+			locale: "zz",
+			name: "N_name",
+			namespace: "NS_ns",
+			branch: "BR_branch",
+		},
+		calls: [
+			{
+				method: "context.brief",
+				args: [
+					ACTOR,
+					"P_projectId",
+					"zz",
+					"N_name",
+					{ namespace: "NS_ns", branch: "BR_branch" },
+				],
+			},
+		],
+	},
+
+	// ---- examples --------------------------------------------------------------
+	find_examples: {
+		input: {
+			projectId: "P_projectId",
+			locale: "zz",
+			name: "N_name",
+			namespace: "NS_ns",
+			branch: "BR_branch",
+		},
+		calls: [
+			{
+				method: "examples.find",
+				args: [
+					ACTOR,
+					"P_projectId",
+					"zz",
+					"N_name",
+					{ namespace: "NS_ns", branch: "BR_branch" },
+				],
+			},
+		],
+	},
+	list_examples: {
+		input: { projectId: "P_projectId" },
+		calls: [{ method: "examples.list", args: [ACTOR, "P_projectId"] }],
+	},
+	add_example: {
+		input: {
+			projectId: "P_projectId",
+			locale: "zz",
+			scope: { keyId: "K_keyId" },
+			sourceText: "ST_source",
+			targetText: "TT_target",
+			quality: "gold",
+			origin: "human",
+		},
+		calls: [
+			{
+				method: "examples.add",
+				args: [
+					ACTOR,
+					"P_projectId",
+					{
+						locale: "zz",
+						scope: { keyId: "K_keyId" },
+						sourceText: "ST_source",
+						targetText: "TT_target",
+						quality: "gold",
+						origin: "human",
+					},
+				],
+			},
+		],
+	},
+	remove_example: {
+		input: { projectId: "P_projectId", exampleId: "EX_exampleId" },
+		calls: [
+			{
+				method: "examples.remove",
+				args: [ACTOR, "P_projectId", "EX_exampleId"],
+			},
+		],
+		result: { removed: "EX_exampleId" },
+	},
+
+	// ---- escalations -----------------------------------------------------------
+	escalate_translation: {
+		input: {
+			projectId: "P_projectId",
+			locale: "zz",
+			name: "N_name",
+			namespace: "NS_ns",
+			branch: "BR_branch",
+			reason: "RE_reason",
+			assigneeUserId: "AU_assignee",
+		},
+		calls: [
+			{
+				method: "escalations.open",
+				args: [
+					ACTOR,
+					"P_projectId",
+					"zz",
+					"N_name",
+					{
+						namespace: "NS_ns",
+						branch: "BR_branch",
+						reason: "RE_reason",
+						assigneeUserId: "AU_assignee",
+					},
+				],
+			},
+		],
+	},
+	list_escalations: {
+		input: { projectId: "P_projectId", status: "open" },
+		calls: [
+			{
+				method: "escalations.list",
+				args: [ACTOR, "P_projectId", { status: "open" }],
+			},
+		],
+	},
+	claim_escalation: {
+		input: { projectId: "P_projectId", escalationId: "ES_escalationId" },
+		calls: [
+			{
+				method: "escalations.claim",
+				args: [ACTOR, "P_projectId", "ES_escalationId"],
+			},
+		],
+	},
+	resolve_escalation: {
+		input: {
+			projectId: "P_projectId",
+			escalationId: "ES_escalationId",
+			value: "VA_value",
+			spawnExample: true,
+			spawnGlossary: { term: "GT_term", translations: { zz: "TR_zz" } },
+		},
+		calls: [
+			{
+				method: "escalations.resolve",
+				args: [
+					ACTOR,
+					"P_projectId",
+					"ES_escalationId",
+					{
+						value: "VA_value",
+						spawnExample: true,
+						spawnGlossary: { term: "GT_term", translations: { zz: "TR_zz" } },
+					},
+				],
+			},
+		],
+	},
+
+	// ---- comments --------------------------------------------------------------
+	add_comment: {
+		input: {
+			projectId: "P_projectId",
+			locale: "zz",
+			name: "N_name",
+			namespace: "NS_ns",
+			body: "BO_body",
+			parentId: "CM_parentId",
+		},
+		calls: [
+			{
+				method: "comments.add",
+				args: [
+					ACTOR,
+					"P_projectId",
+					"zz",
+					"N_name",
+					{ namespace: "NS_ns", body: "BO_body", parentId: "CM_parentId" },
+				],
+			},
+		],
+	},
+	list_comments: {
+		input: {
+			projectId: "P_projectId",
+			locale: "zz",
+			name: "N_name",
+			namespace: "NS_ns",
+		},
+		calls: [
+			{
+				method: "comments.list",
+				args: [ACTOR, "P_projectId", "zz", "N_name", { namespace: "NS_ns" }],
+			},
+		],
+	},
+
 	// ---- glossary --------------------------------------------------------------
 	list_glossary: {
 		input: { projectId: "P_projectId" },
@@ -682,6 +967,7 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 		input: {
 			projectId: "P_projectId",
 			term: "TERM_term",
+			scope: { keyId: "K_keyId" },
 			translations: { zz: "TR_zz" },
 			caseSensitive: true,
 			doNotTranslate: false,
@@ -695,6 +981,7 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 					"P_projectId",
 					{
 						term: "TERM_term",
+						scope: { keyId: "K_keyId" },
 						translations: { zz: "TR_zz" },
 						caseSensitive: true,
 						doNotTranslate: false,
@@ -709,10 +996,12 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 			projectId: "P_projectId",
 			termId: "TID_termId",
 			term: "TERM_term",
+			scope: { keyId: "K_keyId" },
 			translations: { zz: "TR_zz" },
 			caseSensitive: true,
 			doNotTranslate: false,
 			notes: "NO_notes",
+			lifecycle: "active",
 		},
 		calls: [
 			{
@@ -723,10 +1012,12 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 					"TID_termId",
 					{
 						term: "TERM_term",
+						scope: { keyId: "K_keyId" },
 						translations: { zz: "TR_zz" },
 						caseSensitive: true,
 						doNotTranslate: false,
 						notes: "NO_notes",
+						lifecycle: "active",
 					},
 				],
 			},

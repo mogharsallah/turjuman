@@ -1,6 +1,10 @@
 import type { RepositoryApi } from "../repository/index.js";
 import { ApiKeysService } from "./api-keys.js";
 import { BranchService } from "./branches.js";
+import { CommentService } from "./comments.js";
+import { ContextService } from "./context.js";
+import { EscalationService } from "./escalations.js";
+import { ExampleService } from "./examples.js";
 import { GlossaryService } from "./glossary.js";
 import { KeysService } from "./keys.js";
 import { LocalesService } from "./locales.js";
@@ -30,6 +34,10 @@ export class TurjumanService {
 	readonly translations: TranslationsService;
 	readonly runs: RunService;
 	readonly glossary: GlossaryService;
+	readonly context: ContextService;
+	readonly examples: ExampleService;
+	readonly escalations: EscalationService;
+	readonly comments: CommentService;
 	readonly qa: QaService;
 	readonly webhooks: WebhooksService;
 	readonly members: MembersService;
@@ -41,12 +49,22 @@ export class TurjumanService {
 		// services, so construct them first.
 		this.namespaces = new NamespaceService(repo);
 		this.branches = new BranchService(repo);
+		// The context service owns the staleness fan-out; glossary/example/escalation
+		// writes route through it, so build it before them.
+		this.context = new ContextService(repo, this.namespaces);
 		this.projects = new ProjectsService(repo, this.branches);
 		this.locales = new LocalesService(repo);
 		this.keys = new KeysService(repo, this.namespaces);
 		this.translations = new TranslationsService(repo, this.namespaces);
 		this.runs = new RunService(repo);
-		this.glossary = new GlossaryService(repo);
+		this.glossary = new GlossaryService(repo, this.context);
+		this.examples = new ExampleService(repo, this.context, this.namespaces);
+		this.escalations = new EscalationService(
+			repo,
+			this.namespaces,
+			this.context,
+		);
+		this.comments = new CommentService(repo, this.namespaces);
 		this.qa = new QaService(repo, this.namespaces);
 		this.webhooks = new WebhooksService(repo);
 		this.members = new MembersService(repo);

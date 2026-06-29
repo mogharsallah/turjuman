@@ -42,6 +42,7 @@ rows commonly go structural.
 | You changed (source) | Update (docs) |
 |---|---|
 | A **capability**: a service in `packages/core/src/services/` + its `Operation` in `packages/sdk/src/operations/` | `reference/mcp-tools.mdx` (row in the right group) + a workflow in `guides/translate-with-mcp.mdx` (and `guides/code-mode.mdx`) if it enables a new task. REST page auto-generated from the `http` binding. Use the operation name **verbatim**. |
+| **Context cascade**: `ContextService`/`ExampleService`/`EscalationService`/`CommentService` (`core/services/`) + the `context`/`examples`/`escalations`/`comments` operation groups (`sdk/src/operations/`); the pure fold algebra in `packages/schema/src/cascade.ts` | `concepts/context-cascade.mdx` (the grid, operators, ladder, brief, examples, lifecycle, context-staleness) + `reference/mcp-tools.mdx` (the Context / Examples / Escalations / Comments groups; glossary's `scope`/`lifecycle`) + `concepts/how-agents-use-turjuman.mdx` (the brief/escalate touchpoints) + `concepts/lifecycle.mdx` (the `escalated` flow, context-change staleness) + `reference/glossary.mdx` vocabulary |
 | A **brand-new domain** (`XService` + a new operations group) | **Usually structural** — a new Guide (the task) + a new Reference surface, registered in `docs.json`; a Concept page only if there's a non-obvious model. See *Structural changes*. |
 | A **CLI command or flag** (`packages/cli/src/`, commands in `src/commands/`) | `reference/cli-commands.mdx` (+ `guides/sync-with-cli.mdx` if the workflow changed; + `self-hosting/deploy.mdx` for deploy/teardown/status) |
 | A **file-format adapter** (`packages/formats/src/`, `ADAPTERS` in `formats/src/index.ts`) | `reference/file-formats.mdx` |
@@ -130,7 +131,7 @@ can write it in full. Group it where shown; create a new group/tab only at the t
 - **Concepts (Using):** Data model deep-dive · ICU message format & plurals · Security model · Multi-tenancy & orgs
 - **Guides (Using):** CI/CD workflows · Manage a glossary · Import/export & bundles · Migrate from another TMS · Agent recipes & examples
 - **Connect (folds into Guides until ≥2 pages, then its own group):** Other MCP clients · REST for CI · per-client guides (Cursor, …)
-- **Reference:** Configuration reference · Webhook events · Data-model / schema reference
+- **Reference:** Configuration reference · Data-model / schema reference
 - **Self-hosting:** Upgrades & migrations · Monitoring & alerting · Cost & scaling · Backups & DR · Troubleshooting · Operator topology · Changelog / Releases
 - **Footer / GitHub (not docs-site pages):** Development (dev-loop deep-dive) · expanded Contributing · Roadmap
 
@@ -159,9 +160,10 @@ Quick drift check before relying on it: confirm the source paths in the table st
 ### Current docs pages (extend, don't duplicate)
 
 **Using Turjuman** — `introduction` · `quickstart` · `guides/try-it-locally` · `concepts/why-mcp-first` ·
-`concepts/architecture` · `concepts/lifecycle` · `concepts/roles-and-permissions` ·
-`concepts/how-agents-use-turjuman` · `guides/translate-with-mcp` · `guides/code-mode` ·
-`guides/sync-with-cli` · `guides/quality-checks` · `guides/webhooks` · `guides/connect-claude-code`
+`concepts/architecture` · `concepts/lifecycle` · `concepts/context-cascade` ·
+`concepts/roles-and-permissions` · `concepts/how-agents-use-turjuman` · `guides/translate-with-mcp` ·
+`guides/code-mode` · `guides/sync-with-cli` · `guides/quality-checks` · `guides/webhooks` ·
+`guides/connect-claude-code`
 
 **Reference** — `reference/mcp-tools` · `reference/cli-commands` · `reference/rest-api` ·
 `reference/file-formats` · `reference/qa-checks` · `reference/glossary` (+ the auto-generated

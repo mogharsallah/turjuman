@@ -36,6 +36,11 @@ Manage your webhooks with:
 | `locale.added` | A new locale is added to the project |
 | `run.started` | A translation run (the agent write primitive) starts |
 | `run.finished` | A translation run finishes |
+| `escalation.opened` | A translation is escalated to a human (the cell flips to `escalated`) |
+| `escalation.claimed` | A human claims an open escalation |
+| `escalation.resolved` | An escalation is resolved and its cell accepted |
+
+The `escalation.*` events drive a review queue: notify a reviewer on `escalation.opened`, then track ownership and completion with `escalation.claimed` and `escalation.resolved`. See [the escalation flow](/concepts/lifecycle#escalations-resolve-the-escalated-state).
 
 ## Payload format
 
@@ -50,7 +55,16 @@ Every event delivers a JSON payload with the same envelope:
 }
 ```
 
-The shape of `data` varies by event type but always contains the identifiers relevant to what changed.
+The shape of `data` varies by event type but always contains the identifiers relevant to what changed. The three `escalation.*` events carry the escalation's identity and current status:
+
+```json
+{
+  "event": "escalation.opened",
+  "projectId": "proj_x",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "data": { "escalationId": "esc_8a1d", "branchId": "main", "keyId": "key_3f9c", "locale": "fr", "status": "open" }
+}
+```
 
 ## Request headers
 

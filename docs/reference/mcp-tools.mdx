@@ -82,13 +82,37 @@ A **run** is the controlled write primitive that records what an agent did acros
 | `finish_run` | Close a run, recording its final status and `budgetSpent` |
 | `cancel_run` | Cancel an in-flight run |
 
+### Context
+
+The **context cascade** is the curated context an agent translates against — scoped voice, constraints, glossary, and examples, folded for one `key × locale`. See [The context cascade](/concepts/context-cascade).
+
+| Operation | Purpose |
+|---|---|
+| `list_context_rules` | List the project's context rules (voice / length / format / compliance), each scoped and folded by its merge operator |
+| `create_context_rule` | Create a scoped context rule; `kind` picks the payload shape and `operator` defaults from it (voice→override, compliance→restrict) |
+| `update_context_rule` | Update a rule's payload, operator, `hard` flag, or lifecycle (retire it with `retired`/`archived`) |
+| `delete_context_rule` | Delete a context rule |
+| `resolve_context` | Resolve the folded cascade for one key × locale: voice, constraints, glossary, examples, provenance, conflicts, locale shape, and the review-depth signal |
+| `get_brief` | The agent briefing for one key × locale — the key, its base value, and the resolved cascade. The single read to make before translating a string |
+
+### Examples
+
+| Operation | Purpose |
+|---|---|
+| `find_examples` | Retrieve the most relevant examples for one key × locale, ranked by proximity → quality → recency (deterministic, no embeddings) |
+| `list_examples` | List the project's stored translation examples (the corpus) |
+| `add_example` | Add a `source → target` example, scoped for retrieval; use `gold` quality for vetted human pairs |
+| `remove_example` | Delete a stored example |
+
 ### Glossary
+
+A glossary term may carry a `scope` (absent = project-wide) and merges into the cascade by **union**; both `add_glossary_term` and `update_glossary_term` accept it, and `update_glossary_term` also takes a `lifecycle` to retire a term.
 
 | Operation | Purpose |
 |---|---|
 | `list_glossary` | List all glossary terms for a project |
-| `add_glossary_term` | Add a new term to the glossary |
-| `update_glossary_term` | Update an existing glossary term |
+| `add_glossary_term` | Add a new term to the glossary — optional `scope` narrows it to a namespace/key |
+| `update_glossary_term` | Update an existing glossary term — translations, flags, `scope`, or `lifecycle` |
 | `remove_glossary_term` | Remove a term from the glossary |
 
 ### Quality (QA)
@@ -98,6 +122,24 @@ A **run** is the controlled write primitive that records what an agent did acros
 | `run_qa_checks` | Run advisory checks — accepts `{ projectId, locale?, checks?, slot? }`, where `slot` is `working` or `accepted` |
 | `get_qa_config` | Read the per-project QA configuration |
 | `set_qa_config` | Write the per-project QA configuration (enable/disable checks, remap severities, add ignores) |
+
+### Escalations
+
+An **escalation** is the review router's human terminal exit — opened only for an irreducible judgment the agent can't resolve by re-looping. See [the escalation flow](/concepts/lifecycle#escalations-resolve-the-escalated-state).
+
+| Operation | Purpose |
+|---|---|
+| `escalate_translation` | Flip the cell to `escalated` and open an escalation with a reason — for irreducible judgment only |
+| `list_escalations` | List the project's escalations, optionally filtered by status (`open` / `resolved`) |
+| `claim_escalation` | Claim an open escalation (a compare-and-swap — a second concurrent claim loses) |
+| `resolve_escalation` | Accept the chosen value and optionally spawn a gold example or glossary term so the decision becomes reusable context |
+
+### Comments
+
+| Operation | Purpose |
+|---|---|
+| `add_comment` | Add a comment to a `(key, locale)` string — threaded discussion shared across branches; use `parentId` to reply |
+| `list_comments` | List the comment thread on a `(key, locale)` string |
 
 ### Webhooks & lifecycle
 

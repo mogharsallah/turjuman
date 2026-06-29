@@ -250,7 +250,8 @@ export class QaService extends BaseService {
 						c?.lifecycle === "accepted" ||
 						c?.lifecycle === "escalated",
 					stale:
-						c?.sourceRef !== undefined && c.sourceRef !== key.sourceRevision,
+						(c?.stale ?? false) ||
+						(c?.sourceRef !== undefined && c.sourceRef !== key.sourceRevision),
 					origin: c?.origin,
 					glossary,
 					localeIndex,

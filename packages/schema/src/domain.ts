@@ -77,6 +77,57 @@ export type TranslationOrigin = z.infer<typeof translationOriginSchema>;
 export const keyStateSchema = z.enum(["active", "deprecated"]);
 export type KeyState = z.infer<typeof keyStateSchema>;
 
+// ---- context-layer enums + the scope grid-coordinate ------------------------
+
+/** Lifecycle of a context entity (rule / glossary term / example). The resolver
+ * collects only `active` cells; `proposed`/`retired`/`archived` are ignored. */
+export const contextLifecycleSchema = z.enum([
+	"proposed",
+	"active",
+	"retired",
+	"archived",
+]);
+export type ContextLifecycle = z.infer<typeof contextLifecycleSchema>;
+
+/** How a context rule folds across the cascade tiers — a property of the rule's
+ * *kind*, not its tier: `override` (narrowest wins), `union` (collect all tiers),
+ * `restrict` (most-restrictive AND — a parent rule a child cannot loosen). */
+export const contextOperatorSchema = z.enum(["override", "union", "restrict"]);
+export type ContextOperator = z.infer<typeof contextOperatorSchema>;
+
+/** The kind of a context rule; selects its payload shape and default operator. */
+export const contextRuleKindSchema = z.enum([
+	"voice",
+	"length",
+	"placeholdersRequired",
+	"format",
+	"compliance",
+]);
+export type ContextRuleKind = z.infer<typeof contextRuleKindSchema>;
+
+/** Quality tier of a translation example, used for retrieval ranking. */
+export const exampleQualitySchema = z.enum(["gold", "accepted"]);
+export type ExampleQuality = z.infer<typeof exampleQualitySchema>;
+
+/** Whether a human escalation is still open or has been resolved. */
+export const escalationStatusSchema = z.enum(["open", "resolved"]);
+export type EscalationStatus = z.infer<typeof escalationStatusSchema>;
+
+/**
+ * The grid coordinate a context entity lives at. Tier is the narrowest populated
+ * of `{ keyId, namespaceId, projectId }`; `locale` is orthogonal (absent = the
+ * all-locales cell). One value object lets any context entity sit at any cell.
+ */
+export const scopeSchema = z
+	.object({
+		projectId: z.string(),
+		namespaceId: z.string().optional(),
+		keyId: z.string().optional(),
+		locale: localeCodeSchema.optional(),
+	})
+	.openapi({ ref: "Scope" });
+export type Scope = z.infer<typeof scopeSchema>;
+
 /** Severity of a QA finding, and the level at which a QA check is configured. */
 export type QaSeverity = z.infer<typeof qaSeveritySchema>;
 
@@ -92,6 +143,10 @@ export const webhookEventSchema = z.enum([
 	/** A translation run (the agent write primitive) started / finished. */
 	"run.started",
 	"run.finished",
+	/** A translation was escalated to a human, claimed, or resolved. */
+	"escalation.opened",
+	"escalation.claimed",
+	"escalation.resolved",
 ]);
 export type WebhookEvent = z.infer<typeof webhookEventSchema>;
 
@@ -448,6 +503,10 @@ export const glossaryTermSchema = z
 	.object({
 		projectId: z.string(),
 		id: z.string(),
+		/** Cascade coordinate; absent = project-wide. Glossary merges by union. */
+		scope: scopeSchema
+			.optional()
+			.describe("Cascade coordinate; absent = project-wide."),
 		/** The source term (authored in the project's base locale). */
 		term: z
 			.string()
@@ -467,11 +526,188 @@ export const glossaryTermSchema = z
 			.boolean()
 			.describe("Keep verbatim across locales (brand names, product names)."),
 		notes: z.string().optional(),
+		/** Context lifecycle; only `active` terms are surfaced by the resolver. */
+		lifecycle: contextLifecycleSchema.default("active"),
 		createdAt: z.string(),
 		updatedAt: z.string(),
 	})
 	.openapi({ ref: "GlossaryTerm" });
 export type GlossaryTerm = z.infer<typeof glossaryTermSchema>;
+
+/**
+ * The parametric carrier for every scoped, mergeable translation rule. One entity
+ * because rules differ only by `kind` + `operator` + `payload` shape — the
+ * operator is *data*, not a class. `voice` overrides (narrowest tier wins);
+ * `length`/`format`/`placeholdersRequired` override (or restrict when `hard`);
+ * `compliance` restricts (a parent rule a child cannot loosen).
+ */
+export const contextRuleSchema = z
+	.object({
+		id: z.string(),
+		projectId: z.string(),
+		scope: scopeSchema,
+		kind: contextRuleKindSchema,
+		operator: contextOperatorSchema,
+		/** Kind-specific payload (voice `{ tone, formality }`, length `{ max }`, …). */
+		payload: z
+			.record(z.string(), z.unknown())
+			.describe("Kind-specific payload (voice/length/compliance fields)."),
+		/** A hard rule a child scope cannot loosen (folds as `restrict`). */
+		hard: z.boolean().optional(),
+		lifecycle: contextLifecycleSchema.default("active"),
+		createdBy: z.string(),
+		createdAt: z.string(),
+		updatedAt: z.string(),
+	})
+	.openapi({ ref: "ContextRule" });
+export type ContextRule = z.infer<typeof contextRuleSchema>;
+
+/**
+ * A source→target translation example: the few-shot / translation-memory corpus.
+ * Retrieved deterministically by scope-proximity + quality + recency (no
+ * embeddings, per the project constraints). Merges by union across the cascade.
+ */
+export const exampleSchema = z
+	.object({
+		id: z.string(),
+		projectId: z.string(),
+		scope: scopeSchema,
+		/** Target locale the `targetText` is written in. */
+		locale: localeCodeSchema,
+		sourceText: z.string(),
+		targetText: z.string(),
+		quality: exampleQualitySchema,
+		origin: translationOriginSchema.optional(),
+		lifecycle: contextLifecycleSchema.default("active"),
+		createdAt: z.string(),
+		updatedAt: z.string(),
+	})
+	.openapi({ ref: "Example" });
+export type Example = z.infer<typeof exampleSchema>;
+
+/**
+ * A threaded discussion attached to a `(keyId, locale)` string — shared across
+ * branches (it targets the string, not one branch's cell). Where humans record
+ * the judgment a lifecycle flag can't carry; confirmed threads graduate into
+ * shared Examples/GlossaryTerms.
+ */
+export const commentSchema = z
+	.object({
+		id: z.string(),
+		projectId: z.string(),
+		keyId: z.string(),
+		locale: localeCodeSchema,
+		authorId: z.string(),
+		body: z.string(),
+		/** Parent comment id for threading; absent = a root comment. */
+		parentId: z.string().optional(),
+		createdAt: z.string(),
+	})
+	.openapi({ ref: "Comment" });
+export type Comment = z.infer<typeof commentSchema>;
+
+/**
+ * The human terminal exit of the review router: a cell the agent could not
+ * resolve. Slim by design — the cell's lifecycle is the entire verdict. Claiming
+ * is a compare-and-swap on `claimedBy`; resolving sets the cell value, accepts,
+ * and may spawn an Example/GlossaryTerm so a human decision becomes reusable
+ * context rather than a dead-end approval.
+ */
+export const escalationSchema = z
+	.object({
+		id: z.string(),
+		projectId: z.string(),
+		branchId: z.string(),
+		keyId: z.string(),
+		locale: localeCodeSchema,
+		reason: z.string(),
+		/** Defaults to a project MANAGER when the opener does not assign one. */
+		assigneeUserId: z.string().optional(),
+		claimedBy: z.string().optional(),
+		claimedAt: z.string().optional(),
+		status: escalationStatusSchema,
+		openedAt: z.string(),
+		resolvedAt: z.string().optional(),
+		/** What the resolution did: the value chosen + any spawned context. */
+		resolution: z
+			.object({
+				valueChosen: z.string().optional(),
+				spawnedExampleRef: z.string().optional(),
+				spawnedGlossaryRef: z.string().optional(),
+			})
+			.optional(),
+	})
+	.openapi({ ref: "Escalation" });
+export type Escalation = z.infer<typeof escalationSchema>;
+
+// ---- cascade resolution outputs (computed, never stored) --------------------
+
+/** The cascade tier a resolved value came from (provenance), scope-major /
+ * locale-minor — the override precedence ladder, highest first. */
+export const cascadeTierSchema = z.enum([
+	"key×locale",
+	"key×all",
+	"namespace×locale",
+	"namespace×all",
+	"project×locale",
+	"project×all",
+]);
+export type CascadeTier = z.infer<typeof cascadeTierSchema>;
+
+/** One provenance entry: which field resolved from which tier, and whether a
+ * narrower tier overrode a broader one (a deliberate exception → raises review). */
+export const provenanceEntrySchema = z.object({
+	field: z.string(),
+	tier: cascadeTierSchema,
+	crossTierOverride: z.boolean().optional(),
+});
+export type ProvenanceEntry = z.infer<typeof provenanceEntrySchema>;
+
+/** Deterministic locale shaping derived from the locale code (not authored). */
+export const localeShapeSchema = z.object({
+	locale: localeCodeSchema,
+	pluralCategories: z.array(z.string()),
+	rtl: z.boolean(),
+});
+export type LocaleShape = z.infer<typeof localeShapeSchema>;
+
+/** The resolved context bundle for one `key × locale`: the folded cascade plus
+ * provenance, orphan warnings, and the review-depth signal. */
+export const resolvedContextSchema = z
+	.object({
+		scope: scopeSchema,
+		/** Resolved voice (override — narrowest populated tier wins). */
+		voice: z.record(z.string(), z.unknown()).optional(),
+		/** Effective override + restrict constraints (length / format / compliance). */
+		constraints: z.array(contextRuleSchema),
+		/** Glossary terms in scope (union). */
+		glossary: z.array(glossaryTermSchema),
+		/** Retrieved examples (union, ranked). */
+		examples: z.array(exampleSchema),
+		provenance: z.array(provenanceEntrySchema),
+		/** Scopes a context cell pointed at but that no longer resolve. */
+		orphanedContext: z.array(scopeSchema),
+		/** Locale shaping (plural categories, RTL) derived from the locale. */
+		shape: localeShapeSchema,
+		/** `raised` when a cross-tier override or a restrict conflict was seen. */
+		reviewDepth: z.enum(["normal", "raised"]),
+		/** Unresolved `restrict` conflicts (a structural escalation signal). */
+		conflicts: z.array(z.string()),
+	})
+	.openapi({ ref: "ResolvedContext" });
+export type ResolvedContext = z.infer<typeof resolvedContextSchema>;
+
+/** The agent briefing for one `key × locale`: the key, its base value, and the
+ * resolved context cascade — the single thing the agent needs to translate well. */
+export const briefSchema = z
+	.object({
+		key: translationKeySchema,
+		locale: localeCodeSchema,
+		baseValue: z.string().optional(),
+		context: resolvedContextSchema,
+	})
+	.openapi({ ref: "Brief" });
+export type Brief = z.infer<typeof briefSchema>;
 
 export const webhookSchema = z
 	.object({

@@ -2,8 +2,18 @@ import {
 	type Actor,
 	apiKeyCreatedSchema,
 	branchSchema,
+	briefSchema,
 	bulkSetResultSchema,
+	commentSchema,
+	contextLifecycleSchema,
+	contextOperatorSchema,
+	contextRuleKindSchema,
+	contextRuleSchema,
 	emailSchema,
+	escalationSchema,
+	escalationStatusSchema,
+	exampleQualitySchema,
+	exampleSchema,
 	globalRoleSchema,
 	glossaryTermSchema,
 	keyPageSchema,
@@ -18,6 +28,7 @@ import {
 	qaConfigSchema,
 	qaReportSchema,
 	qaSeveritySchema,
+	resolvedContextSchema,
 	type TurjumanService,
 	translationKeySchema,
 	translationPageSchema,
@@ -38,8 +49,18 @@ import { z } from "zod";
 export {
 	apiKeyCreatedSchema,
 	branchSchema,
+	briefSchema,
 	bulkSetResultSchema,
+	commentSchema,
+	contextLifecycleSchema,
+	contextOperatorSchema,
+	contextRuleKindSchema,
+	contextRuleSchema,
 	emailSchema,
+	escalationSchema,
+	escalationStatusSchema,
+	exampleQualitySchema,
+	exampleSchema,
 	globalRoleSchema as globalRole,
 	glossaryTermSchema,
 	keyPageSchema,
@@ -55,6 +76,7 @@ export {
 	qaConfigSchema,
 	qaReportSchema,
 	qaSeveritySchema,
+	resolvedContextSchema,
 	translationKeySchema,
 	translationPageSchema,
 	translationRunSchema,
@@ -172,6 +194,17 @@ export const branchInput = z
 	.string()
 	.optional()
 	.describe("Branch to operate on (default main).");
+
+/** A cascade coordinate as supplied by a caller — the project is implied by the
+ * operation's `projectId`. Absent fields broaden the scope (no key = the whole
+ * namespace or project; no locale = all locales). */
+export const scopeInputSchema = z
+	.object({
+		namespaceId: z.string().optional(),
+		keyId: z.string().optional(),
+		locale: localeCodeSchema.optional(),
+	})
+	.describe("Cascade coordinate (namespace / key / locale); project implied.");
 
 // Shared pagination inputs and the locale-scoped key-list output, used by the
 // paged growth/queue operations across groups (translations + scoring). Defined

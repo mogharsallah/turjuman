@@ -18,18 +18,23 @@ Because the server holds no per-connection state, the agent's only durable conte
 
 ## The translate-and-judge loop
 
-The operations exist to serve one loop. An agent typically:
+The operations exist to serve one loop: **Define → Brief → Translate → Judge → Record**. The agent owns the middle of it; humans curate the context it draws on and resolve the rare escalation.
 
-1. **Defines or reads keys.** A developer (or an import) adds a `TranslationKey` — the source string plus whatever context is cheap to attach. The agent reads the keys that need a locale with `list_untranslated` or `list_stale`.
-2. **Translates.** The agent writes a draft `value` with `set_translation` (or `bulk_set_translations`). The cell becomes `proposed`.
-3. **Judges its own output** and picks an exit: **accept** (confident — call `accept_translation`), **re-loop** (unsure — write a better draft with the objection as new context), or **escalate** (an irreducible judgment a human should make).
-4. **Records.** An accept appends an immutable version and advances the cell's `head`. History holds every accepted value, non-destructively.
+1. **Define.** A developer (or an import) adds a `TranslationKey` — the source string plus whatever context is cheap to attach. The agent reads the keys that need a locale with `list_untranslated` or `list_stale`.
+2. **Brief.** Before translating a string, the agent calls `get_brief` for the `key × locale`. The brief resolves the whole [context cascade](/concepts/context-cascade) — the key, its base value, the voice, the constraints, the in-scope glossary, ranked examples, and the locale shape — into one read. `find_examples` fetches extra few-shot guidance, and `list_comments` surfaces any human discussion on the string.
+3. **Translate.** The agent writes a draft `value` with `set_translation` (or `bulk_set_translations`); the cell becomes `proposed`. Verifiable constraints from the brief — placeholders, ICU, length, glossary survival — are enforced *inside* generation, reject-and-retry like a compiler, never as a separate gate.
+4. **Judge — the router.** The agent judges its own output and picks an exit: **accept** (confident — call `accept_translation`), **re-loop** (unsure — feed the objection back as new context and regenerate, which is roughly free), or **escalate** (an irreducible judgment a human should make — `escalate_translation`).
+5. **Record.** An accept appends an immutable version and advances the cell's `head`. History holds every accepted value, non-destructively.
 
 The human is the *terminal* exit, not a line-by-line reviewer. There is no quality score to submit — the cell's [lifecycle state](/concepts/lifecycle) is the entire verdict. A project that wants a person to sign off sets `requireHumanAccept: true`, which stops a run from accepting its own work.
 
+### Escalation hands a decision to a human
+
+When judgment is genuinely irreducible — a legal nuance, a restrict conflict the cascade surfaced — the agent calls `escalate_translation`, which flips the cell to `escalated` and opens an escalation with a reason. A human then `claim_escalation`s it (a compare-and-swap, so a second concurrent claim loses) and `resolve_escalation`s it by accepting the chosen value. Resolving can **spawn a gold example or a glossary term**, so the human decision becomes reusable context the cascade feeds back into the next brief — the loop gets better without anyone training a model. See [the escalation flow](/concepts/lifecycle#escalations-resolve-the-escalated-state).
+
 ## Discovery spans operations *and* docs
 
-`search` queries one knowledge index that covers both the **operations** (returned with full typed signatures) and the **documentation** — these guides, concepts, and reference pages. So an agent can learn *how the system works*, not merely which functions exist: a search for "webhook events" surfaces both the relevant operations and the concept page that explains them. This is why the docs are treated as a first-class agent surface, not just a human one.
+`search` queries one knowledge index that covers both the **operations** (returned with full typed signatures) and the **documentation** — these guides, concepts, and reference pages. So an agent can learn *how the system works*, not merely which functions exist: a search for "context cascade" surfaces both `get_brief` and the concept page that explains how the brief is resolved. This is why the docs are treated as a first-class agent surface, not just a human one.
 
 ## Authorization is enforced in the core
 

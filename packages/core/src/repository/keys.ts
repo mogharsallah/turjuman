@@ -39,6 +39,22 @@ export const namespaceSK = (namespaceId: string) => `NS#${namespaceId}`;
 /** A translation run (the agent write primitive) lives under its project partition. */
 export const runSK = (runId: string) => `RUN#${runId}`;
 
+// ---- context layer + review records (project-partition) ---------------------
+
+/** A scoped, mergeable translation rule (voice / length / compliance). */
+export const contextRuleSK = (id: string) => `CTXRULE#${id}`;
+/** A translation example (the few-shot / translation-memory corpus). */
+export const exampleSK = (id: string) => `EXAMPLE#${id}`;
+/** A human escalation (the review router's terminal exit). */
+export const escalationSK = (id: string) => `ESC#${id}`;
+/** A comment is branch-free, keyed by the `(keyId, locale)` string it discusses,
+ * so every comment on one string shares a sort-key prefix. */
+export const commentSK = (keyId: string, locale: string, id: string) =>
+	`CMT#${keyId}#${locale}#${id}`;
+/** Prefix matching every comment on one `(keyId, locale)` string. */
+export const commentPrefix = (keyId: string, locale: string) =>
+	`CMT#${keyId}#${locale}#`;
+
 // ---- key definitions + name lookup (per branch) -----------------------------
 
 /** Partition holding a branch's key definitions and `KEYNAME#` name-lookup rows. */
