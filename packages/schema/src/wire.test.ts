@@ -1,22 +1,30 @@
 import { describe, expect, it } from "vitest";
 import type {
 	ApiKey,
+	Branch,
 	GlossaryTerm,
 	Locale,
 	Membership,
+	Namespace,
 	Project,
 	QaConfig,
 	Translation,
 	TranslationKey,
+	TranslationRun,
+	TranslationVersion,
 	User,
 	Webhook,
 } from "./domain.js";
 import {
+	branchSchema,
 	glossaryTermSchema,
 	localeSchema,
 	membershipSchema,
+	namespaceEntitySchema,
 	projectSchema,
 	qaConfigSchema,
+	translationRunSchema,
+	translationVersionSchema,
 	userSchema,
 	webhookSchema,
 } from "./domain.js";
@@ -45,14 +53,16 @@ import {
 const now = "2026-06-18T00:00:00.000Z";
 
 const sampleKey: TranslationKey = {
+	id: "key_1",
 	projectId: "proj_1",
-	namespace: "default",
+	namespaceId: "ns_1",
 	name: "greeting",
 	description: "A greeting",
 	plural: false,
 	maxLength: 40,
 	tags: ["ui"],
 	state: "active",
+	sourceRevision: "rev_abc",
 	lastSeenAt: now,
 	createdAt: now,
 	updatedAt: now,
@@ -60,12 +70,15 @@ const sampleKey: TranslationKey = {
 
 const sampleTranslation: Translation = {
 	projectId: "proj_1",
-	localeCode: "fr",
-	namespace: "default",
-	keyName: "greeting",
+	branchId: "main",
+	keyId: "key_1",
+	locale: "fr",
 	value: "Bonjour",
-	status: "translated",
-	origin: "llm",
+	head: 1,
+	lifecycle: "accepted",
+	stale: false,
+	sourceRef: "rev_abc",
+	origin: "agent",
 	updatedBy: "user_1",
 	updatedAt: now,
 };
@@ -135,6 +148,8 @@ describe("wire schemas accept service results", () => {
 			slug: "web-app",
 			description: "The web app strings",
 			baseLocale: "en",
+			contextRevision: 0,
+			requireHumanAccept: false,
 			createdAt: now,
 			updatedAt: now,
 		};
@@ -146,6 +161,7 @@ describe("wire schemas accept service results", () => {
 			projectId: "proj_1",
 			code: "fr",
 			name: "French",
+			lifecycle: "active",
 			createdAt: now,
 		};
 		expect(() => localeSchema.parse(locale)).not.toThrow();
@@ -244,6 +260,65 @@ describe("wire schemas accept service results", () => {
 			byLocale: { fr: [finding] },
 		};
 		expect(() => qaReportSchema.parse(report)).not.toThrow();
+	});
+});
+
+describe("cell-model entity schemas accept service results", () => {
+	it("branchSchema accepts the root main branch", () => {
+		const branch: Branch = {
+			id: "main",
+			projectId: "proj_1",
+			name: "main",
+			parentBranchId: null,
+			status: "open",
+			createdBy: "user_1",
+			createdAt: now,
+		};
+		expect(() => branchSchema.parse(branch)).not.toThrow();
+	});
+
+	it("namespaceEntitySchema accepts a namespace", () => {
+		const ns: Namespace = {
+			id: "ns_1",
+			projectId: "proj_1",
+			name: "default",
+			lifecycle: "active",
+			createdAt: now,
+			updatedAt: now,
+		};
+		expect(() => namespaceEntitySchema.parse(ns)).not.toThrow();
+	});
+
+	it("translationRunSchema accepts an in-flight run", () => {
+		const run: TranslationRun = {
+			id: "run_1",
+			projectId: "proj_1",
+			branchId: "main",
+			trigger: "manual",
+			valueSource: "agent",
+			status: "running",
+			cellsTotal: 3,
+			cellsDone: 1,
+			errors: [],
+			startedAt: now,
+		};
+		expect(() => translationRunSchema.parse(run)).not.toThrow();
+	});
+
+	it("translationVersionSchema accepts an accepted-value commit", () => {
+		const version: TranslationVersion = {
+			projectId: "proj_1",
+			branchId: "main",
+			keyId: "key_1",
+			locale: "fr",
+			seq: 1,
+			value: "Bonjour",
+			origin: "agent",
+			acceptedAt: now,
+			acceptedBy: "user_1",
+			sourceRevision: "rev_abc",
+		};
+		expect(() => translationVersionSchema.parse(version)).not.toThrow();
 	});
 });
 

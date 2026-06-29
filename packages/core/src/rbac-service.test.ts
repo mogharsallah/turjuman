@@ -130,6 +130,11 @@ const DENIED: DeniedCase[] = [
 		call: (s, ro, p) => s.keys.delete(ro, p, "k", true),
 	},
 	{
+		op: "rename_key",
+		action: "key.manage",
+		call: (s, ro, p) => s.keys.rename(ro, p, "k", { name: "k2" }),
+	},
+	{
 		op: "import_keys (CLI)",
 		action: "key.manage",
 		call: (s, ro, p) => s.keys.import(ro, p, [{ name: "k" }]),
@@ -148,9 +153,9 @@ const DENIED: DeniedCase[] = [
 			s.translations.bulkSet(ro, p, "en", [{ name: "k", value: "v" }]),
 	},
 	{
-		op: "set_translation_status",
+		op: "accept_translation",
 		action: "translation.review",
-		call: (s, ro, p) => s.translations.setStatus(ro, p, "en", "k", "approved"),
+		call: (s, ro, p) => s.translations.accept(ro, p, "en", "k", {}),
 	},
 	// ---- glossary ----------------------------------------------------------------
 	{
@@ -196,28 +201,39 @@ const DENIED: DeniedCase[] = [
 		action: "member.manage",
 		call: (s, ro, p) => s.members.remove(ro, p, "user_x"),
 	},
-	// ---- QA + scoring config -----------------------------------------------------
+	// ---- QA config ---------------------------------------------------------------
 	{
 		op: "set_qa_config",
 		action: "project.update",
 		call: (s, ro, p) =>
 			s.qa.setConfig(ro, p, { checks: { empty: { enabled: false } } }),
 	},
+	// ---- namespaces --------------------------------------------------------------
 	{
-		op: "set_score_config",
-		action: "project.update",
-		call: (s, ro, p) => s.scoring.setConfig(ro, p, { threshold: 50 }),
+		op: "create_namespace",
+		action: "key.manage",
+		call: (s, ro, p) => s.namespaces.create(ro, p, { name: "ns" }),
 	},
 	{
-		op: "score_translation",
+		op: "update_namespace",
+		action: "key.manage",
+		call: (s, ro, p) => s.namespaces.update(ro, p, "nsid", { title: "t" }),
+	},
+	// ---- runs --------------------------------------------------------------------
+	{
+		op: "start_run",
 		action: "translation.write",
-		call: (s, ro, p) => s.scoring.score(ro, p, "en", { name: "k", score: 50 }),
+		call: (s, ro, p) => s.runs.start(ro, p, {}),
 	},
 	{
-		op: "review_translations",
+		op: "finish_run",
 		action: "translation.write",
-		call: (s, ro, p) =>
-			s.scoring.reviewBatch(ro, p, "en", [{ name: "k", score: 50 }]),
+		call: (s, ro, p) => s.runs.finish(ro, p, "run_x", {}),
+	},
+	{
+		op: "cancel_run",
+		action: "translation.write",
+		call: (s, ro, p) => s.runs.cancel(ro, p, "run_x"),
 	},
 ];
 

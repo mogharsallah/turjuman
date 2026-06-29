@@ -115,7 +115,7 @@ const PAGE_RESULT = (locale: string) => ({
 });
 
 export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
-	// ---- projects --------------------------------------------------------------
+	// ---- projects + locales ----------------------------------------------------
 	list_projects: {
 		input: {},
 		calls: [{ method: "projects.list", args: [ACTOR] }],
@@ -142,6 +142,7 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 			name: "N_name",
 			description: "D_description",
 			baseLocale: "zz",
+			requireHumanAccept: true,
 		},
 		calls: [
 			{
@@ -149,7 +150,12 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 				args: [
 					ACTOR,
 					"P_projectId",
-					{ name: "N_name", description: "D_description", baseLocale: "zz" },
+					{
+						name: "N_name",
+						description: "D_description",
+						baseLocale: "zz",
+						requireHumanAccept: true,
+					},
 				],
 			},
 		],
@@ -165,6 +171,77 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 		],
 	},
 
+	// ---- branches --------------------------------------------------------------
+	list_branches: {
+		input: { projectId: "P_projectId" },
+		calls: [{ method: "branches.list", args: [ACTOR, "P_projectId"] }],
+	},
+	get_branch: {
+		input: { projectId: "P_projectId", branch: "BR_branch" },
+		calls: [
+			{ method: "branches.get", args: [ACTOR, "P_projectId", "BR_branch"] },
+		],
+	},
+
+	// ---- namespaces ------------------------------------------------------------
+	list_namespaces: {
+		input: { projectId: "P_projectId" },
+		calls: [{ method: "namespaces.list", args: [ACTOR, "P_projectId"] }],
+	},
+	get_namespace: {
+		input: { projectId: "P_projectId", namespaceId: "NSID_namespaceId" },
+		calls: [
+			{
+				method: "namespaces.get",
+				args: [ACTOR, "P_projectId", "NSID_namespaceId"],
+			},
+		],
+	},
+	create_namespace: {
+		input: {
+			projectId: "P_projectId",
+			name: "NS_ns",
+			title: "TI_title",
+			description: "D_description",
+		},
+		calls: [
+			{
+				method: "namespaces.create",
+				args: [
+					ACTOR,
+					"P_projectId",
+					{ name: "NS_ns", title: "TI_title", description: "D_description" },
+				],
+			},
+		],
+	},
+	update_namespace: {
+		input: {
+			projectId: "P_projectId",
+			namespaceId: "NSID_namespaceId",
+			name: "NS_ns",
+			title: "TI_title",
+			description: "D_description",
+			lifecycle: "active",
+		},
+		calls: [
+			{
+				method: "namespaces.update",
+				args: [
+					ACTOR,
+					"P_projectId",
+					"NSID_namespaceId",
+					{
+						name: "NS_ns",
+						title: "TI_title",
+						description: "D_description",
+						lifecycle: "active",
+					},
+				],
+			},
+		],
+	},
+
 	// ---- keys ------------------------------------------------------------------
 	list_keys: [
 		{
@@ -172,6 +249,7 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 			input: {
 				projectId: "P_projectId",
 				namespace: "NS_ns",
+				branch: "BR_branch",
 				tag: "T_tag",
 				limit: 7,
 				cursor: "CUR_cursor",
@@ -183,6 +261,7 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 						ACTOR,
 						"P_projectId",
 						{
+							branch: "BR_branch",
 							namespace: "NS_ns",
 							tag: "T_tag",
 							limit: 7,
@@ -193,22 +272,27 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 			],
 		},
 		{
-			variant: "unpaged (no limit/cursor)",
+			variant: "unpaged (no limit/cursor, no branch)",
 			input: { projectId: "P_projectId", namespace: "NS_ns", tag: "T_tag" },
 			calls: [
 				{
 					method: "keys.list",
-					args: [ACTOR, "P_projectId", { namespace: "NS_ns", tag: "T_tag" }],
+					args: [
+						ACTOR,
+						"P_projectId",
+						{ branch: undefined, namespace: "NS_ns", tag: "T_tag" },
+					],
 				},
 			],
 		},
 	],
 	search_keys: [
 		{
-			variant: "explicit limit",
+			variant: "explicit limit + branch",
 			input: {
 				projectId: "P_projectId",
 				query: "Q_query",
+				branch: "BR_branch",
 				limit: 7,
 				cursor: "CUR_cursor",
 			},
@@ -219,13 +303,13 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 						ACTOR,
 						"P_projectId",
 						"Q_query",
-						{ limit: 7, cursor: "CUR_cursor" },
+						{ branch: "BR_branch", limit: 7, cursor: "CUR_cursor" },
 					],
 				},
 			],
 		},
 		{
-			variant: "default limit (?? 100)",
+			variant: "default limit (?? 100), no branch",
 			input: {
 				projectId: "P_projectId",
 				query: "Q_query",
@@ -238,16 +322,24 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 						ACTOR,
 						"P_projectId",
 						"Q_query",
-						{ limit: 100, cursor: "CUR_cursor" },
+						{ branch: undefined, limit: 100, cursor: "CUR_cursor" },
 					],
 				},
 			],
 		},
 	],
 	get_key: {
-		input: { projectId: "P_projectId", name: "N_name", namespace: "NS_ns" },
+		input: {
+			projectId: "P_projectId",
+			name: "N_name",
+			namespace: "NS_ns",
+			branch: "BR_branch",
+		},
 		calls: [
-			{ method: "keys.get", args: [ACTOR, "P_projectId", "N_name", "NS_ns"] },
+			{
+				method: "keys.get",
+				args: [ACTOR, "P_projectId", "N_name", "NS_ns", "BR_branch"],
+			},
 		],
 	},
 	create_key: {
@@ -255,6 +347,7 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 			projectId: "P_projectId",
 			name: "N_name",
 			namespace: "NS_ns",
+			branch: "BR_branch",
 			description: "D_description",
 			plural: true,
 			maxLength: 99,
@@ -270,6 +363,7 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 					{
 						name: "N_name",
 						namespace: "NS_ns",
+						branch: "BR_branch",
 						description: "D_description",
 						plural: true,
 						maxLength: 99,
@@ -285,10 +379,12 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 			projectId: "P_projectId",
 			name: "N_name",
 			namespace: "NS_ns",
+			branch: "BR_branch",
 			description: "D_description",
 			plural: true,
 			maxLength: 99,
 			tags: ["TG_tag1"],
+			noTranslate: true,
 		},
 		calls: [
 			{
@@ -302,8 +398,33 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 						plural: true,
 						maxLength: 99,
 						tags: ["TG_tag1"],
+						noTranslate: true,
 					},
 					"NS_ns",
+					"BR_branch",
+				],
+			},
+		],
+	},
+	rename_key: {
+		input: {
+			projectId: "P_projectId",
+			name: "N_name",
+			namespace: "NS_ns",
+			branch: "BR_branch",
+			newName: "NN_newName",
+			newNamespace: "NNS_newNamespace",
+		},
+		calls: [
+			{
+				method: "keys.rename",
+				args: [
+					ACTOR,
+					"P_projectId",
+					"N_name",
+					{ name: "NN_newName", namespace: "NNS_newNamespace" },
+					"NS_ns",
+					"BR_branch",
 				],
 			},
 		],
@@ -313,12 +434,13 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 			projectId: "P_projectId",
 			name: "N_name",
 			namespace: "NS_ns",
+			branch: "BR_branch",
 			confirm: true,
 		},
 		calls: [
 			{
 				method: "keys.delete",
-				args: [ACTOR, "P_projectId", "N_name", true, "NS_ns"],
+				args: [ACTOR, "P_projectId", "N_name", true, "NS_ns", "BR_branch"],
 			},
 		],
 		result: { deleted: "N_name" },
@@ -328,16 +450,21 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 	get_translations: [
 		{
 			variant: "by key (name present)",
-			input: { projectId: "P_projectId", name: "N_name", namespace: "NS_ns" },
+			input: {
+				projectId: "P_projectId",
+				name: "N_name",
+				namespace: "NS_ns",
+				branch: "BR_branch",
+			},
 			calls: [
 				{
 					method: "translations.listForKey",
-					args: [ACTOR, "P_projectId", "N_name", "NS_ns"],
+					args: [ACTOR, "P_projectId", "N_name", "NS_ns", "BR_branch"],
 				},
 			],
 		},
 		{
-			variant: "by locale (paged)",
+			variant: "by locale (paged, no branch)",
 			input: {
 				projectId: "P_projectId",
 				locale: "zz",
@@ -351,7 +478,7 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 						ACTOR,
 						"P_projectId",
 						"zz",
-						{ limit: 7, cursor: "CUR_cursor" },
+						{ branch: undefined, limit: 7, cursor: "CUR_cursor" },
 					],
 				},
 			],
@@ -361,6 +488,7 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 		input: {
 			projectId: "P_projectId",
 			locale: "zz",
+			branch: "BR_branch",
 			limit: 7,
 			cursor: "CUR_cursor",
 		},
@@ -368,7 +496,12 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 		calls: [
 			{
 				method: "translations.listUntranslatedPage",
-				args: [ACTOR, "P_projectId", "zz", { limit: 7, cursor: "CUR_cursor" }],
+				args: [
+					ACTOR,
+					"P_projectId",
+					"zz",
+					{ branch: "BR_branch", limit: 7, cursor: "CUR_cursor" },
+				],
 			},
 		],
 		result: PAGE_RESULT("zz"),
@@ -377,6 +510,7 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 		input: {
 			projectId: "P_projectId",
 			locale: "zz",
+			branch: "BR_branch",
 			limit: 7,
 			cursor: "CUR_cursor",
 		},
@@ -384,7 +518,12 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 		calls: [
 			{
 				method: "translations.listStalePage",
-				args: [ACTOR, "P_projectId", "zz", { limit: 7, cursor: "CUR_cursor" }],
+				args: [
+					ACTOR,
+					"P_projectId",
+					"zz",
+					{ branch: "BR_branch", limit: 7, cursor: "CUR_cursor" },
+				],
 			},
 		],
 		result: PAGE_RESULT("zz"),
@@ -395,8 +534,8 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 			locale: "zz",
 			name: "N_name",
 			namespace: "NS_ns",
+			branch: "BR_branch",
 			value: "V_value",
-			status: "approved",
 		},
 		calls: [
 			{
@@ -408,9 +547,9 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 					{
 						name: "N_name",
 						namespace: "NS_ns",
+						branch: "BR_branch",
 						value: "V_value",
-						status: "approved",
-						origin: "llm",
+						origin: "agent",
 					},
 				],
 			},
@@ -420,14 +559,8 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 		input: {
 			projectId: "P_projectId",
 			locale: "zz",
-			entries: [
-				{
-					name: "N_name",
-					namespace: "NS_ns",
-					value: "V_value",
-					status: "approved",
-				},
-			],
+			branch: "BR_branch",
+			entries: [{ name: "N_name", namespace: "NS_ns", value: "V_value" }],
 		},
 		calls: [
 			{
@@ -441,28 +574,103 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 							name: "N_name",
 							namespace: "NS_ns",
 							value: "V_value",
-							status: "approved",
-							origin: "llm",
+							origin: "agent",
 						},
 					],
+					"BR_branch",
 				],
 			},
 		],
 	},
-	set_translation_status: {
+	accept_translation: {
 		input: {
 			projectId: "P_projectId",
 			locale: "zz",
 			name: "N_name",
 			namespace: "NS_ns",
-			status: "approved",
+			branch: "BR_branch",
+			runRef: "RR_runRef",
 		},
 		calls: [
 			{
-				method: "translations.setStatus",
-				args: [ACTOR, "P_projectId", "zz", "N_name", "approved", "NS_ns"],
+				method: "translations.accept",
+				args: [
+					ACTOR,
+					"P_projectId",
+					"zz",
+					"N_name",
+					{ namespace: "NS_ns", branch: "BR_branch", runRef: "RR_runRef" },
+				],
 			},
 		],
+	},
+
+	// ---- runs ------------------------------------------------------------------
+	start_run: {
+		input: {
+			projectId: "P_projectId",
+			branch: "BR_branch",
+			trigger: "manual",
+			valueSource: "VS_valueSource",
+			idempotencyKey: "IK_idem",
+			cellsTotal: 3,
+		},
+		calls: [
+			{
+				method: "runs.start",
+				args: [
+					ACTOR,
+					"P_projectId",
+					{
+						branch: "BR_branch",
+						trigger: "manual",
+						valueSource: "VS_valueSource",
+						idempotencyKey: "IK_idem",
+						cellsTotal: 3,
+					},
+				],
+			},
+		],
+	},
+	get_run: {
+		input: { projectId: "P_projectId", runId: "R_runId" },
+		calls: [{ method: "runs.get", args: [ACTOR, "P_projectId", "R_runId"] }],
+	},
+	list_runs: {
+		input: { projectId: "P_projectId", branch: "BR_branch" },
+		calls: [{ method: "runs.list", args: [ACTOR, "P_projectId", "BR_branch"] }],
+	},
+	finish_run: {
+		input: {
+			projectId: "P_projectId",
+			runId: "R_runId",
+			status: "done",
+			cellsDone: 2,
+			cellsTotal: 3,
+			errors: ["E_err"],
+			budgetSpent: 5,
+		},
+		calls: [
+			{
+				method: "runs.finish",
+				args: [
+					ACTOR,
+					"P_projectId",
+					"R_runId",
+					{
+						status: "done",
+						cellsDone: 2,
+						cellsTotal: 3,
+						errors: ["E_err"],
+						budgetSpent: 5,
+					},
+				],
+			},
+		],
+	},
+	cancel_run: {
+		input: { projectId: "P_projectId", runId: "R_runId" },
+		calls: [{ method: "runs.cancel", args: [ACTOR, "P_projectId", "R_runId"] }],
 	},
 
 	// ---- glossary --------------------------------------------------------------
@@ -531,49 +739,6 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 		],
 		result: { removed: "TID_termId" },
 	},
-	lookup_translation_memory: {
-		input: { projectId: "P_projectId", locale: "zz", text: "X_text", limit: 7 },
-		calls: [
-			{ method: "tm.lookup", args: [ACTOR, "P_projectId", "zz", "X_text", 7] },
-		],
-	},
-
-	// ---- webhooks + destructive lifecycle -------------------------------------
-	list_webhooks: {
-		input: { projectId: "P_projectId" },
-		calls: [{ method: "webhooks.list", args: [ACTOR, "P_projectId"] }],
-	},
-	add_webhook: {
-		input: {
-			projectId: "P_projectId",
-			url: "https://h.example/wh",
-			events: ["key.created"],
-		},
-		calls: [
-			{
-				method: "webhooks.add",
-				args: [
-					ACTOR,
-					"P_projectId",
-					{ url: "https://h.example/wh", events: ["key.created"] },
-				],
-			},
-		],
-	},
-	remove_webhook: {
-		input: { projectId: "P_projectId", webhookId: "WH_webhookId" },
-		calls: [
-			{
-				method: "webhooks.remove",
-				args: [ACTOR, "P_projectId", "WH_webhookId"],
-			},
-		],
-		result: { removed: "WH_webhookId" },
-	},
-	delete_project: {
-		input: { projectId: "P_projectId", confirm: true },
-		calls: [{ method: "projects.delete", args: [ACTOR, "P_projectId", true] }],
-	},
 
 	// ---- qa --------------------------------------------------------------------
 	run_qa_checks: {
@@ -634,106 +799,41 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 		],
 	},
 
-	// ---- scoring ---------------------------------------------------------------
-	score_translation: {
-		input: {
-			projectId: "P_projectId",
-			locale: "zz",
-			name: "N_name",
-			namespace: "NS_ns",
-			score: 42,
-			comment: "C_comment",
-			model: "M_model",
-		},
-		calls: [
-			{
-				method: "scoring.score",
-				args: [
-					ACTOR,
-					"P_projectId",
-					"zz",
-					{
-						name: "N_name",
-						namespace: "NS_ns",
-						score: 42,
-						comment: "C_comment",
-						model: "M_model",
-					},
-				],
-			},
-		],
-	},
-	review_translations: {
-		input: {
-			projectId: "P_projectId",
-			locale: "zz",
-			entries: [
-				{
-					name: "N_name",
-					namespace: "NS_ns",
-					score: 42,
-					comment: "C_comment",
-					model: "M_model",
-				},
-			],
-		},
-		calls: [
-			{
-				method: "scoring.reviewBatch",
-				args: [
-					ACTOR,
-					"P_projectId",
-					"zz",
-					[
-						{
-							name: "N_name",
-							namespace: "NS_ns",
-							score: 42,
-							comment: "C_comment",
-							model: "M_model",
-						},
-					],
-				],
-			},
-		],
-	},
-	list_for_review: {
-		input: {
-			projectId: "P_projectId",
-			locale: "zz",
-			limit: 7,
-			cursor: "CUR_cursor",
-		},
-		returns: PAGE,
-		calls: [
-			{
-				method: "scoring.listForReviewPage",
-				args: [ACTOR, "P_projectId", "zz", { limit: 7, cursor: "CUR_cursor" }],
-			},
-		],
-		result: PAGE_RESULT("zz"),
-	},
-	get_score_config: {
+	// ---- webhooks + destructive lifecycle -------------------------------------
+	list_webhooks: {
 		input: { projectId: "P_projectId" },
-		calls: [{ method: "scoring.getConfig", args: [ACTOR, "P_projectId"] }],
+		calls: [{ method: "webhooks.list", args: [ACTOR, "P_projectId"] }],
 	},
-	set_score_config: {
+	add_webhook: {
 		input: {
 			projectId: "P_projectId",
-			threshold: 77,
-			autoApprove: true,
-			guidance: "G_guidance",
+			url: "https://h.example/wh",
+			events: ["key.created"],
 		},
 		calls: [
 			{
-				method: "scoring.setConfig",
+				method: "webhooks.add",
 				args: [
 					ACTOR,
 					"P_projectId",
-					{ threshold: 77, autoApprove: true, guidance: "G_guidance" },
+					{ url: "https://h.example/wh", events: ["key.created"] },
 				],
 			},
 		],
+	},
+	remove_webhook: {
+		input: { projectId: "P_projectId", webhookId: "WH_webhookId" },
+		calls: [
+			{
+				method: "webhooks.remove",
+				args: [ACTOR, "P_projectId", "WH_webhookId"],
+			},
+		],
+		result: { removed: "WH_webhookId" },
+	},
+	delete_project: {
+		input: { projectId: "P_projectId", confirm: true },
+		calls: [{ method: "projects.delete", args: [ACTOR, "P_projectId", true] }],
 	},
 
 	// ---- admin -----------------------------------------------------------------
