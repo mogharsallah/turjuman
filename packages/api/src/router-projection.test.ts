@@ -67,15 +67,15 @@ const REST_FIXTURES: Record<string, RestFixture> = {
 	run_qa_checks: {
 		method: "post",
 		url: `/v1/projects/${PID}/checks`,
-		body: { locale: "zz", checks: ["icu"], slot: "working" },
+		body: { locale: "zz", checks: ["icu"] },
 		serviceMethod: "qa.run",
 		check: (a) => {
 			expect(a[1]).toBe(PID);
 			// The wire field `checks` is renamed to the service field `checkIds`.
+			// REST carries no `slot` (MCP-only); the service defaults it.
 			expect(a[2]).toMatchObject({
 				locale: "zz",
 				checkIds: ["icu"],
-				slot: "working",
 			});
 		},
 	},
@@ -180,7 +180,7 @@ describe("Bespoke CLI routes — golden envelopes & the origin divergence", () =
 					locale: "fr",
 					entries: [
 						{ name: "a", value: "A" },
-						{ name: "b", value: "B", status: "approved" },
+						{ name: "b", value: "B" },
 					],
 				}),
 			},
@@ -195,13 +195,13 @@ describe("Bespoke CLI routes — golden envelopes & the origin divergence", () =
 		expect(calls[0]!.args[2]).toBe("fr");
 		expect(calls[0]!.args[3]).toEqual([
 			{ name: "a", value: "A", origin: "import" },
-			{ name: "b", value: "B", status: "approved", origin: "import" },
+			{ name: "b", value: "B", origin: "import" },
 		]);
 	});
 
-	it('the MCP set_translation handler stamps origin:"llm" — the other side of the divergence', () => {
+	it('the MCP set_translation handler stamps origin:"agent" — the other side of the divergence', () => {
 		// set_translation has no REST route; exercise its operation handler directly so
-		// the import-vs-llm origin split is pinned in one place, against both oracles.
+		// the import-vs-agent origin split is pinned in one place, against both oracles.
 		const op = OPERATIONS_BY_NAME.get("set_translation")!;
 		const { service, calls } = spyService(undefined);
 		const ctx: OpContext = {
@@ -229,7 +229,7 @@ describe("Bespoke CLI routes — golden envelopes & the origin divergence", () =
 			expect(calls[0]!.args[3]).toMatchObject({
 				name: "a",
 				value: "A",
-				origin: "llm",
+				origin: "agent",
 			});
 		});
 	});

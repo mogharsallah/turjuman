@@ -173,9 +173,9 @@ describe("TurjumanService (in-memory)", () => {
 			["keep.me"],
 		);
 		expect(
-			(await svc.keys.list(actor, project.id, { includeDeprecated: true })).map(
-				(k) => k.name,
-			),
+			(await svc.keys.list(actor, project.id, { includeDeprecated: true }))
+				.map((k) => k.name)
+				.sort(),
 		).toEqual(["drop.me", "keep.me"]);
 		expect(
 			await svc.translations.listForKey(actor, project.id, "drop.me"),
@@ -187,9 +187,9 @@ describe("TurjumanService (in-memory)", () => {
 			{ name: "drop.me" },
 		]);
 		expect(back.reactivated).toBe(1);
-		expect((await svc.keys.list(actor, project.id)).map((k) => k.name)).toEqual(
-			["drop.me", "keep.me"],
-		);
+		expect(
+			(await svc.keys.list(actor, project.id)).map((k) => k.name).sort(),
+		).toEqual(["drop.me", "keep.me"]);
 	});
 
 	it("only an OWNER may grant or change privileged roles", async () => {

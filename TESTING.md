@@ -42,7 +42,7 @@ against independent data.
 | **L2 hermetic — sandbox adversarial** | QuickJS engine traps (byte-truncation / use-after-free / multibyte split) + marshal edges | Fast, always runs |
 | **L3 integration** | Real DynamoDB single-table invariants + REST-projection wiring | Slow; `describe.skipIf(!env)` |
 | **L4 hermetic — service-RBAC seam** | Read-only-key universal deny probe over the real service + fake repo | Fast, always runs |
-| **L5 e2e** | Deployed black-box over Function URLs, classic *and* code mode | Slowest; `describe.skipIf(!env)`; keep tiny |
+| **L5 e2e** | Deployed black-box over Function URLs, the single code-surface MCP | Slowest; `describe.skipIf(!env)`; keep tiny |
 
 Anything that boots a transport stack or a real datastore is integration/e2e — not L0/L1. Don't
 label a slow test "unit" because you wish it were one.
@@ -87,7 +87,7 @@ label a slow test "unit" because you wish it were one.
 - **Additive-then-subtractive.** A new suite lands green *alongside* the old; an old file is
   removed only with a checklist mapping each old `it()` to its new home. Coverage never dips.
 - **Non-rewritable — keep bespoke, do not fold into a loop:** sandbox byte-truncation /
-  use-after-free / multibyte-split cases; pagination page-count assertions; dual-slot delivery
+  use-after-free / multibyte-split cases; pagination page-count assertions; accepted-vs-working delivery
   sequence; CONFLICT/NOT_FOUND nuances (last-owner, expired key, duplicate email); every
   branch/throw path a contract loop skips.
 

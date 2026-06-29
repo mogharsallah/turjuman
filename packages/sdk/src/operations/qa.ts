@@ -16,7 +16,7 @@ export const qaOps: Operation[] = [
 	op({
 		name: "run_qa_checks",
 		description:
-			"Run deterministic QA checks on translations (ICU/placeholder/plural/markup/length/whitespace/punctuation/empty/glossary/duplicate/stale). Advisory — run this before approving, then fix any errors. Returns findings grouped by locale with error/warning/info counts. Prefer passing a single `locale`.",
+			"Run deterministic QA checks on translations (ICU/placeholder/plural/markup/length/whitespace/punctuation/empty/glossary/duplicate/stale). Advisory — run this before accepting, then fix any errors. Returns findings grouped by locale with error/warning/info counts. Prefer passing a single `locale`.",
 		input: z.object({
 			projectId,
 			locale: localeCode

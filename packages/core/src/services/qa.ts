@@ -42,7 +42,7 @@ export interface SetQaConfigInput {
  * `qa/` engine and the data model: it loads translations/keys/glossary, derives
  * the lifecycle-dependent context fields (`expectsValue`, `stale`), runs the
  * engine, then applies config (severity overrides + ignore rules). QA is
- * advisory — it never mutates translations or the approval state.
+ * advisory — it never mutates translations or the acceptance state.
  */
 export class QaService extends BaseService {
 	constructor(
