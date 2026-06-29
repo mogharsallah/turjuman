@@ -1,21 +1,24 @@
 import type {
 	Actor,
 	ApiKey,
+	Branch,
 	GlobalRole,
 	GlossaryTerm,
 	Locale,
 	Membership,
+	Namespace,
 	Project,
 	QaConfig,
-	ScoreConfig,
 	Translation,
 	TranslationKey,
+	TranslationRun,
+	TranslationVersion,
 	User,
 	Webhook,
 } from "@turjuman/schema";
-import { conflict } from "@turjuman/schema";
+import { conflict, MAIN_BRANCH_ID } from "@turjuman/schema";
 import { authenticate, bootstrapOwner } from "../auth.js";
-import type { RepositoryApi } from "../repository/index.js";
+import type { AcceptCellParams, RepositoryApi } from "../repository/index.js";
 import { TurjumanService } from "../services/index.js";
 
 /**
@@ -32,7 +35,8 @@ const compareSk = (a: string, b: string): number =>
  * (not the concrete class) so the compiler enforces that every public repository
  * method is present and correctly typed — drift becomes a build error, not a
  * runtime `TypeError` discovered mid-test. The DynamoDB-backed `integration.test.ts`
- * exercises the real single-table queries this stand-in approximates.
+ * exercises the real single-table queries this stand-in approximates, including the
+ * copy-on-write fall-through and the accept compare-and-swap modelled here.
  *
  * NOTE: this file lives under `src/testing/` which the package build
  * (`tsconfig.build.json`) excludes from `dist`, so no test code ships in the
@@ -46,12 +50,44 @@ export class FakeRepo implements RepositoryApi {
 	projects = new Map<string, Project>();
 	memberships = new Map<string, Membership>(); // `${projectId}#${userId}`
 	locales = new Map<string, Locale>(); // `${projectId}#${code}`
-	keys = new Map<string, Map<string, TranslationKey>>(); // projectId -> sk -> key
-	translations = new Map<string, Map<string, Translation>>(); // projectId -> `${loc}#${ns}#${name}`
+	branches = new Map<string, Branch>(); // `${projectId}#${branchId}`
+	namespaces = new Map<string, Namespace>(); // `${projectId}#${namespaceId}`
+	keyDefs = new Map<string, TranslationKey>(); // `${projectId}#${branchId}#${keyId}`
+	keyNames = new Map<string, string>(); // `${projectId}#${branchId}#${ns}#${name}` -> keyId
+	cells = new Map<string, Translation>(); // `${projectId}#${branchId}#${locale}#${keyId}`
+	versions = new Map<string, TranslationVersion>(); // cellKey + `#${seq}`
 	glossary = new Map<string, Map<string, GlossaryTerm>>(); // projectId -> termId -> term
 	webhooks = new Map<string, Map<string, Webhook>>(); // projectId -> id -> webhook
 	qaConfigs = new Map<string, QaConfig>(); // projectId -> config
-	scoreConfigs = new Map<string, ScoreConfig>(); // projectId -> config
+	runs = new Map<string, TranslationRun>(); // `${projectId}#${runId}`
+
+	// ---- composite-key helpers -------------------------------------------------
+	private defK = (p: string, b: string, id: string) => `${p}#${b}#${id}`;
+	private nameK = (p: string, b: string, ns: string | undefined, n: string) =>
+		`${p}#${b}#${ns ?? "_"}#${n}`;
+	private cellK = (p: string, b: string, loc: string, id: string) =>
+		`${p}#${b}#${loc}#${id}`;
+
+	/** Copy-on-write read: the branch's own value, else the first ancestor's. */
+	private fallthrough<T>(
+		projectId: string,
+		branchId: string,
+		get: (branchId: string) => T | undefined,
+	): T | undefined {
+		const own = get(branchId);
+		if (own !== undefined) return own;
+		if (branchId === MAIN_BRANCH_ID) return undefined;
+		let current: string | null | undefined = this.branches.get(
+			`${projectId}#${branchId}`,
+		)?.parentBranchId;
+		while (current) {
+			const hit = get(current);
+			if (hit !== undefined) return hit;
+			if (current === MAIN_BRANCH_ID) break;
+			current = this.branches.get(`${projectId}#${current}`)?.parentBranchId;
+		}
+		return undefined;
+	}
 
 	// ---- users ----------------------------------------------------------------
 	async createUser(u: User): Promise<User> {
@@ -130,7 +166,16 @@ export class FakeRepo implements RepositoryApi {
 	}
 	async updateProject(
 		projectId: string,
-		patch: Partial<Pick<Project, "name" | "description" | "baseLocale">>,
+		patch: Partial<
+			Pick<
+				Project,
+				| "name"
+				| "description"
+				| "baseLocale"
+				| "contextRevision"
+				| "requireHumanAccept"
+			>
+		>,
 	): Promise<void> {
 		const p = this.projects.get(projectId);
 		if (!p) return;
@@ -139,6 +184,38 @@ export class FakeRepo implements RepositoryApi {
 			...patch,
 			updatedAt: new Date().toISOString(),
 		});
+	}
+
+	// ---- branches -------------------------------------------------------------
+	async putBranch(b: Branch): Promise<Branch> {
+		this.branches.set(`${b.projectId}#${b.id}`, b);
+		return b;
+	}
+	async getBranch(
+		projectId: string,
+		branchId: string,
+	): Promise<Branch | undefined> {
+		return this.branches.get(`${projectId}#${branchId}`);
+	}
+	async listBranches(projectId: string): Promise<Branch[]> {
+		return [...this.branches.values()].filter((b) => b.projectId === projectId);
+	}
+
+	// ---- namespaces -----------------------------------------------------------
+	async putNamespace(ns: Namespace): Promise<Namespace> {
+		this.namespaces.set(`${ns.projectId}#${ns.id}`, ns);
+		return ns;
+	}
+	async getNamespace(
+		projectId: string,
+		namespaceId: string,
+	): Promise<Namespace | undefined> {
+		return this.namespaces.get(`${projectId}#${namespaceId}`);
+	}
+	async listNamespaces(projectId: string): Promise<Namespace[]> {
+		return [...this.namespaces.values()].filter(
+			(n) => n.projectId === projectId,
+		);
 	}
 
 	// ---- memberships ----------------------------------------------------------
@@ -182,62 +259,241 @@ export class FakeRepo implements RepositoryApi {
 		this.locales.delete(`${projectId}#${code}`);
 	}
 
-	// ---- translation keys -----------------------------------------------------
-	private keyMap(projectId: string): Map<string, TranslationKey> {
-		let m = this.keys.get(projectId);
-		if (!m) this.keys.set(projectId, (m = new Map()));
-		return m;
+	// ---- key definitions ------------------------------------------------------
+	async createKeyDef(
+		branchId: string,
+		key: TranslationKey,
+	): Promise<TranslationKey> {
+		const nk = this.nameK(key.projectId, branchId, key.namespaceId, key.name);
+		if (this.keyNames.has(nk))
+			throw conflict(`Key "${key.name}" already exists`);
+		this.keyDefs.set(this.defK(key.projectId, branchId, key.id), key);
+		this.keyNames.set(nk, key.id);
+		return key;
 	}
-	async putKey(k: TranslationKey): Promise<TranslationKey> {
-		this.keyMap(k.projectId).set(`${k.namespace}#${k.name}`, k);
-		return k;
+	async putKeyDef(
+		branchId: string,
+		key: TranslationKey,
+	): Promise<TranslationKey> {
+		this.keyDefs.set(this.defK(key.projectId, branchId, key.id), key);
+		return key;
 	}
-	async getKey(
-		projectId: string,
-		ns: string,
-		name: string,
-	): Promise<TranslationKey | undefined> {
-		return this.keyMap(projectId).get(`${ns}#${name}`);
-	}
-	async listKeys(
-		projectId: string,
-		namespace?: string,
-	): Promise<TranslationKey[]> {
-		const all = [...this.keyMap(projectId).values()].sort((a, b) =>
-			compareSk(`${a.namespace}#${a.name}`, `${b.namespace}#${b.name}`),
+	async renameKeyDef(
+		branchId: string,
+		key: TranslationKey,
+		from: { namespaceId?: string; name: string },
+	): Promise<TranslationKey> {
+		const nk = this.nameK(key.projectId, branchId, key.namespaceId, key.name);
+		if (this.keyNames.has(nk))
+			throw conflict(`Key "${key.name}" already exists`);
+		this.keyNames.delete(
+			this.nameK(key.projectId, branchId, from.namespaceId, from.name),
 		);
-		return namespace ? all.filter((k) => k.namespace === namespace) : all;
+		this.keyNames.set(nk, key.id);
+		this.keyDefs.set(this.defK(key.projectId, branchId, key.id), key);
+		return key;
 	}
-	async listKeysPage(
+	async getKeyDef(
 		projectId: string,
-		opts: { namespace?: string; limit?: number; cursor?: string } = {},
+		branchId: string,
+		keyId: string,
+	): Promise<TranslationKey | undefined> {
+		return this.fallthrough(projectId, branchId, (br) =>
+			this.keyDefs.get(this.defK(projectId, br, keyId)),
+		);
+	}
+	async resolveKeyIdByName(
+		projectId: string,
+		branchId: string,
+		namespaceId: string | undefined,
+		name: string,
+	): Promise<string | undefined> {
+		return this.fallthrough(projectId, branchId, (br) =>
+			this.keyNames.get(this.nameK(projectId, br, namespaceId, name)),
+		);
+	}
+	async listKeyDefs(
+		projectId: string,
+		branchId: string,
+	): Promise<TranslationKey[]> {
+		const prefix = `${projectId}#${branchId}#`;
+		const out: TranslationKey[] = [];
+		for (const [k, v] of this.keyDefs) if (k.startsWith(prefix)) out.push(v);
+		return out.sort((a, b) => compareSk(`KEY#${a.id}`, `KEY#${b.id}`));
+	}
+	async listKeyDefsPage(
+		projectId: string,
+		branchId: string,
+		opts: { limit?: number; cursor?: string } = {},
 	): Promise<{ keys: TranslationKey[]; nextCursor?: string }> {
 		// The cursor here is an opaque in-memory offset token, not the real repo's
 		// key-anchored `LastEvaluatedKey`. Callers must treat it as opaque (the
-		// services do); a test that paginates while concurrently inserting/deleting
-		// keys would see offset drift the real key-anchored cursor doesn't have — so
-		// mid-mutation pagination is an integration-tier (real-DynamoDB) concern.
-		const all = await this.listKeys(projectId, opts.namespace);
+		// services do); mid-mutation pagination is an integration-tier concern.
+		const all = await this.listKeyDefs(projectId, branchId);
 		const start = opts.cursor ? Number(opts.cursor) : 0;
 		const limit = opts.limit ?? all.length;
 		const slice = all.slice(start, start + limit);
 		const next = start + limit < all.length ? String(start + limit) : undefined;
 		return { keys: slice, nextCursor: next };
 	}
-	async deleteKey(projectId: string, ns: string, name: string): Promise<void> {
-		this.keyMap(projectId).delete(`${ns}#${name}`);
-	}
-	async deleteKeysCascade(
+	async deleteKeyDefsCascade(
 		projectId: string,
-		ns: string,
-		names: string[],
+		branchId: string,
+		keys: Pick<TranslationKey, "id" | "namespaceId" | "name">[],
 	): Promise<void> {
-		for (const name of names) {
-			for (const t of await this.listTranslationsByKey(projectId, ns, name)) {
-				await this.deleteTranslation(projectId, t.localeCode, ns, name);
-			}
-			await this.deleteKey(projectId, ns, name);
+		for (const key of keys) {
+			this.keyDefs.delete(this.defK(projectId, branchId, key.id));
+			this.keyNames.delete(
+				this.nameK(projectId, branchId, key.namespaceId, key.name),
+			);
+			const cellPrefix = `${projectId}#${branchId}#`;
+			const cellSuffix = `#${key.id}`;
+			for (const [k] of this.cells)
+				if (k.startsWith(cellPrefix) && k.endsWith(cellSuffix))
+					this.cells.delete(k);
+			for (const [k] of this.versions)
+				if (k.startsWith(cellPrefix) && k.includes(`${cellSuffix}#`))
+					this.versions.delete(k);
 		}
+	}
+
+	// ---- translation cells ----------------------------------------------------
+	async putCell(c: Translation): Promise<Translation> {
+		this.cells.set(this.cellK(c.projectId, c.branchId, c.locale, c.keyId), c);
+		return c;
+	}
+	async putCells(list: Translation[]): Promise<void> {
+		for (const c of list) await this.putCell(c);
+	}
+	async getCell(
+		projectId: string,
+		branchId: string,
+		keyId: string,
+		locale: string,
+	): Promise<Translation | undefined> {
+		return this.fallthrough(projectId, branchId, (br) =>
+			this.cells.get(this.cellK(projectId, br, locale, keyId)),
+		);
+	}
+	async listCellsByLocale(
+		projectId: string,
+		branchId: string,
+		locale: string,
+	): Promise<Translation[]> {
+		return [...this.cells.values()]
+			.filter(
+				(c) =>
+					c.projectId === projectId &&
+					c.branchId === branchId &&
+					c.locale === locale,
+			)
+			.sort((a, b) => compareSk(`KEY#${a.keyId}`, `KEY#${b.keyId}`));
+	}
+	async listCellsByLocalePage(
+		projectId: string,
+		branchId: string,
+		locale: string,
+		opts: { limit?: number; cursor?: string } = {},
+	): Promise<{ cells: Translation[]; nextCursor?: string }> {
+		const all = await this.listCellsByLocale(projectId, branchId, locale);
+		const start = opts.cursor ? Number(opts.cursor) : 0;
+		const limit = opts.limit ?? all.length;
+		const slice = all.slice(start, start + limit);
+		const next = start + limit < all.length ? String(start + limit) : undefined;
+		return { cells: slice, nextCursor: next };
+	}
+	async listCellsByKey(
+		projectId: string,
+		branchId: string,
+		keyId: string,
+	): Promise<Translation[]> {
+		return [...this.cells.values()].filter(
+			(c) =>
+				c.projectId === projectId &&
+				c.branchId === branchId &&
+				c.keyId === keyId,
+		);
+	}
+	async deleteCell(
+		projectId: string,
+		branchId: string,
+		keyId: string,
+		locale: string,
+	): Promise<void> {
+		this.cells.delete(this.cellK(projectId, branchId, locale, keyId));
+	}
+	async acceptCell(params: AcceptCellParams): Promise<Translation> {
+		const ck = this.cellK(
+			params.projectId,
+			params.branchId,
+			params.locale,
+			params.keyId,
+		);
+		const existing = this.cells.get(ck);
+		// Mirror the real repo's CAS: the cell must exist and its `head` must match
+		// the caller's expectation, else a concurrent accept already advanced it.
+		if (!existing || existing.head !== params.expectedHead)
+			throw conflict(
+				"Translation changed while accepting; reload and retry the accept.",
+			);
+		const now = new Date().toISOString();
+		const seq = (params.expectedHead ?? 0) + 1;
+		const version: TranslationVersion = {
+			projectId: params.projectId,
+			branchId: params.branchId,
+			keyId: params.keyId,
+			locale: params.locale,
+			seq,
+			value: params.value,
+			origin: params.origin,
+			acceptedAt: now,
+			acceptedBy: params.acceptedBy,
+			runRef: params.runRef,
+			sourceRevision: params.sourceRevision,
+			prevVersionRef: params.expectedHead,
+		};
+		this.versions.set(`${ck}#${seq}`, version);
+		const updated: Translation = {
+			...existing,
+			value: params.value,
+			head: seq,
+			lifecycle: "accepted",
+			stale: false,
+			sourceRef: params.sourceRevision,
+			origin: params.origin ?? existing.origin,
+			lockedByRunId: undefined,
+			updatedBy: params.updatedBy,
+			updatedAt: now,
+		};
+		this.cells.set(ck, updated);
+		return updated;
+	}
+	async getVersion(
+		projectId: string,
+		branchId: string,
+		keyId: string,
+		locale: string,
+		seq: number,
+	): Promise<TranslationVersion | undefined> {
+		return this.versions.get(
+			`${this.cellK(projectId, branchId, locale, keyId)}#${seq}`,
+		);
+	}
+	async getCellHistory(
+		projectId: string,
+		branchId: string,
+		keyId: string,
+		locale: string,
+	): Promise<TranslationVersion[]> {
+		return [...this.versions.values()]
+			.filter(
+				(v) =>
+					v.projectId === projectId &&
+					v.branchId === branchId &&
+					v.keyId === keyId &&
+					v.locale === locale,
+			)
+			.sort((a, b) => a.seq - b.seq);
 	}
 
 	// ---- glossary -------------------------------------------------------------
@@ -286,7 +542,7 @@ export class FakeRepo implements RepositoryApi {
 		this.webhookMap(projectId).delete(id);
 	}
 
-	// ---- QA + scoring config (per-project singletons) -------------------------
+	// ---- QA config (per-project singleton) ------------------------------------
 	async getQaConfig(projectId: string): Promise<QaConfig | undefined> {
 		return this.qaConfigs.get(projectId);
 	}
@@ -294,98 +550,49 @@ export class FakeRepo implements RepositoryApi {
 		this.qaConfigs.set(config.projectId, config);
 		return config;
 	}
-	async getScoreConfig(projectId: string): Promise<ScoreConfig | undefined> {
-		return this.scoreConfigs.get(projectId);
+
+	// ---- runs -----------------------------------------------------------------
+	async putRun(run: TranslationRun): Promise<TranslationRun> {
+		this.runs.set(`${run.projectId}#${run.id}`, run);
+		return run;
 	}
-	async putScoreConfig(config: ScoreConfig): Promise<ScoreConfig> {
-		this.scoreConfigs.set(config.projectId, config);
-		return config;
+	async getRun(
+		projectId: string,
+		runId: string,
+	): Promise<TranslationRun | undefined> {
+		return this.runs.get(`${projectId}#${runId}`);
+	}
+	async listRunsByBranch(
+		projectId: string,
+		branchId: string,
+	): Promise<TranslationRun[]> {
+		return [...this.runs.values()].filter(
+			(r) => r.projectId === projectId && r.branchId === branchId,
+		);
 	}
 
+	// ---- project cascade ------------------------------------------------------
 	async deleteProjectCascade(
 		projectId: string,
-		localeCodes: string[],
+		_localeCodes: string[],
 	): Promise<void> {
 		this.projects.delete(projectId);
-		this.keys.delete(projectId);
 		this.glossary.delete(projectId);
 		this.webhooks.delete(projectId);
 		this.qaConfigs.delete(projectId);
-		this.scoreConfigs.delete(projectId);
-		for (const [k] of this.locales)
-			if (k.startsWith(`${projectId}#`)) this.locales.delete(k);
+		const dropByPrefix = (m: Map<string, unknown>) => {
+			for (const [k] of m) if (k.startsWith(`${projectId}#`)) m.delete(k);
+		};
+		dropByPrefix(this.locales);
+		dropByPrefix(this.branches);
+		dropByPrefix(this.namespaces);
+		dropByPrefix(this.keyDefs);
+		dropByPrefix(this.keyNames);
+		dropByPrefix(this.cells);
+		dropByPrefix(this.versions);
+		dropByPrefix(this.runs);
 		for (const [k, m] of this.memberships)
 			if (m.projectId === projectId) this.memberships.delete(k);
-		const trans = this.translations.get(projectId);
-		if (trans) {
-			for (const [k, t] of trans)
-				if (localeCodes.includes(t.localeCode)) trans.delete(k);
-		}
-	}
-
-	// ---- translations ---------------------------------------------------------
-	private transMap(projectId: string): Map<string, Translation> {
-		let m = this.translations.get(projectId);
-		if (!m) this.translations.set(projectId, (m = new Map()));
-		return m;
-	}
-	async putTranslation(t: Translation): Promise<Translation> {
-		this.transMap(t.projectId).set(
-			`${t.localeCode}#${t.namespace}#${t.keyName}`,
-			t,
-		);
-		return t;
-	}
-	async putTranslations(list: Translation[]): Promise<void> {
-		for (const t of list) await this.putTranslation(t);
-	}
-	async getTranslation(
-		projectId: string,
-		code: string,
-		ns: string,
-		name: string,
-	): Promise<Translation | undefined> {
-		return this.transMap(projectId).get(`${code}#${ns}#${name}`);
-	}
-	async listTranslationsByLocale(
-		projectId: string,
-		code: string,
-	): Promise<Translation[]> {
-		return [...this.transMap(projectId).values()].filter(
-			(t) => t.localeCode === code,
-		);
-	}
-	async listTranslationsByLocalePage(
-		projectId: string,
-		code: string,
-		opts: { limit?: number; cursor?: string } = {},
-	): Promise<{ translations: Translation[]; nextCursor?: string }> {
-		const all = (await this.listTranslationsByLocale(projectId, code)).sort(
-			(a, b) =>
-				compareSk(`${a.namespace}#${a.keyName}`, `${b.namespace}#${b.keyName}`),
-		);
-		const start = opts.cursor ? Number(opts.cursor) : 0;
-		const limit = opts.limit ?? all.length;
-		const slice = all.slice(start, start + limit);
-		const next = start + limit < all.length ? String(start + limit) : undefined;
-		return { translations: slice, nextCursor: next };
-	}
-	async listTranslationsByKey(
-		projectId: string,
-		ns: string,
-		name: string,
-	): Promise<Translation[]> {
-		return [...this.transMap(projectId).values()].filter(
-			(t) => t.namespace === ns && t.keyName === name,
-		);
-	}
-	async deleteTranslation(
-		projectId: string,
-		code: string,
-		ns: string,
-		name: string,
-	): Promise<void> {
-		this.transMap(projectId).delete(`${code}#${ns}#${name}`);
 	}
 }
 

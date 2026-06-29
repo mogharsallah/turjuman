@@ -1,8 +1,4 @@
-import type {
-	TranslationOrigin,
-	TranslationStatus,
-	WebhookEvent,
-} from "@turjuman/schema";
+import type { TranslationOrigin, WebhookEvent } from "@turjuman/schema";
 
 // Aggregate/page/result shapes the services return are defined once in `wire.ts`
 // (the transport-facing schemas) and re-exported here as their inferred types,
@@ -24,6 +20,7 @@ export interface CreateProjectInput {
 
 export interface CreateKeyInput {
 	namespace?: string;
+	branch?: string;
 	name: string;
 	description?: string;
 	plural?: boolean;
@@ -38,14 +35,16 @@ export interface UpdateKeyInput {
 	plural?: boolean;
 	maxLength?: number;
 	tags?: string[];
+	/** Keep the whole key verbatim across locales (brand names, codes). */
+	noTranslate?: boolean;
 }
 
 export interface SetTranslationInput {
 	namespace?: string;
+	branch?: string;
 	name: string;
 	value: string;
-	status?: Exclude<TranslationStatus, "untranslated">;
-	/** Provenance of the value; stamped onto the translation when known. */
+	/** Provenance of the value; stamped onto the cell when known. */
 	origin?: TranslationOrigin;
 }
 
@@ -58,15 +57,6 @@ export interface AddGlossaryTermInput {
 }
 
 export type UpdateGlossaryTermInput = Partial<AddGlossaryTermInput>;
-
-/** A translation-memory suggestion: a prior source/target pair and its match score. */
-export interface TmMatch {
-	source: string;
-	target: string;
-	score: number;
-	key: string;
-	namespace: string;
-}
 
 export interface AddWebhookInput {
 	url: string;

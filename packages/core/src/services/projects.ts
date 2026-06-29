@@ -8,10 +8,19 @@ import {
 	slugify,
 	validation,
 } from "@turjuman/schema";
+import type { RepositoryApi } from "../repository/index.js";
 import { BaseService } from "./base.js";
+import type { BranchService } from "./branches.js";
 import type { CreateProjectInput } from "./types.js";
 
 export class ProjectsService extends BaseService {
+	constructor(
+		repo: RepositoryApi,
+		private readonly branches: BranchService,
+	) {
+		super(repo);
+	}
+
 	async list(actor: Actor): Promise<Project[]> {
 		if (actor.globalRole === "OWNER" || actor.globalRole === "ADMIN") {
 			return this.repo.listProjectsByOrg(actor.orgId);
@@ -44,14 +53,19 @@ export class ProjectsService extends BaseService {
 			slug: slugify(name),
 			description: input.description,
 			baseLocale,
+			contextRevision: 0,
+			requireHumanAccept: false,
 			createdAt: now,
 			updatedAt: now,
 		};
 		await this.repo.createProject(project);
+		// Every project starts with the root `main` branch.
+		await this.branches.ensureMain(project.id, actor.userId);
 		await this.repo.putLocale({
 			projectId: project.id,
 			code: baseLocale,
 			name: baseLocale,
+			lifecycle: "active",
 			createdAt: now,
 		});
 		// The creator gets an explicit MANAGER membership so the project shows up in
@@ -68,7 +82,12 @@ export class ProjectsService extends BaseService {
 	async update(
 		actor: Actor,
 		projectId: string,
-		patch: { name?: string; description?: string; baseLocale?: string },
+		patch: {
+			name?: string;
+			description?: string;
+			baseLocale?: string;
+			requireHumanAccept?: boolean;
+		},
 	): Promise<Project> {
 		await this.authorizeProject(actor, projectId, "project.update");
 		if (patch.baseLocale !== undefined)
