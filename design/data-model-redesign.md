@@ -215,7 +215,8 @@ all-locales cell). One value object lets any context entity live at any cell.
   branch lives only in that branch's key partition until merged — so `introducedOnBranchId` is
   provenance + a merge hint, not a visibility filter. `placements` is a flat list of
   `{ surface, screen, role, order? }` situating the key in the UI — **briefing data only, never a
-  `Scope`** (see the manifest, below).
+  `Scope`** (see the manifest, below). **Deferred from the initial build** — kept in the model but
+  not populated or consumed until a user needs it.
 
 `lifecycle` on Namespace/Locale/Key is **soft-delete** (active|deprecated/retired) so `Scope`
 coordinates never dangle. Retiring cascades: dependent Translations go `stale` (not deleted), scoped
@@ -371,6 +372,10 @@ FieldReport ──(via releaseRef → branch)──► reopen cell + fix-run ─
 ## Cross-cutting mechanisms
 
 ### Situational awareness — the TranslationManifest
+
+> **Deferred from the initial build** (rides on the deferred `Key.placements`): until a user asks for
+> it, the briefing is the resolved cascade alone — which the manifest already degrades to whenever
+> placements are absent. Documented here as the target shape.
 
 The agent learns *where* a string sits in the UI from `Key.placements` (a flat
 `{ surface, screen, role, order? }` list). The agent briefing is a **projection** of those placements
