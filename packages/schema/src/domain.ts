@@ -25,7 +25,6 @@ import {
 	localeCodeSchema,
 	namespaceSchema,
 	qaSeveritySchema,
-	scoreValueSchema,
 } from "./validation.js";
 
 /**
@@ -52,29 +51,29 @@ export const projectRoleSchema = z.enum([
 export type ProjectRole = z.infer<typeof projectRoleSchema>;
 
 /**
- * Lifecycle of a single translation value. `needs_review` is the AI-scoring
- * landing state: a value graded below the project's threshold (or manually
- * flagged) that carries a value but is held back from approval for a human.
+ * Lifecycle of a translation cell — the **entire** review verdict (no score).
+ * `untranslated` (no value yet) → `proposed` (a draft value awaiting acceptance)
+ * → `accepted` (the agent self-accepted, or a human flipped it). `escalated`
+ * routes an irreducible judgment to a human; `retired` soft-deletes a cell whose
+ * key was retired.
  */
-export const translationStatusSchema = z.enum([
+export const cellLifecycleSchema = z.enum([
 	"untranslated",
-	"translated",
-	"needs_review",
-	"approved",
+	"proposed",
+	"accepted",
+	"escalated",
+	"retired",
 ]);
-export type TranslationStatus = z.infer<typeof translationStatusSchema>;
+export type CellLifecycle = z.infer<typeof cellLifecycleSchema>;
 
-/** How a translation value was produced (provenance). */
-export const translationOriginSchema = z.enum([
-	"human",
-	"llm",
-	"tm",
-	"mt",
-	"import",
-]);
+/** How a translation value was produced (provenance). A merge keeps the
+ * transported value's original origin, so there is no `merge` origin: `human` (a
+ * person typed it), `agent` (the model decided it), `import` (a CLI/REST push). */
+export const translationOriginSchema = z.enum(["human", "agent", "import"]);
 export type TranslationOrigin = z.infer<typeof translationOriginSchema>;
 
-/** Source lifecycle of a key: present in the latest import, or absent but retained. */
+/** Soft-delete lifecycle of a structural entity (key / locale / namespace):
+ * present and usable, or retained-but-hidden so `Scope` coordinates never dangle. */
 export const keyStateSchema = z.enum(["active", "deprecated"]);
 export type KeyState = z.infer<typeof keyStateSchema>;
 
@@ -90,6 +89,9 @@ export const webhookEventSchema = z.enum([
 	"key.updated",
 	"key.deleted",
 	"locale.added",
+	/** A translation run (the agent write primitive) started / finished. */
+	"run.started",
+	"run.finished",
 ]);
 export type WebhookEvent = z.infer<typeof webhookEventSchema>;
 
@@ -154,6 +156,20 @@ export const projectSchema = z
 		baseLocale: localeCodeSchema.describe(
 			'Source locale every key is authored in, e.g. "en".',
 		),
+		/** Monotonic counter bumped on any scoped context write; drives context-staleness. */
+		contextRevision: z
+			.number()
+			.int()
+			.describe(
+				"Monotonic counter bumped on any scoped context write (context-staleness).",
+			),
+		/** When true, the agent's run can only leave cells `proposed`; a human must
+		 * flip `proposed → accepted` (a run-attributed accept is rejected). */
+		requireHumanAccept: z
+			.boolean()
+			.describe(
+				"When true, only a human (not a run) may accept a proposed translation.",
+			),
 		createdAt: z.string(),
 		updatedAt: z.string(),
 	})
@@ -168,18 +184,56 @@ export const localeSchema = z
 			'BCP-47-ish code, e.g. "fr", "es-MX", "pt-BR".',
 		),
 		name: z.string().optional(),
+		/** Soft-delete state; a deprecated locale's cells are retained but hidden. */
+		lifecycle: keyStateSchema,
 		createdAt: z.string(),
 	})
 	.openapi({ ref: "Locale" });
 export type Locale = z.infer<typeof localeSchema>;
 
+/**
+ * A namespace: an optional grouping of keys by feature-area (file / screen /
+ * feature). An opaque-`id` entity whose `name` is a renamable display label. It
+ * becomes the "voice" context tier in a later batch; here it is the identity
+ * carrier so keys reference `namespaceId`, never a name.
+ */
+export const namespaceEntitySchema = z
+	.object({
+		id: z.string(),
+		projectId: z.string(),
+		/** Display label (file / feature), unique per project. */
+		name: namespaceSchema.describe(
+			"Display label (file/feature), unique per project.",
+		),
+		title: z.string().optional(),
+		description: z.string().optional(),
+		lifecycle: keyStateSchema,
+		createdAt: z.string(),
+		updatedAt: z.string(),
+	})
+	.openapi({ ref: "Namespace" });
+export type Namespace = z.infer<typeof namespaceEntitySchema>;
+
+/** Where a key surfaces in the UI — briefing data only, never a `Scope`.
+ * **Deferred:** typed here as the target shape but not populated or consumed. */
+export const placementSchema = z.object({
+	surface: z.string(),
+	screen: z.string(),
+	role: z.string(),
+	order: z.number().int().optional(),
+});
+export type Placement = z.infer<typeof placementSchema>;
+
 export const translationKeySchema = z
 	.object({
+		/** Opaque identity; `(namespaceId, name)` are renamable labels, not identity. */
+		id: z.string().describe("Opaque key identity (stable across renames)."),
 		projectId: z.string(),
-		/** Logical grouping (file/feature). Defaults to "default". */
-		namespace: namespaceSchema.describe(
-			'Logical grouping (file/feature). Defaults to "default".',
-		),
+		/** Optional namespace grouping (FK to a Namespace entity); absent = no namespace. */
+		namespaceId: z
+			.string()
+			.optional()
+			.describe("Namespace grouping (FK); absent = no namespace."),
 		name: keyNameSchema,
 		/** Context for translators and the connected LLM. */
 		description: z
@@ -194,6 +248,23 @@ export const translationKeySchema = z
 		state: keyStateSchema.describe(
 			'"active" when present in the latest source import; "deprecated" when absent but retained.',
 		),
+		/** Keep the whole key verbatim across locales (brand names, codes). */
+		noTranslate: z
+			.boolean()
+			.optional()
+			.describe(
+				"Keep the whole key verbatim across locales (brand names, codes).",
+			),
+		/** Content hash + timestamp of the base value; bumps on a base edit and fires the forward loop. */
+		sourceRevision: z
+			.string()
+			.describe(
+				"Revision token of the base value; bumps on a base edit and stales dependents.",
+			),
+		/** Branch this key was introduced on (provenance + merge hint). */
+		introducedOnBranchId: z.string().optional(),
+		/** UI placements — briefing data only. **Deferred**: typed, not yet populated. */
+		placements: z.array(placementSchema).optional(),
 		/** ISO timestamp of the last import that created, updated, or reactivated this key. */
 		lastSeenAt: z
 			.string()
@@ -207,76 +278,161 @@ export const translationKeySchema = z
 	.openapi({ ref: "TranslationKey" });
 export type TranslationKey = z.infer<typeof translationKeySchema>;
 
+/** Lifecycle of a branch (its own state, distinct from shippability). */
+export const branchStatusSchema = z.enum(["open", "merged", "abandoned"]);
+export type BranchStatus = z.infer<typeof branchStatusSchema>;
+
+/**
+ * A named, copy-on-write line of work over a project's keys and translations.
+ * `main` always exists (`parentBranchId = null`) and is the safe root; nothing
+ * experimental touches it until a deliberate merge. Branching is optional —
+ * most self-host users only ever work on `main`.
+ */
+export const branchSchema = z
+	.object({
+		id: z.string(),
+		projectId: z.string(),
+		name: z.string(),
+		/** Parent branch; `null` for `main`. */
+		parentBranchId: z.string().nullable(),
+		/** The parent's state at fork time — the merge baseline. Absent for `main`. */
+		forkPoint: z.string().optional(),
+		status: branchStatusSchema,
+		createdBy: z.string(),
+		createdAt: z.string(),
+		mergedAt: z.string().optional(),
+	})
+	.openapi({ ref: "Branch" });
+export type Branch = z.infer<typeof branchSchema>;
+
+/**
+ * The living translation cell, one per `(branchId, keyId, locale)`. Copy-on-
+ * write: a cell exists only on the branch that wrote it; an unwritten cell
+ * resolves by falling through to the parent branch. The lifecycle is the entire
+ * review verdict — there is no score.
+ */
 export const translationSchema = z
 	.object({
 		projectId: z.string(),
-		localeCode: localeCodeSchema,
-		namespace: namespaceSchema,
-		keyName: keyNameSchema,
-		/** ICU MessageFormat string (plain string for simple values). */
+		branchId: z.string(),
+		keyId: z.string(),
+		locale: localeCodeSchema,
+		/** ICU MessageFormat string — the working draft (the only mutable text). */
 		value: z
 			.string()
 			.describe("ICU MessageFormat string (plain string for simple values)."),
-		status: translationStatusSchema,
-		/** Last approved value — the snapshot delivery ships. Set only on approval (status → "approved"). */
-		approvedValue: z
-			.string()
+		/** Pointer (version seq) to the current accepted TranslationVersion — the
+		 * cell's branch-head. Doubles as the accept compare-and-swap + merge token.
+		 * Absent until the first accept. */
+		head: z
+			.number()
+			.int()
 			.optional()
 			.describe(
-				'Last approved value — the snapshot delivery ships. Set only on approval (status → "approved").',
+				"Seq of the current accepted version (the branch-head / CAS token).",
 			),
-		/** The base value this working `value` was written against; used to derive staleness. */
+		lifecycle: cellLifecycleSchema,
+		/** Derived: `sourceRef != key.sourceRevision`. */
+		stale: z.boolean(),
+		/** The base revision this cell was translated from (captured at loop start). */
 		sourceRef: z
 			.string()
 			.optional()
 			.describe(
-				"The base value this working `value` was written against; used to derive staleness.",
+				"The base revision this value was written against; derives staleness.",
 			),
 		/** How the current `value` was produced. Absent when unknown. */
 		origin: translationOriginSchema
 			.optional()
 			.describe("How the current `value` was produced. Absent when unknown."),
-		/** Latest AI quality score (0–100) for the working `value`; absent until scored. A re-score overwrites it. */
-		score: scoreValueSchema
-			.optional()
-			.describe(
-				"Latest AI quality score (0–100) for the working value; absent until scored.",
-			),
-		/** The reviewer model's one- or two-sentence rationale for the latest `score`. */
-		scoreComment: z
-			.string()
-			.optional()
-			.describe("The reviewer model's rationale for the latest score."),
-		/** userId of the key that submitted the latest score. */
-		scoredBy: z
-			.string()
-			.optional()
-			.describe("userId of the key that submitted the latest score."),
-		/** ISO timestamp of the latest score. */
-		scoredAt: z
-			.string()
-			.optional()
-			.describe("ISO timestamp of the latest score."),
-		/** Identifier of the model that produced the latest score (provenance). */
-		scoreModel: z
-			.string()
-			.optional()
-			.describe(
-				"Identifier of the model that produced the latest score (provenance).",
-			),
-		/** Version of the scoring methodology/prompt the latest score was produced under. */
-		promptVersion: z
-			.string()
-			.optional()
-			.describe(
-				"Version of the scoring methodology/prompt the latest score was produced under.",
-			),
+		/** Set while a run or escalation owns the cell (in-flight exclusivity). */
+		lockedByRunId: z.string().optional(),
 		/** userId of the last editor. */
 		updatedBy: z.string().describe("userId of the last editor."),
 		updatedAt: z.string(),
 	})
 	.openapi({ ref: "Translation" });
 export type Translation = z.infer<typeof translationSchema>;
+
+/**
+ * An accepted-value commit: append-only, one chain per `(branchId, keyId,
+ * locale)`. The cell's `head` points at the current one; accepted text lives
+ * here, not in a mutable field, which is what makes "accepted" non-destructive.
+ */
+export const translationVersionSchema = z
+	.object({
+		projectId: z.string(),
+		branchId: z.string(),
+		keyId: z.string(),
+		locale: localeCodeSchema,
+		/** Monotonic position in the chain (zero-padded in storage for SK ordering). */
+		seq: z.number().int(),
+		value: z.string(),
+		origin: translationOriginSchema.optional(),
+		acceptedAt: z.string(),
+		/** Human who accepted (absent when a run accepted). */
+		acceptedBy: z.string().optional(),
+		/** Run that accepted (absent when a human accepted). */
+		runRef: z.string().optional(),
+		/** The key's base revision at accept time. */
+		sourceRevision: z.string().optional(),
+		/** Previous version's seq, linking the chain (absent for the first). */
+		prevVersionRef: z.number().int().optional(),
+		/** Set when a later revert supersedes this version. */
+		supersededBy: z.number().int().optional(),
+	})
+	.openapi({ ref: "TranslationVersion" });
+export type TranslationVersion = z.infer<typeof translationVersionSchema>;
+
+/** What triggered a run. A `merge` transports already-accepted values from a
+ * sibling branch instead of generating them. */
+export const runTriggerSchema = z.enum([
+	"key.created",
+	"context-change",
+	"field-report",
+	"manual",
+	"merge",
+]);
+export type RunTrigger = z.infer<typeof runTriggerSchema>;
+
+/** Run progress state. */
+export const runStatusSchema = z.enum([
+	"queued",
+	"running",
+	"partial",
+	"done",
+	"failed",
+	"canceled",
+]);
+export type RunStatus = z.infer<typeof runStatusSchema>;
+
+/**
+ * The controlled write primitive: one job that applies a set of value-changes
+ * onto one branch, recording what the external MCP-driven agent did. A merge is
+ * just a run with `trigger=merge`. Draft writes (CLI import) do NOT need a run;
+ * only the accept transition is funnelled through one.
+ */
+export const translationRunSchema = z
+	.object({
+		id: z.string(),
+		projectId: z.string(),
+		branchId: z.string(),
+		trigger: runTriggerSchema,
+		/** `agent` (generated) or `branch:<id>` (a merge transporting accepted values). */
+		valueSource: z.string(),
+		status: runStatusSchema,
+		/** Dedupe token for at-least-once webhook delivery. */
+		idempotencyKey: z.string().optional(),
+		/** Output tokens / cost recorded for the run (recorded, not enforced). */
+		budgetSpent: z.number().optional(),
+		cellsTotal: z.number().int(),
+		cellsDone: z.number().int(),
+		errors: z.array(z.string()),
+		startedAt: z.string(),
+		finishedAt: z.string().optional(),
+	})
+	.openapi({ ref: "TranslationRun" });
+export type TranslationRun = z.infer<typeof translationRunSchema>;
 
 export const membershipSchema = z
 	.object({
@@ -374,37 +530,8 @@ export const qaConfigSchema = z
 	.openapi({ ref: "QaConfig" });
 export type QaConfig = z.infer<typeof qaConfigSchema>;
 
-/**
- * Per-project AI-scoring configuration: a singleton record holding the
- * auto-approve `threshold`, the `autoApprove` opt-in (off by default), and
- * optional evaluation `guidance` merged into the scoring prompt. Absence of the
- * whole record means "defaults" (threshold 90, auto-approve off).
- */
-export const scoreConfigSchema = z
-	.object({
-		projectId: z.string(),
-		/** Minimum score (0–100) a translation must reach to be eligible for auto-approve. */
-		threshold: scoreValueSchema.describe(
-			"Minimum score (0–100) to be eligible for auto-approve.",
-		),
-		/** When true, a high score on machine-origin work auto-promotes it to `approved`. */
-		autoApprove: z
-			.boolean()
-			.describe(
-				"When true, a high score on machine-origin work auto-promotes it to approved.",
-			),
-		/** Optional per-project evaluation guidance, merged into the scoring prompt. */
-		guidance: z
-			.string()
-			.optional()
-			.describe(
-				"Per-project evaluation guidance, merged into the scoring prompt.",
-			),
-		updatedBy: z.string(),
-		updatedAt: z.string(),
-	})
-	.openapi({ ref: "ScoreConfig" });
-export type ScoreConfig = z.infer<typeof scoreConfigSchema>;
-
-/** Default namespace applied when a key does not specify one. */
+/** Default namespace label applied when an import does not specify one. */
 export const DEFAULT_NAMESPACE = "default";
+
+/** The reserved id + name of the always-present root branch. */
+export const MAIN_BRANCH_ID = "main";
