@@ -182,6 +182,21 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 			{ method: "branches.get", args: [ACTOR, "P_projectId", "BR_branch"] },
 		],
 	},
+	create_branch: {
+		input: { projectId: "P_projectId", name: "N_name", from: "FR_from" },
+		calls: [
+			{
+				method: "branches.create",
+				args: [ACTOR, "P_projectId", { name: "N_name", from: "FR_from" }],
+			},
+		],
+	},
+	merge_branch: {
+		input: { projectId: "P_projectId", branch: "BR_branch" },
+		calls: [
+			{ method: "branches.merge", args: [ACTOR, "P_projectId", "BR_branch"] },
+		],
+	},
 
 	// ---- namespaces ------------------------------------------------------------
 	list_namespaces: {
@@ -673,6 +688,39 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 		calls: [{ method: "runs.cancel", args: [ACTOR, "P_projectId", "R_runId"] }],
 	},
 
+	// ---- releases --------------------------------------------------------------
+	create_release: {
+		input: {
+			projectId: "P_projectId",
+			label: "LB_label",
+			branch: "BR_branch",
+			locales: ["zz"],
+		},
+		calls: [
+			{
+				method: "releases.create",
+				args: [
+					ACTOR,
+					"P_projectId",
+					{ label: "LB_label", branch: "BR_branch", locales: ["zz"] },
+				],
+			},
+		],
+	},
+	list_releases: {
+		input: { projectId: "P_projectId" },
+		calls: [{ method: "releases.list", args: [ACTOR, "P_projectId"] }],
+	},
+	get_release: {
+		input: { projectId: "P_projectId", releaseId: "RE_releaseId" },
+		calls: [
+			{
+				method: "releases.get",
+				args: [ACTOR, "P_projectId", "RE_releaseId"],
+			},
+		],
+	},
+
 	// ---- context ---------------------------------------------------------------
 	list_context_rules: {
 		input: { projectId: "P_projectId" },
@@ -954,6 +1002,62 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 			{
 				method: "comments.list",
 				args: [ACTOR, "P_projectId", "zz", "N_name", { namespace: "NS_ns" }],
+			},
+		],
+	},
+
+	// ---- field reports ---------------------------------------------------------
+	file_field_report: {
+		input: {
+			projectId: "P_projectId",
+			locale: "zz",
+			name: "N_name",
+			namespace: "NS_ns",
+			branch: "BR_branch",
+			releaseRef: "RR_releaseRef",
+			description: "DE_description",
+		},
+		calls: [
+			{
+				method: "fieldReports.file",
+				args: [
+					ACTOR,
+					"P_projectId",
+					{
+						locale: "zz",
+						name: "N_name",
+						namespace: "NS_ns",
+						branch: "BR_branch",
+						releaseRef: "RR_releaseRef",
+						description: "DE_description",
+					},
+				],
+			},
+		],
+	},
+	list_field_reports: {
+		input: { projectId: "P_projectId" },
+		calls: [{ method: "fieldReports.list", args: [ACTOR, "P_projectId"] }],
+	},
+	resolve_field_report: {
+		input: {
+			projectId: "P_projectId",
+			reportId: "RP_reportId",
+			spawnExample: true,
+			spawnGlossary: { term: "GT_term", translations: { zz: "TR_zz" } },
+		},
+		calls: [
+			{
+				method: "fieldReports.resolve",
+				args: [
+					ACTOR,
+					"P_projectId",
+					"RP_reportId",
+					{
+						spawnExample: true,
+						spawnGlossary: { term: "GT_term", translations: { zz: "TR_zz" } },
+					},
+				],
 			},
 		],
 	},

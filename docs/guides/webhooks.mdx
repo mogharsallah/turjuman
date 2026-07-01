@@ -39,8 +39,16 @@ Manage your webhooks with:
 | `escalation.opened` | A translation is escalated to a human (the cell flips to `escalated`) |
 | `escalation.claimed` | A human claims an open escalation |
 | `escalation.resolved` | An escalation is resolved and its cell accepted |
+| `field-report.opened` | A field report is filed against a shipped string, reopening the targeted cell for a fix |
+| `field-report.resolved` | A field report is resolved and closed |
 
 The `escalation.*` events drive a review queue: notify a reviewer on `escalation.opened`, then track ownership and completion with `escalation.claimed` and `escalation.resolved`. See [the escalation flow](/concepts/lifecycle#escalations-resolve-the-escalated-state).
+
+The two `field-report.*` events close the production loop: filing a report reopens the bad cell so a run can fix it, and resolving it can spawn reusable context. See [Branching & releases](/concepts/branching-and-releases#field-reports-close-the-production-loop).
+
+<Note>
+  A **merge** is a translation run, so merging a branch fires `run.started` / `run.finished` (and `escalation.opened` for any conflict), not a dedicated event. **Releases emit no webhook events** — cutting or superseding a release is a deliberate, pull-based action, so nothing is pushed.
+</Note>
 
 ## Payload format
 

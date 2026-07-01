@@ -43,6 +43,7 @@ rows commonly go structural.
 |---|---|
 | A **capability**: a service in `packages/core/src/services/` + its `Operation` in `packages/sdk/src/operations/` | `reference/mcp-tools.mdx` (row in the right group) + a workflow in `guides/translate-with-mcp.mdx` (and `guides/code-mode.mdx`) if it enables a new task. REST page auto-generated from the `http` binding. Use the operation name **verbatim**. |
 | **Context cascade**: `ContextService`/`ExampleService`/`EscalationService`/`CommentService` (`core/services/`) + the `context`/`examples`/`escalations`/`comments` operation groups (`sdk/src/operations/`); the pure fold algebra in `packages/schema/src/cascade.ts` | `concepts/context-cascade.mdx` (the grid, operators, ladder, brief, examples, lifecycle, context-staleness) + `reference/mcp-tools.mdx` (the Context / Examples / Escalations / Comments groups; glossary's `scope`/`lifecycle`) + `concepts/how-agents-use-turjuman.mdx` (the brief/escalate touchpoints) + `concepts/lifecycle.mdx` (the `escalated` flow, context-change staleness) + `reference/glossary.mdx` vocabulary |
+| **Branching / releases / feedback**: `BranchService` (create + merge) / `ReleaseService` / `FieldReportService` (`core/services/`) + the `branches` (`create_branch`/`merge_branch`) / `releases` / `field_reports` operation groups (`sdk/src/operations/`) — all **MCP-only** (no `http` binding) | `concepts/branching-and-releases.mdx` (copy-on-write branches, merge→escalation, immutable releases / "live = latest release", field-report reopen + context fan-out) + `reference/mcp-tools.mdx` (extend Branches; add Releases + Field reports groups) + `guides/webhooks.mdx` (`field-report.opened`/`field-report.resolved`; releases emit none) + `concepts/lifecycle.mdx` (field-report return edge, merge conflict → `escalated`) + `concepts/how-agents-use-turjuman.mdx` (Ship + Stay-correct steps) + `concepts/architecture.mdx` (`Release`/`FieldReport` entities, `#BR#` segment, `REL#` partition) |
 | A **brand-new domain** (`XService` + a new operations group) | **Usually structural** — a new Guide (the task) + a new Reference surface, registered in `docs.json`; a Concept page only if there's a non-obvious model. See *Structural changes*. |
 | A **CLI command or flag** (`packages/cli/src/`, commands in `src/commands/`) | `reference/cli-commands.mdx` (+ `guides/sync-with-cli.mdx` if the workflow changed; + `self-hosting/deploy.mdx` for deploy/teardown/status) |
 | A **file-format adapter** (`packages/formats/src/`, `ADAPTERS` in `formats/src/index.ts`) | `reference/file-formats.mdx` |
@@ -161,7 +162,8 @@ Quick drift check before relying on it: confirm the source paths in the table st
 
 **Using Turjuman** — `introduction` · `quickstart` · `guides/try-it-locally` · `concepts/why-mcp-first` ·
 `concepts/architecture` · `concepts/lifecycle` · `concepts/context-cascade` ·
-`concepts/roles-and-permissions` · `concepts/how-agents-use-turjuman` · `guides/translate-with-mcp` ·
+`concepts/branching-and-releases` · `concepts/roles-and-permissions` ·
+`concepts/how-agents-use-turjuman` · `guides/translate-with-mcp` ·
 `guides/code-mode` · `guides/sync-with-cli` · `guides/quality-checks` · `guides/webhooks` ·
 `guides/connect-claude-code`
 

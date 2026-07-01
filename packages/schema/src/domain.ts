@@ -113,6 +113,16 @@ export type ExampleQuality = z.infer<typeof exampleQualitySchema>;
 export const escalationStatusSchema = z.enum(["open", "resolved"]);
 export type EscalationStatus = z.infer<typeof escalationStatusSchema>;
 
+/** Lifecycle of a Release (the immutable shipped snapshot): `open` is live,
+ * `superseded` was replaced by a newer release on the same branch, `frozen` is
+ * retained read-only. */
+export const releaseStatusSchema = z.enum(["open", "frozen", "superseded"]);
+export type ReleaseStatus = z.infer<typeof releaseStatusSchema>;
+
+/** Whether a production field report is still open or has been resolved. */
+export const fieldReportStatusSchema = z.enum(["open", "resolved"]);
+export type FieldReportStatus = z.infer<typeof fieldReportStatusSchema>;
+
 /**
  * The grid coordinate a context entity lives at. Tier is the narrowest populated
  * of `{ keyId, namespaceId, projectId }`; `locale` is orthogonal (absent = the
@@ -147,6 +157,9 @@ export const webhookEventSchema = z.enum([
 	"escalation.opened",
 	"escalation.claimed",
 	"escalation.resolved",
+	/** Production reported a shipped string wrong (field report opened / resolved). */
+	"field-report.opened",
+	"field-report.resolved",
 ]);
 export type WebhookEvent = z.infer<typeof webhookEventSchema>;
 
@@ -489,6 +502,40 @@ export const translationRunSchema = z
 	.openapi({ ref: "TranslationRun" });
 export type TranslationRun = z.infer<typeof translationRunSchema>;
 
+/** One pinned cell in a Release: the accepted version of a `(keyId, locale)` at
+ * cut time. `versionRef` is the TranslationVersion `seq` on the pinned branch. */
+export const releaseEntrySchema = z.object({
+	keyId: z.string(),
+	locale: localeCodeSchema,
+	versionRef: z.number().int(),
+});
+export type ReleaseEntry = z.infer<typeof releaseEntrySchema>;
+
+/**
+ * An immutable shipped snapshot — what is live. **Pins one branch** and
+ * materializes its resolved accepted view (own cells + fall-through) at a moment
+ * in time. "Live" is the latest Release, never a per-cell flag, so a reopened
+ * cell or re-export never silently changes what shipped. Anchors rollback,
+ * reproducible CI export, and field reports.
+ */
+export const releaseSchema = z
+	.object({
+		id: z.string(),
+		projectId: z.string(),
+		/** The branch this release pinned. */
+		branchId: z.string(),
+		label: z.string(),
+		/** Locales included in the snapshot. */
+		locales: z.array(localeCodeSchema),
+		status: releaseStatusSchema,
+		createdBy: z.string(),
+		createdAt: z.string(),
+		/** The pinned accepted versions, one per `(keyId, locale)` cell. */
+		entries: z.array(releaseEntrySchema),
+	})
+	.openapi({ ref: "Release" });
+export type Release = z.infer<typeof releaseSchema>;
+
 export const membershipSchema = z
 	.object({
 		projectId: z.string(),
@@ -640,6 +687,40 @@ export const escalationSchema = z
 	.openapi({ ref: "Escalation" });
 export type Escalation = z.infer<typeof escalationSchema>;
 
+/**
+ * Production feedback: "this shipped string is wrong" — the one fact the in-loop
+ * agent provably cannot know from its own context. Filing **reopens the targeted
+ * cell** (`accepted → proposed`, re-entering the router); `releaseRef` names the
+ * release that was live. Resolving may **spawn an Example/GlossaryTerm** so a
+ * correction compounds into reusable context. Slim by design — no corroboration
+ * math, no trust fold: an API-key-gated tool has no anonymous mob to guard against.
+ */
+export const fieldReportSchema = z
+	.object({
+		id: z.string(),
+		projectId: z.string(),
+		/** Branch whose cell is reopened for the fix (default `main`). */
+		branchId: z.string(),
+		keyId: z.string(),
+		locale: localeCodeSchema,
+		/** The Release that was live when the bad string shipped (provenance). */
+		releaseRef: z.string().optional(),
+		description: z.string(),
+		status: fieldReportStatusSchema,
+		reportedBy: z.string(),
+		createdAt: z.string(),
+		resolvedAt: z.string().optional(),
+		/** What the resolution spawned, if anything. */
+		resolution: z
+			.object({
+				spawnedExampleRef: z.string().optional(),
+				spawnedGlossaryRef: z.string().optional(),
+			})
+			.optional(),
+	})
+	.openapi({ ref: "FieldReport" });
+export type FieldReport = z.infer<typeof fieldReportSchema>;
+
 // ---- cascade resolution outputs (computed, never stored) --------------------
 
 /** The cascade tier a resolved value came from (provenance), scope-major /
@@ -708,6 +789,19 @@ export const briefSchema = z
 	})
 	.openapi({ ref: "Brief" });
 export type Brief = z.infer<typeof briefSchema>;
+
+/** The outcome of merging a branch into its parent: the merge run, how many cells
+ * transported cleanly, and any conflicts raised as escalations for a human. */
+export const mergeResultSchema = z
+	.object({
+		run: translationRunSchema,
+		/** Cells transported cleanly onto the parent. */
+		merged: z.number().int(),
+		/** Merge conflicts surfaced as escalations (parent advanced past forkPoint). */
+		conflicts: z.array(escalationSchema),
+	})
+	.openapi({ ref: "MergeResult" });
+export type MergeResult = z.infer<typeof mergeResultSchema>;
 
 export const webhookSchema = z
 	.object({

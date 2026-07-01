@@ -19,6 +19,8 @@ import type {
 	EscalationStatus,
 	Example,
 	ExampleQuality,
+	FieldReport,
+	FieldReportStatus,
 	GlobalRole,
 	GlossaryTerm,
 	KeyState,
@@ -30,6 +32,9 @@ import type {
 	ProjectRole,
 	QaConfig,
 	QaIgnoreRule,
+	Release,
+	ReleaseEntry,
+	ReleaseStatus,
 	RunStatus,
 	RunTrigger,
 	Scope,
@@ -50,6 +55,8 @@ import {
 	keyDefPK,
 	keyDefSK,
 	keyNameSK,
+	releaseEntryPK,
+	releaseEntrySK,
 	versionSK,
 } from "./keys.js";
 
@@ -94,6 +101,22 @@ export function keyNameItem(branchId: string, k: TranslationKey): Item {
 		SK: keyNameSK(k.namespaceId, k.name),
 		entityType: "KeyName",
 		keyId: k.id,
+	};
+}
+
+/** A release's pinned entry row, co-located in the release's own partition. */
+export function releaseEntryItem(
+	projectId: string,
+	releaseId: string,
+	e: ReleaseEntry,
+): Item {
+	return {
+		PK: releaseEntryPK(projectId, releaseId),
+		SK: releaseEntrySK(e.keyId, e.locale),
+		entityType: "ReleaseEntry",
+		projectId,
+		releaseId,
+		...e,
 	};
 }
 
@@ -297,6 +320,50 @@ export function toEscalation(i: Item): Escalation {
 		openedAt: i.openedAt as string,
 		resolvedAt: i.resolvedAt as string | undefined,
 		resolution: i.resolution as Escalation["resolution"],
+	};
+}
+
+// ---- releases + field reports -----------------------------------------------
+
+/** The release metadata row. `entries` are stored as separate rows in the
+ * release's own partition, so a metadata read leaves them empty; the repository
+ * fills them from those rows on {@link Repository.getRelease}. */
+export function toRelease(i: Item): Release {
+	return {
+		id: i.id as string,
+		projectId: i.projectId as string,
+		branchId: i.branchId as string,
+		label: i.label as string,
+		locales: (i.locales as string[] | undefined) ?? [],
+		status: i.status as ReleaseStatus,
+		createdBy: i.createdBy as string,
+		createdAt: i.createdAt as string,
+		entries: [],
+	};
+}
+
+export function toReleaseEntry(i: Item): ReleaseEntry {
+	return {
+		keyId: i.keyId as string,
+		locale: i.locale as string,
+		versionRef: i.versionRef as number,
+	};
+}
+
+export function toFieldReport(i: Item): FieldReport {
+	return {
+		id: i.id as string,
+		projectId: i.projectId as string,
+		branchId: i.branchId as string,
+		keyId: i.keyId as string,
+		locale: i.locale as string,
+		releaseRef: i.releaseRef as string | undefined,
+		description: i.description as string,
+		status: i.status as FieldReportStatus,
+		reportedBy: i.reportedBy as string,
+		createdAt: i.createdAt as string,
+		resolvedAt: i.resolvedAt as string | undefined,
+		resolution: i.resolution as FieldReport["resolution"],
 	};
 }
 

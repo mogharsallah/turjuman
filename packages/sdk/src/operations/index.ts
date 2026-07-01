@@ -5,12 +5,14 @@ import { commentOps } from "./comments.js";
 import { contextOps } from "./context.js";
 import { escalationOps } from "./escalations.js";
 import { exampleOps } from "./examples.js";
+import { fieldReportOps } from "./field-reports.js";
 import { glossaryOps } from "./glossary.js";
 import { keyOps } from "./keys.js";
 import { lifecycleOps } from "./lifecycle.js";
 import { namespaceOps } from "./namespaces.js";
 import { projectOps } from "./projects.js";
 import { qaOps } from "./qa.js";
+import { releaseOps } from "./releases.js";
 import { runOps } from "./runs.js";
 import { translationOps } from "./translations.js";
 
@@ -25,10 +27,12 @@ export const OPERATIONS: Operation[] = [
 	...keyOps,
 	...translationOps,
 	...runOps,
+	...releaseOps,
 	...contextOps,
 	...exampleOps,
 	...escalationOps,
 	...commentOps,
+	...fieldReportOps,
 	...glossaryOps,
 	...lifecycleOps,
 	...qaOps,
@@ -58,10 +62,12 @@ export const OPERATION_GROUPS: Record<string, Operation[]> = {
 	keys: keyOps,
 	translations: translationOps,
 	runs: runOps,
+	releases: releaseOps,
 	context: contextOps,
 	examples: exampleOps,
 	escalations: escalationOps,
 	comments: commentOps,
+	field_reports: fieldReportOps,
 	glossary: glossaryOps,
 	webhooks: webhookOps,
 	qa: qaOps,

@@ -81,6 +81,18 @@ export async function handler(event: {
 						data: summarizeEscalation(item),
 					});
 			}
+		} else if (item.entityType === "FieldReport") {
+			// Opened once (INSERT), then resolved (MODIFY). Releases emit nothing.
+			if (record.eventName === "INSERT")
+				events.push({
+					event: "field-report.opened",
+					data: summarizeFieldReport(item),
+				});
+			else if (record.eventName === "MODIFY" && item.status === "resolved")
+				events.push({
+					event: "field-report.resolved",
+					data: summarizeFieldReport(item),
+				});
 		} else {
 			const mapped = mapEvent(String(item.entityType), record.eventName);
 			if (mapped) events.push({ event: mapped, data: summarize(item) });
@@ -190,6 +202,18 @@ function summarizeEscalation(
 ): Record<string, unknown> {
 	return {
 		escalationId: item.id,
+		branchId: item.branchId,
+		keyId: item.keyId,
+		locale: item.locale,
+		status: item.status,
+	};
+}
+
+function summarizeFieldReport(
+	item: Record<string, unknown>,
+): Record<string, unknown> {
+	return {
+		fieldReportId: item.id,
 		branchId: item.branchId,
 		keyId: item.keyId,
 		locale: item.locale,

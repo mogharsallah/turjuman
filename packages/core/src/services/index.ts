@@ -1,5 +1,5 @@
 export { ApiKeysService } from "./api-keys.js";
-export { BranchService } from "./branches.js";
+export { BranchService, type CreateBranchInput } from "./branches.js";
 export { type AddCommentInput, CommentService } from "./comments.js";
 export {
 	ContextService,
@@ -14,6 +14,11 @@ export {
 	type ResolveEscalationInput,
 } from "./escalations.js";
 export { type AddExampleInput, ExampleService } from "./examples.js";
+export {
+	FieldReportService,
+	type FileFieldReportInput,
+	type ResolveFieldReportInput,
+} from "./field-reports.js";
 export { GlossaryService } from "./glossary.js";
 export { KeysService } from "./keys.js";
 export { LocalesService } from "./locales.js";
@@ -26,6 +31,7 @@ export {
 export { ProjectsService } from "./projects.js";
 export type { RunChecksOptions, SetQaConfigInput } from "./qa.js";
 export { QaService } from "./qa.js";
+export { type CreateReleaseInput, ReleaseService } from "./releases.js";
 export {
 	type FinishRunInput,
 	RunService,

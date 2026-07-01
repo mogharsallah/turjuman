@@ -33,10 +33,14 @@ These are the operations you call from `run_code` (and that the REST API project
 
 ### Branches
 
+A **branch** is a copy-on-write line of work over a project's keys and translations; `main` always exists and is the safe root. See [Branching & releases](/concepts/branching-and-releases). These operations are **MCP-only** — there is no REST binding for them.
+
 | Operation | Purpose |
 |---|---|
 | `list_branches` | List a project's branches (`main` always exists) |
 | `get_branch` | Fetch a single branch by ID |
+| `create_branch` | Fork a copy-on-write branch off a parent (default `main`) — for a feature, experiment, or A/B variant; needs a write role |
+| `merge_branch` | Merge a branch into its parent: transport its accepted values (spends no budget), surface any two-sided change as an escalation, then close the branch (`merged`). Review-level |
 
 ### Namespaces
 
@@ -81,6 +85,26 @@ A **run** is the controlled write primitive that records what an agent did acros
 | `list_runs` | List runs for a project or branch |
 | `finish_run` | Close a run, recording its final status and `budgetSpent` |
 | `cancel_run` | Cancel an in-flight run |
+
+### Releases
+
+A **release** is an immutable shipped snapshot that pins one branch's accepted view; **"live" is the latest release**, and CI pulls one to build a reproducible bundle. See [Branching & releases](/concepts/branching-and-releases). These operations are **MCP-only** — there is no REST binding for them.
+
+| Operation | Purpose |
+|---|---|
+| `create_release` | Cut an immutable release pinning a branch's accepted view (own cells + fall-through) as fixed `{ keyId, locale, versionRef }` entries; supersedes the prior open release on the same branch. `locales` defaults to all. Needs a write role |
+| `list_releases` | List the project's releases (metadata only) — read-only |
+| `get_release` | Fetch one release with its full pinned entries (the snapshot of what shipped) — read-only |
+
+### Field reports
+
+A **field report** is production reporting that a shipped string is wrong — the one fact the in-loop agent can't know from its own context. Filing reopens the cell for a fix; resolving compounds the correction into reusable context. See [Branching & releases](/concepts/branching-and-releases). These operations are **MCP-only** — there is no REST binding for them.
+
+| Operation | Purpose |
+|---|---|
+| `file_field_report` | Report a shipped string as wrong — reopens the targeted cell (`accepted → proposed`) so a run can fix it; `releaseRef` names the release that was live. Needs a write role |
+| `list_field_reports` | List the project's field reports — read-only |
+| `resolve_field_report` | Close a report and optionally spawn a gold example (base → the fix) or a glossary term, so the correction becomes reusable context. Review-level |
 
 ### Context
 

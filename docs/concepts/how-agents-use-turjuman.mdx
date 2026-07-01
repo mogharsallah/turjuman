@@ -18,13 +18,15 @@ Because the server holds no per-connection state, the agent's only durable conte
 
 ## The translate-and-judge loop
 
-The operations exist to serve one loop: **Define → Brief → Translate → Judge → Record**. The agent owns the middle of it; humans curate the context it draws on and resolve the rare escalation.
+The operations exist to serve one loop: **Define → Brief → Translate → Judge → Record → Ship → Stay-correct**. The agent owns the middle of it; humans curate the context it draws on and resolve the rare escalation.
 
 1. **Define.** A developer (or an import) adds a `TranslationKey` — the source string plus whatever context is cheap to attach. The agent reads the keys that need a locale with `list_untranslated` or `list_stale`.
 2. **Brief.** Before translating a string, the agent calls `get_brief` for the `key × locale`. The brief resolves the whole [context cascade](/concepts/context-cascade) — the key, its base value, the voice, the constraints, the in-scope glossary, ranked examples, and the locale shape — into one read. `find_examples` fetches extra few-shot guidance, and `list_comments` surfaces any human discussion on the string.
 3. **Translate.** The agent writes a draft `value` with `set_translation` (or `bulk_set_translations`); the cell becomes `proposed`. Verifiable constraints from the brief — placeholders, ICU, length, glossary survival — are enforced *inside* generation, reject-and-retry like a compiler, never as a separate gate.
 4. **Judge — the router.** The agent judges its own output and picks an exit: **accept** (confident — call `accept_translation`), **re-loop** (unsure — feed the objection back as new context and regenerate, which is roughly free), or **escalate** (an irreducible judgment a human should make — `escalate_translation`).
 5. **Record.** An accept appends an immutable version and advances the cell's `head`. History holds every accepted value, non-destructively.
+6. **Ship.** `create_release` pins a branch's accepted view into an immutable snapshot — what is live. CI pulls a release with `get_release` for a reproducible bundle. See [Branching & releases](/concepts/branching-and-releases).
+7. **Stay correct.** A changed base string or context re-stales dependent cells; a `file_field_report` from production reopens a shipped string the agent couldn't have known was wrong, so the fix re-enters the loop.
 
 The human is the *terminal* exit, not a line-by-line reviewer. There is no quality score to submit — the cell's [lifecycle state](/concepts/lifecycle) is the entire verdict. A project that wants a person to sign off sets `requireHumanAccept: true`, which stops a run from accepting its own work.
 

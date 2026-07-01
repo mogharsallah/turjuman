@@ -56,7 +56,7 @@ untranslated ──► proposed ──► accepted
 | `retired` | The cell is soft-deleted because its key was retired; the value is retained, not destroyed. |
 
 <Note>
-  The states form a router, not a one-way gate. An `accepted` cell whose source later changes is re-flagged `stale` and re-enters at `proposed`; an `escalated` cell returns to `proposed` or `accepted` once a human decides. Regeneration is cheap, so most "failures" simply loop again rather than blocking.
+  The states form a router, not a one-way gate. An `accepted` cell whose source later changes is re-flagged `stale` and re-enters at `proposed`; an `escalated` cell returns to `proposed` or `accepted` once a human decides. A [field report](/concepts/branching-and-releases#field-reports-close-the-production-loop) against a shipped string is a third return edge — it reopens the cell `accepted → proposed` (marked `stale`) so a run fixes it. Regeneration is cheap, so most "failures" simply loop again rather than blocking.
 </Note>
 
 ### Escalations resolve the `escalated` state
@@ -163,7 +163,7 @@ Use `--working` only in development, when you want to preview drafts before they
 
 Two optional axes organise the cells; most self-host projects use neither and never notice them.
 
-- **Branch.** Every project has a `main` branch that always exists and is the safe root. Cells and key definitions are **copy-on-write** per branch: a branch stores only what it changes, and an unwritten cell falls through to its parent. In this release everything happens on `main`; parallel branches arrive in a later batch.
+- **Branch.** Every project has a `main` branch that always exists and is the safe root. Cells and key definitions are **copy-on-write** per branch: a branch stores only what it changes, and an unwritten cell falls through to its parent. Merging a branch transports its accepted values onto the parent, and a cell the parent changed on the other side of the fork point surfaces as an `escalated` cell rather than a silent overwrite. See [Branching & releases](/concepts/branching-and-releases).
 - **Namespace.** A key may belong to an optional namespace — a grouping by feature-area (a file, a screen). A namespace is a first-class entity with its own stable id; its name is a renamable label. A key with no namespace is distinct from one with the same name under a namespace.
 
 ## Keys: `active` and `deprecated`

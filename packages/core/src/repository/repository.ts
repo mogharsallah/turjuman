@@ -17,6 +17,7 @@ import type {
 	ContextRule,
 	Escalation,
 	Example,
+	FieldReport,
 	GlobalRole,
 	GlossaryTerm,
 	Locale,
@@ -24,6 +25,7 @@ import type {
 	Namespace,
 	Project,
 	QaConfig,
+	Release,
 	Translation,
 	TranslationKey,
 	TranslationRun,
@@ -46,6 +48,7 @@ import {
 	emailPK,
 	escalationSK,
 	exampleSK,
+	fieldReportSK,
 	glossarySK,
 	keyDefPK,
 	keyDefSK,
@@ -57,6 +60,8 @@ import {
 	orgOwnerPK,
 	projectPK,
 	qaConfigSK,
+	releaseEntryPK,
+	releaseSK,
 	runSK,
 	userPK,
 	versionPrefix,
@@ -68,6 +73,7 @@ import {
 	isConditionalFailure,
 	keyDefItem,
 	keyNameItem,
+	releaseEntryItem,
 	toApiKey,
 	toBranch,
 	toCell,
@@ -75,6 +81,7 @@ import {
 	toContextRule,
 	toEscalation,
 	toExample,
+	toFieldReport,
 	toGlossaryTerm,
 	toKey,
 	toLocale,
@@ -82,6 +89,8 @@ import {
 	toNamespace,
 	toProject,
 	toQaConfig,
+	toRelease,
+	toReleaseEntry,
 	toRun,
 	toUser,
 	toVersion,
@@ -690,6 +699,25 @@ export class Repository {
 	}
 
 	/**
+	 * Every key definition **visible** on a branch: its own rows overlaid on the
+	 * parent chain, the nearest branch winning per `keyId` (the copy-on-write
+	 * overlay). On `main` this is exactly {@link listKeyDefs}; on a child branch it
+	 * unions in the parent's keys the branch never touched. Used to materialize a
+	 * release's full resolved view.
+	 */
+	async listKeyDefsResolved(
+		projectId: string,
+		branchId: string,
+	): Promise<TranslationKey[]> {
+		const chain = await this.branchChain(projectId, branchId);
+		const byId = new Map<string, TranslationKey>();
+		for (const br of chain)
+			for (const k of await this.listKeyDefs(projectId, br))
+				if (!byId.has(k.id)) byId.set(k.id, k); // nearest branch wins
+		return [...byId.values()];
+	}
+
+	/**
 	 * Hard-delete keys and everything beneath them on one branch: each key's
 	 * definition row, its `KEYNAME#` lookup row, and every locale's live cell plus
 	 * the cell's append-only version chain. Batched into 25-item BatchWrite chunks.
@@ -1267,13 +1295,113 @@ export class Repository {
 		return runs.filter((r) => r.branchId === branchId);
 	}
 
+	// ---- releases (immutable shipped snapshots) -------------------------------
+
+	/**
+	 * Write a release: its metadata row in the project partition (so releases list
+	 * with one prefix query) plus one entry row per pinned cell in the release's
+	 * own partition (batched 25 at a time), so a big release never bloats a single
+	 * item. Entries are immutable once written.
+	 */
+	async putRelease(release: Release): Promise<Release> {
+		const { entries, ...meta } = release;
+		await this.putItem({
+			PK: projectPK(release.projectId),
+			SK: releaseSK(release.id),
+			entityType: "Release",
+			...meta,
+		});
+		const rows = entries.map((e) =>
+			releaseEntryItem(release.projectId, release.id, e),
+		);
+		for (let i = 0; i < rows.length; i += 25) {
+			const chunk = rows.slice(i, i + 25);
+			await this.doc.send(
+				new BatchWriteCommand({
+					RequestItems: {
+						[this.table]: chunk.map((Item) => ({ PutRequest: { Item } })),
+					},
+				}),
+			);
+		}
+		return release;
+	}
+
+	/** A release's metadata plus its pinned entries, reassembled. */
+	async getRelease(
+		projectId: string,
+		releaseId: string,
+	): Promise<Release | undefined> {
+		const meta = await this.getItem(
+			projectPK(projectId),
+			releaseSK(releaseId),
+			toRelease,
+		);
+		if (!meta) return undefined;
+		const entries = await this.listByPrefix(
+			releaseEntryPK(projectId, releaseId),
+			"KEY#",
+			toReleaseEntry,
+		);
+		return { ...meta, entries };
+	}
+
+	/** Every release in a project, metadata only (entries omitted — use
+	 * {@link getRelease} for one release's pinned entries). */
+	async listReleases(projectId: string): Promise<Release[]> {
+		return this.listByPrefix(projectPK(projectId), "REL#", toRelease);
+	}
+
+	/** Flip a release's lifecycle status (e.g. mark a prior release `superseded`
+	 * when a newer one is cut). Its pinned entries are immutable and untouched. */
+	async setReleaseStatus(
+		projectId: string,
+		releaseId: string,
+		status: Release["status"],
+	): Promise<void> {
+		await this.doc.send(
+			new UpdateCommand({
+				TableName: this.table,
+				Key: { PK: projectPK(projectId), SK: releaseSK(releaseId) },
+				UpdateExpression: "SET #s = :st",
+				ExpressionAttributeNames: { "#s": "status" },
+				ExpressionAttributeValues: { ":st": status },
+				ConditionExpression: "attribute_exists(PK)",
+			}),
+		);
+	}
+
+	// ---- field reports (production feedback) ----------------------------------
+
+	async putFieldReport(report: FieldReport): Promise<FieldReport> {
+		await this.putItem({
+			PK: projectPK(report.projectId),
+			SK: fieldReportSK(report.id),
+			entityType: "FieldReport",
+			...report,
+		});
+		return report;
+	}
+
+	async getFieldReport(
+		projectId: string,
+		id: string,
+	): Promise<FieldReport | undefined> {
+		return this.getItem(projectPK(projectId), fieldReportSK(id), toFieldReport);
+	}
+
+	async listFieldReports(projectId: string): Promise<FieldReport[]> {
+		return this.listByPrefix(projectPK(projectId), "FR#", toFieldReport);
+	}
+
 	// ---- project cascade ------------------------------------------------------
 
 	/**
 	 * Delete a project and every item beneath it: the `PROJECT#<id>` partition
 	 * (locales, members, glossary, webhooks, qa-config, branches, namespaces,
-	 * runs, context rules, examples, escalations, comments), every branch's
-	 * key-definition partition, and every branch×locale cell/version partition.
+	 * runs, context rules, examples, escalations, comments, releases, field
+	 * reports), every branch's key-definition partition, every branch×locale
+	 * cell/version partition, and every release's entry partition.
 	 */
 	async deleteProjectCascade(
 		projectId: string,
@@ -1286,10 +1414,13 @@ export class Repository {
 			ExpressionAttributeValues: { ":p": projectPK(projectId) },
 		});
 		const branchIds = new Set<string>([MAIN_BRANCH_ID]);
+		const releaseIds = new Set<string>();
 		for (const item of partition) {
 			toDelete.push({ PK: item.PK, SK: item.SK });
 			if (item.entityType === "Branch" && typeof item.id === "string")
 				branchIds.add(item.id);
+			if (item.entityType === "Release" && typeof item.id === "string")
+				releaseIds.add(item.id);
 		}
 		for (const branchId of branchIds) {
 			const defs = await this.queryAll({
@@ -1308,6 +1439,16 @@ export class Repository {
 				});
 				for (const item of cells) toDelete.push({ PK: item.PK, SK: item.SK });
 			}
+		}
+		for (const releaseId of releaseIds) {
+			const rows = await this.queryAll({
+				TableName: this.table,
+				KeyConditionExpression: "PK = :p",
+				ExpressionAttributeValues: {
+					":p": releaseEntryPK(projectId, releaseId),
+				},
+			});
+			for (const item of rows) toDelete.push({ PK: item.PK, SK: item.SK });
 		}
 		await this.batchDelete(toDelete);
 	}

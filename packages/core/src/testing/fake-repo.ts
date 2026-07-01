@@ -6,6 +6,7 @@ import type {
 	ContextRule,
 	Escalation,
 	Example,
+	FieldReport,
 	GlobalRole,
 	GlossaryTerm,
 	Locale,
@@ -13,6 +14,7 @@ import type {
 	Namespace,
 	Project,
 	QaConfig,
+	Release,
 	Translation,
 	TranslationKey,
 	TranslationRun,
@@ -68,6 +70,8 @@ export class FakeRepo implements RepositoryApi {
 	examples = new Map<string, Example>(); // `${projectId}#${id}`
 	escalations = new Map<string, Escalation>(); // `${projectId}#${id}`
 	comments = new Map<string, Comment>(); // `${projectId}#${keyId}#${locale}#${id}`
+	releases = new Map<string, Release>(); // `${projectId}#${releaseId}` (entries inline)
+	fieldReports = new Map<string, FieldReport>(); // `${projectId}#${id}`
 
 	// ---- composite-key helpers -------------------------------------------------
 	private defK = (p: string, b: string, id: string) => `${p}#${b}#${id}`;
@@ -343,6 +347,22 @@ export class FakeRepo implements RepositoryApi {
 		const slice = all.slice(start, start + limit);
 		const next = start + limit < all.length ? String(start + limit) : undefined;
 		return { keys: slice, nextCursor: next };
+	}
+	async listKeyDefsResolved(
+		projectId: string,
+		branchId: string,
+	): Promise<TranslationKey[]> {
+		// Walk the parent chain like the real repo's branchChain, nearest branch
+		// winning per keyId — the copy-on-write key overlay.
+		const byId = new Map<string, TranslationKey>();
+		let current: string | null | undefined = branchId;
+		while (current) {
+			for (const k of await this.listKeyDefs(projectId, current))
+				if (!byId.has(k.id)) byId.set(k.id, k);
+			if (current === MAIN_BRANCH_ID) break;
+			current = this.branches.get(`${projectId}#${current}`)?.parentBranchId;
+		}
+		return [...byId.values()];
 	}
 	async deleteKeyDefsCascade(
 		projectId: string,
@@ -708,6 +728,50 @@ export class FakeRepo implements RepositoryApi {
 		);
 	}
 
+	// ---- releases -------------------------------------------------------------
+	async putRelease(release: Release): Promise<Release> {
+		this.releases.set(`${release.projectId}#${release.id}`, release);
+		return release;
+	}
+	async getRelease(
+		projectId: string,
+		releaseId: string,
+	): Promise<Release | undefined> {
+		return this.releases.get(`${projectId}#${releaseId}`);
+	}
+	async listReleases(projectId: string): Promise<Release[]> {
+		// Mirror the real repo: the list view carries metadata only (entries are
+		// separate rows there), so a test can't lean on list including entries.
+		return [...this.releases.values()]
+			.filter((r) => r.projectId === projectId)
+			.map((r) => ({ ...r, entries: [] }));
+	}
+	async setReleaseStatus(
+		projectId: string,
+		releaseId: string,
+		status: Release["status"],
+	): Promise<void> {
+		const r = this.releases.get(`${projectId}#${releaseId}`);
+		if (r) this.releases.set(`${projectId}#${releaseId}`, { ...r, status });
+	}
+
+	// ---- field reports --------------------------------------------------------
+	async putFieldReport(report: FieldReport): Promise<FieldReport> {
+		this.fieldReports.set(`${report.projectId}#${report.id}`, report);
+		return report;
+	}
+	async getFieldReport(
+		projectId: string,
+		id: string,
+	): Promise<FieldReport | undefined> {
+		return this.fieldReports.get(`${projectId}#${id}`);
+	}
+	async listFieldReports(projectId: string): Promise<FieldReport[]> {
+		return [...this.fieldReports.values()].filter(
+			(r) => r.projectId === projectId,
+		);
+	}
+
 	// ---- project cascade ------------------------------------------------------
 	async deleteProjectCascade(
 		projectId: string,
@@ -732,6 +796,8 @@ export class FakeRepo implements RepositoryApi {
 		dropByPrefix(this.examples);
 		dropByPrefix(this.escalations);
 		dropByPrefix(this.comments);
+		dropByPrefix(this.releases);
+		dropByPrefix(this.fieldReports);
 		for (const [k, m] of this.memberships)
 			if (m.projectId === projectId) this.memberships.delete(k);
 	}

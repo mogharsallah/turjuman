@@ -63,7 +63,9 @@ These are the core entities you interact with when using Turjuman.
 | **TranslationKey** | `id`, `namespaceId`, `name`, `description`, `tags`, `plural`, `state`, `sourceRevision` | Identifies a single string. `id` is stable identity; `(namespaceId, name)` are renamable labels. `state` is `active` or `deprecated`. |
 | **Translation** (cell) | `branchId`, `keyId`, `locale`, `value`, `head`, `lifecycle`, `stale`, `sourceRef`, `origin` | The living draft for a key in one locale. See [Lifecycle](/concepts/lifecycle). |
 | **TranslationVersion** | `keyId`, `locale`, `seq`, `value`, `acceptedBy` \| `runRef`, `prevVersionRef` | An immutable accepted-value commit. The cell's `head` points at the current one. |
-| **TranslationRun** | `id`, `branchId`, `trigger`, `valueSource`, `status`, `budgetSpent` | The write primitive that records what an agent did across a set of cells. |
+| **TranslationRun** | `id`, `branchId`, `trigger`, `valueSource`, `status`, `budgetSpent` | The write primitive that records what an agent did across a set of cells. A merge is a run with `trigger = merge`. |
+| **Release** | `id`, `branchId`, `label`, `locales`, `status`, `entries` | An immutable shipped snapshot. Pins one branch's accepted view; each entry is `{ keyId, locale, versionRef }`. See [Branching & releases](/concepts/branching-and-releases). |
+| **FieldReport** | `id`, `branchId`, `keyId`, `locale`, `releaseRef`, `status`, `resolution` | Production feedback that a shipped string is wrong; filing reopens the cell (`accepted → proposed`). |
 | **Glossary term** | `term`, `translations`, `doNotTranslate`, `caseSensitive` | A preferred translation or do-not-translate entry that guides AI translation. |
 | **Webhook** | `url`, `events`, `projectId` | An outbound notification sent when translation events occur. |
 | **User** | `id`, `email`, `globalRole` | A person or service account with a global org role. |
@@ -88,10 +90,12 @@ Turjuman stores everything in one DynamoDB table with three global secondary ind
 | `PROJECT#<id>` | `LOCALE#`, `MEMBER#`, `GLOSSARY#`, `WEBHOOK#`, `QACONFIG`, `BRANCH#`, `NS#`, `RUN#` | The project record and its singletons: locales, members, glossary, webhooks, QA config, branches, namespaces, runs. |
 | `PROJ#<id>#BR#<branch>` | `KEY#<keyId>`, `KEYNAME#<ns>#<name>` | A branch's key definitions and the `name → id` lookup rows. |
 | `PROJ#<id>#BR#<branch>#LOC#<code>` | `KEY#<keyId>`, `VER#<keyId>#<seq>` | A branch × locale's live cells and their append-only version chains. |
+| `PROJ#<id>#REL#<releaseId>` | `META`, `KEY#<keyId>#<code>` | An immutable release: a metadata row plus one pinned `{ keyId, locale, versionRef }` entry per shipped cell. |
 
-Two design choices fall out of this layout:
+Three design choices fall out of this layout:
 
-- **Branching is one PK segment.** `#BR#<branchId>` scopes both key definitions and cells. `main` is not special — it is `branchId = "main"` baked into the key. A copy-on-write read is at most a few point-reads up the parent chain; in this release the chain is just `main`, so it collapses to a single read.
+- **Branching is one PK segment.** `#BR#<branchId>` scopes both key definitions and cells. `main` is not special — it is `branchId = "main"` baked into the key. A copy-on-write read is at most a few point-reads up the parent chain; a branch that overrode nothing collapses to a single fall-through read of its parent.
+- **A release is its own immutable partition.** `PROJ#<id>#REL#<releaseId>` holds a metadata row plus the pinned `{ keyId, locale, versionRef }` entries — a self-contained snapshot of what shipped, so listing releases and reassembling one never touch the live cells. A [merge](/concepts/branching-and-releases) needs no new storage: it is a run that overlays one branch's cells onto another.
 - **`GSI3` flips locale-partitioned cells to key-major.** Indexed by `PROJ#<id>#BR#<branch>#KEY#<keyId>` → `LOC#<code>` and set on live cells only, it reads one key across every locale without scanning. Because cells are keyed by `keyId`, this index is rename-safe.
 
 Read [the lifecycle](/concepts/lifecycle) for how cells move through their states, and [Roles & permissions](/concepts/roles-and-permissions) for how the service layer authorizes each call.

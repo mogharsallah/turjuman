@@ -55,6 +55,21 @@ export const commentSK = (keyId: string, locale: string, id: string) =>
 export const commentPrefix = (keyId: string, locale: string) =>
 	`CMT#${keyId}#${locale}#`;
 
+// ---- releases + field reports -----------------------------------------------
+
+/** A Release's metadata row lives under its project partition (so releases list
+ * with one prefix query); its pinned entries live in a dedicated per-release
+ * partition, so a release with thousands of entries never bloats one item. */
+export const releaseSK = (releaseId: string) => `REL#${releaseId}`;
+/** Partition holding one release's pinned `(keyId, locale)` entry rows. */
+export const releaseEntryPK = (projectId: string, releaseId: string) =>
+	`PROJ#${projectId}#REL#${releaseId}`;
+/** A pinned cell within a release (its accepted version at cut time). */
+export const releaseEntrySK = (keyId: string, code: string) =>
+	`KEY#${keyId}#${code}`;
+/** A production field report lives under its project partition. */
+export const fieldReportSK = (id: string) => `FR#${id}`;
+
 // ---- key definitions + name lookup (per branch) -----------------------------
 
 /** Partition holding a branch's key definitions and `KEYNAME#` name-lookup rows. */

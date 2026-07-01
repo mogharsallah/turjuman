@@ -5,6 +5,7 @@ import { CommentService } from "./comments.js";
 import { ContextService } from "./context.js";
 import { EscalationService } from "./escalations.js";
 import { ExampleService } from "./examples.js";
+import { FieldReportService } from "./field-reports.js";
 import { GlossaryService } from "./glossary.js";
 import { KeysService } from "./keys.js";
 import { LocalesService } from "./locales.js";
@@ -12,6 +13,7 @@ import { MembersService } from "./members.js";
 import { NamespaceService } from "./namespaces.js";
 import { ProjectsService } from "./projects.js";
 import { QaService } from "./qa.js";
+import { ReleaseService } from "./releases.js";
 import { RunService } from "./runs.js";
 import { TranslationsService } from "./translations.js";
 import { UsersService } from "./users.js";
@@ -38,6 +40,8 @@ export class TurjumanService {
 	readonly examples: ExampleService;
 	readonly escalations: EscalationService;
 	readonly comments: CommentService;
+	readonly releases: ReleaseService;
+	readonly fieldReports: FieldReportService;
 	readonly qa: QaService;
 	readonly webhooks: WebhooksService;
 	readonly members: MembersService;
@@ -65,6 +69,12 @@ export class TurjumanService {
 			this.context,
 		);
 		this.comments = new CommentService(repo, this.namespaces);
+		this.releases = new ReleaseService(repo);
+		this.fieldReports = new FieldReportService(
+			repo,
+			this.namespaces,
+			this.context,
+		);
 		this.qa = new QaService(repo, this.namespaces);
 		this.webhooks = new WebhooksService(repo);
 		this.members = new MembersService(repo);

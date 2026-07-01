@@ -288,6 +288,37 @@ const DENIED: DeniedCase[] = [
 		action: "translation.write",
 		call: (s, ro, p) => s.runs.cancel(ro, p, "run_x"),
 	},
+	// ---- branches / releases / field reports -------------------------------------
+	{
+		op: "create_branch",
+		action: "translation.write",
+		call: (s, ro, p) => s.branches.create(ro, p, { name: "feature" }),
+	},
+	{
+		op: "merge_branch",
+		action: "translation.review",
+		call: (s, ro, p) => s.branches.merge(ro, p, "br_x"),
+	},
+	{
+		op: "create_release",
+		action: "translation.write",
+		call: (s, ro, p) => s.releases.create(ro, p, { label: "v1" }),
+	},
+	{
+		op: "file_field_report",
+		action: "translation.write",
+		call: (s, ro, p) =>
+			s.fieldReports.file(ro, p, {
+				locale: "en",
+				name: "k",
+				description: "wrong",
+			}),
+	},
+	{
+		op: "resolve_field_report",
+		action: "translation.review",
+		call: (s, ro, p) => s.fieldReports.resolve(ro, p, "fr_x", {}),
+	},
 ];
 
 describe("RBAC service seam — a read-only key is denied every mutation", () => {
