@@ -133,16 +133,17 @@ describe("TurjumanService (in-memory)", () => {
 			actor,
 			project.id,
 			[{ name: "keep.me", baseValue: "Keep" }],
-			"default",
+			undefined,
 			{ prune: true },
 		);
 		expect(res.deleted).toBe(1);
 		expect((await svc.keys.list(actor, project.id)).map((k) => k.name)).toEqual(
 			["keep.me"],
 		);
-		expect(
-			await svc.translations.listForKey(actor, project.id, "drop.me"),
-		).toHaveLength(0);
+		// drop.me was pruned, so it no longer resolves.
+		await expect(
+			svc.translations.listForKey(actor, project.id, "drop.me"),
+		).rejects.toMatchObject({ code: "NOT_FOUND" });
 	});
 
 	it("soft-deprecates keys absent from an import and restores them on return", async () => {
@@ -162,7 +163,7 @@ describe("TurjumanService (in-memory)", () => {
 			actor,
 			project.id,
 			[{ name: "keep.me", baseValue: "Keep" }],
-			"default",
+			undefined,
 			{ deprecateAbsent: true },
 		);
 		expect(res.deprecated).toBe(1);
@@ -172,9 +173,9 @@ describe("TurjumanService (in-memory)", () => {
 			["keep.me"],
 		);
 		expect(
-			(await svc.keys.list(actor, project.id, { includeDeprecated: true })).map(
-				(k) => k.name,
-			),
+			(await svc.keys.list(actor, project.id, { includeDeprecated: true }))
+				.map((k) => k.name)
+				.sort(),
 		).toEqual(["drop.me", "keep.me"]);
 		expect(
 			await svc.translations.listForKey(actor, project.id, "drop.me"),
@@ -186,9 +187,9 @@ describe("TurjumanService (in-memory)", () => {
 			{ name: "drop.me" },
 		]);
 		expect(back.reactivated).toBe(1);
-		expect((await svc.keys.list(actor, project.id)).map((k) => k.name)).toEqual(
-			["drop.me", "keep.me"],
-		);
+		expect(
+			(await svc.keys.list(actor, project.id)).map((k) => k.name).sort(),
+		).toEqual(["drop.me", "keep.me"]);
 	});
 
 	it("only an OWNER may grant or change privileged roles", async () => {
@@ -542,9 +543,10 @@ describe("TurjumanService (in-memory)", () => {
 		// With confirm the key and its translations are gone.
 		await svc.keys.delete(actor, project.id, "doomed", true);
 		expect(await svc.keys.list(actor, project.id)).toEqual([]);
-		expect(
-			await svc.translations.listForKey(actor, project.id, "doomed"),
-		).toHaveLength(0);
+		// The key no longer resolves, so listing its translations now 404s.
+		await expect(
+			svc.translations.listForKey(actor, project.id, "doomed"),
+		).rejects.toMatchObject({ code: "NOT_FOUND" });
 	});
 
 	it("rejects an expired API key", async () => {
@@ -614,7 +616,7 @@ describe("TurjumanService (in-memory)", () => {
 		).rejects.toMatchObject({ code: "FORBIDDEN" });
 	});
 
-	it("delivers only approved values, with source fallback and a working override", async () => {
+	it("delivers accepted values, with source fallback and a working override", async () => {
 		const { repo, svc } = setup();
 		const { actor } = await ownerActor(repo);
 		const project = await svc.projects.create(actor, {
@@ -629,13 +631,13 @@ describe("TurjumanService (in-memory)", () => {
 
 		const bundle = (
 			code: string,
-			opts?: { slot?: "approved" | "working"; fallback?: "source" | "omit" },
+			opts?: { slot?: "accepted" | "working"; fallback?: "source" | "omit" },
 		) =>
 			svc.translations
 				.exportBundle(actor, project.id, code, opts)
 				.then((b) => Object.fromEntries(b.map((e) => [e.key, e.value])));
 
-		// A working (unapproved) translation must not ship; pull falls back to source.
+		// A proposed (unaccepted) draft must not ship; the accepted slot falls back to source.
 		await svc.translations.set(actor, project.id, "fr", {
 			name: "greeting",
 			value: "Bonjour",
@@ -646,17 +648,11 @@ describe("TurjumanService (in-memory)", () => {
 			greeting: "Bonjour",
 		});
 
-		// Approval promotes the working value into the shipped snapshot.
-		await svc.translations.setStatus(
-			actor,
-			project.id,
-			"fr",
-			"greeting",
-			"approved",
-		);
+		// Accepting appends a version and ships the accepted value.
+		await svc.translations.accept(actor, project.id, "fr", "greeting");
 		expect(await bundle("fr")).toEqual({ greeting: "Bonjour" });
 
-		// Editing after approval keeps shipping the last approved value (no leak)...
+		// Editing after acceptance keeps shipping the last accepted value (no leak)...
 		await svc.translations.set(actor, project.id, "fr", {
 			name: "greeting",
 			value: "Salut",
@@ -667,19 +663,19 @@ describe("TurjumanService (in-memory)", () => {
 		});
 		const fr = (
 			await svc.translations.listForKey(actor, project.id, "greeting")
-		).find((t) => t.localeCode === "fr");
-		// ...status dropped back to translated; the approved snapshot is retained.
+		).find((t) => t.locale === "fr");
+		// ...the cell drops back to proposed; head still points at the accepted version.
 		expect(fr).toMatchObject({
-			status: "translated",
+			lifecycle: "proposed",
 			value: "Salut",
-			approvedValue: "Bonjour",
+			head: 1,
 		});
 
 		// The base locale always ships its own source value.
 		expect(await bundle("en")).toEqual({ greeting: "Hello" });
 	});
 
-	it("bulk-set promotes approved entries and preserves prior approved snapshots", async () => {
+	it("bulk-set writes proposed cells, skips unknowns, and preserves a prior accepted head", async () => {
 		const { repo, svc } = setup();
 		const { actor } = await ownerActor(repo);
 		const project = await svc.projects.create(actor, {
@@ -690,31 +686,52 @@ describe("TurjumanService (in-memory)", () => {
 		await svc.keys.create(actor, project.id, { name: "a", baseValue: "A" });
 		await svc.keys.create(actor, project.id, { name: "b", baseValue: "B" });
 
-		await svc.translations.bulkSet(actor, project.id, "fr", [
-			{ name: "a", value: "Aa", status: "approved" },
+		const res = await svc.translations.bulkSet(actor, project.id, "fr", [
+			{ name: "a", value: "Aa" },
 			{ name: "b", value: "Bb" },
+			{ name: "ghost", value: "x" }, // no such key → reported, not written
 		]);
-		const after = async (key: string) =>
-			(await svc.translations.listForLocale(actor, project.id, "fr")).find(
-				(t) => t.keyName === key,
+		expect(res).toMatchObject({ written: 2, skipped: ["ghost"] });
+
+		const cell = async (name: string) =>
+			(await svc.translations.listForKey(actor, project.id, name)).find(
+				(t) => t.locale === "fr",
 			);
-		expect(await after("a")).toMatchObject({
-			status: "approved",
-			approvedValue: "Aa",
+		// Both land as proposed drafts with no accepted head yet.
+		expect(await cell("a")).toMatchObject({
+			lifecycle: "proposed",
+			value: "Aa",
+			head: undefined,
 		});
-		expect(await after("b")).toMatchObject({
-			status: "translated",
-			approvedValue: undefined,
+		expect(await cell("b")).toMatchObject({
+			lifecycle: "proposed",
+			value: "Bb",
+			head: undefined,
 		});
 
-		// A later working edit to b leaves a's approved snapshot untouched.
-		await svc.translations.bulkSet(actor, project.id, "fr", [
-			{ name: "b", value: "Bbb" },
-		]);
-		expect(await after("a")).toMatchObject({
-			status: "approved",
-			approvedValue: "Aa",
+		// Accept a, then a later bulk edit to a keeps its accepted version intact.
+		await svc.translations.accept(actor, project.id, "fr", "a");
+		expect(await cell("a")).toMatchObject({
+			lifecycle: "accepted",
+			value: "Aa",
+			head: 1,
 		});
+		await svc.translations.bulkSet(actor, project.id, "fr", [
+			{ name: "a", value: "Aaa" },
+		]);
+		// Edited back to proposed, but head still points at the accepted version 1...
+		expect(await cell("a")).toMatchObject({
+			lifecycle: "proposed",
+			value: "Aaa",
+			head: 1,
+		});
+		// ...so the accepted export still ships "Aa".
+		const shipped = Object.fromEntries(
+			(await svc.translations.exportBundle(actor, project.id, "fr")).map(
+				(e) => [e.key, e.value],
+			),
+		);
+		expect(shipped.a).toBe("Aa");
 	});
 
 	it("flags translations stale when the source value moves on", async () => {
@@ -796,7 +813,7 @@ describe("TurjumanService (in-memory)", () => {
 			actor,
 			project.id,
 			[{ name: "greeting", baseValue: "Hi {name}" }],
-			"default",
+			undefined,
 			{
 				deprecateAbsent: true,
 			},

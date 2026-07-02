@@ -52,30 +52,72 @@ export async function handler(event: {
 		const image = record.dynamodb?.NewImage ?? record.dynamodb?.OldImage;
 		if (!image) continue;
 		const item = unmarshall(image) as Record<string, unknown>;
-		const mapped = mapEvent(String(item.entityType), record.eventName);
-		if (!mapped) continue;
 		const projectId = item.projectId as string | undefined;
 		if (!projectId) continue;
-		const list = byProject.get(projectId) ?? [];
-		list.push({ event: mapped, data: summarize(item) });
+		const events: DispatchEvent[] = [];
 
-		// A base-locale value change moves the source on, so dependent translations
-		// for that key are now stale. Emit a one-off signal keyed on the key.
-		if (item.entityType === "Translation" && record.eventName === "MODIFY") {
-			const oldImage = record.dynamodb?.OldImage;
-			const old = oldImage
-				? (unmarshall(oldImage) as Record<string, unknown>)
-				: undefined;
-			if (old && old.value !== item.value) {
-				const baseLocale = await baseLocaleFor(projectId, baseLocaleCache);
-				if (baseLocale && item.localeCode === baseLocale) {
-					list.push({
-						event: "translation.stale",
-						data: { namespace: item.namespace, key: item.keyName },
+		if (item.entityType === "TranslationRun") {
+			// A run is written once (running) then updated when it finishes.
+			if (record.eventName === "INSERT")
+				events.push({ event: "run.started", data: summarizeRun(item) });
+			else if (record.eventName === "MODIFY" && item.finishedAt)
+				events.push({ event: "run.finished", data: summarizeRun(item) });
+		} else if (item.entityType === "Escalation") {
+			// Opened once (INSERT), then claimed and/or resolved (MODIFY).
+			if (record.eventName === "INSERT")
+				events.push({
+					event: "escalation.opened",
+					data: summarizeEscalation(item),
+				});
+			else if (record.eventName === "MODIFY") {
+				if (item.status === "resolved")
+					events.push({
+						event: "escalation.resolved",
+						data: summarizeEscalation(item),
 					});
+				else if (item.claimedBy)
+					events.push({
+						event: "escalation.claimed",
+						data: summarizeEscalation(item),
+					});
+			}
+		} else if (item.entityType === "FieldReport") {
+			// Opened once (INSERT), then resolved (MODIFY). Releases emit nothing.
+			if (record.eventName === "INSERT")
+				events.push({
+					event: "field-report.opened",
+					data: summarizeFieldReport(item),
+				});
+			else if (record.eventName === "MODIFY" && item.status === "resolved")
+				events.push({
+					event: "field-report.resolved",
+					data: summarizeFieldReport(item),
+				});
+		} else {
+			const mapped = mapEvent(String(item.entityType), record.eventName);
+			if (mapped) events.push({ event: mapped, data: summarize(item) });
+
+			// A base-locale value change moves the source on, so dependent
+			// translations for that key are now stale. Emit a one-off signal.
+			if (item.entityType === "Translation" && record.eventName === "MODIFY") {
+				const oldImage = record.dynamodb?.OldImage;
+				const old = oldImage
+					? (unmarshall(oldImage) as Record<string, unknown>)
+					: undefined;
+				if (old && old.value !== item.value) {
+					const baseLocale = await baseLocaleFor(projectId, baseLocaleCache);
+					if (baseLocale && item.locale === baseLocale)
+						events.push({
+							event: "translation.stale",
+							data: { keyId: item.keyId },
+						});
 				}
 			}
 		}
+
+		if (events.length === 0) continue;
+		const list = byProject.get(projectId) ?? [];
+		list.push(...events);
 		byProject.set(projectId, list);
 	}
 
@@ -112,6 +154,8 @@ async function baseLocaleFor(
 function mapEvent(entityType: string, eventName?: string): WebhookEvent | null {
 	switch (entityType) {
 		case "Translation":
+			// The live cell. Its append-only version commits (TranslationVersion) and
+			// the KEYNAME# lookup rows are internal and intentionally emit nothing.
 			return eventName === "REMOVE" ? null : "translation.updated";
 		case "TranslationKey":
 			return eventName === "INSERT"
@@ -130,18 +174,51 @@ function summarize(item: Record<string, unknown>): Record<string, unknown> {
 	switch (item.entityType) {
 		case "Translation":
 			return {
-				namespace: item.namespace,
-				key: item.keyName,
-				locale: item.localeCode,
-				status: item.status,
+				keyId: item.keyId,
+				branchId: item.branchId,
+				locale: item.locale,
+				lifecycle: item.lifecycle,
 			};
 		case "TranslationKey":
-			return { namespace: item.namespace, key: item.name };
+			return { keyId: item.id, namespaceId: item.namespaceId, key: item.name };
 		case "Locale":
 			return { code: item.code };
 		default:
 			return {};
 	}
+}
+
+function summarizeRun(item: Record<string, unknown>): Record<string, unknown> {
+	return {
+		runId: item.id,
+		branchId: item.branchId,
+		status: item.status,
+		trigger: item.trigger,
+	};
+}
+
+function summarizeEscalation(
+	item: Record<string, unknown>,
+): Record<string, unknown> {
+	return {
+		escalationId: item.id,
+		branchId: item.branchId,
+		keyId: item.keyId,
+		locale: item.locale,
+		status: item.status,
+	};
+}
+
+function summarizeFieldReport(
+	item: Record<string, unknown>,
+): Record<string, unknown> {
+	return {
+		fieldReportId: item.id,
+		branchId: item.branchId,
+		keyId: item.keyId,
+		locale: item.locale,
+		status: item.status,
+	};
 }
 
 async function dispatch(

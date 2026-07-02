@@ -1,51 +1,30 @@
 ---
-title: "Code mode: run TypeScript against the Turjuman SDK"
-sidebarTitle: "Code mode"
-description: "Code mode swaps Turjuman's full MCP tool catalogue for three tools — search, describe, and run_code — so an agent discovers operations and docs, then writes TypeScript that runs in a sandbox and returns only the final result, cutting context tokens dramatically."
+title: "Drive Turjuman over MCP"
+sidebarTitle: "Drive the MCP"
+description: "Turjuman's MCP exposes three tools — search, describe, and run_code. Discover operations and docs, then run TypeScript in a sandbox that returns only the final result, cutting context tokens."
 ---
 
-A Turjuman MCP connection runs in one of two **mutually exclusive** modes:
+Turjuman's MCP is a single **code surface**. Instead of advertising one tool per operation, it exposes three: `search` and `describe` to discover capability, and `run_code` to execute it. The agent finds what it needs with `search` (over both the operations and the docs), pulls full detail with `describe`, then writes a short TypeScript program that calls the operations and runs it with `run_code`. Only the final result comes back.
 
-- **Classic mode** (default) — every operation is its own MCP tool. The agent picks
-  tools by name and calls them one at a time.
-- **Code mode** — the server advertises just three tools, `search`, `describe`, and
-  `run_code`. The agent finds what it needs with `search` (over both the operations
-  and the docs), pulls full detail with `describe`, then writes a short TypeScript
-  program that calls the operations and runs it with `run_code`. Only the final
-  result comes back.
-
-Code mode exists to cut **context tokens**. In classic mode every tool's name,
-description, and JSON schema is injected into the model's context on every turn —
-a large, permanent tax that grows with the toolset. Code mode advertises three
-tools instead of the full catalogue, and a multi-step job (read untranslated keys
-→ translate → write them back) becomes **one** `run_code` call instead of a tool
-call per step, so intermediate data never round-trips through the model.
+This design cuts **context tokens**. Advertising one tool per operation injects every tool's name, description, and schema into the model's context on every turn — a permanent tax that grows with the catalogue. Three tools keep the catalogue out of context, and a multi-step job (read untranslated keys → translate → write them back) becomes **one** `run_code` call instead of a call per step, so intermediate data never round-trips through the model.
 
 <Note>
-  Both modes run the same operations with the same authorization. Code mode is a
-  different *surface*, not a different *permission set* — see
-  [Roles & permissions](/concepts/roles-and-permissions). A read-only key still
-  can't write in code mode: the write is denied in the core, not hidden.
+  `run_code` runs the same operations with the same authorization as any other call — it is a different *surface*, not a different *permission set*. A read-only key still can't write: the write is denied in the core, not hidden. See [Roles & permissions](/concepts/roles-and-permissions).
 </Note>
 
-## Connect in code mode
+## Connect
 
-Add `?mode=code` to the MCP server URL when you configure the connection:
+Point your MCP client at the Function URL of your deployment's MCP. No mode or scoping parameters are needed — there is one surface.
 
 ```
-https://<your-mcp-function-url>/?mode=code
+https://<your-mcp-function-url>/
 ```
 
-Omit it (or pass `?mode=classic`) for the full tool catalogue. The modes are
-mutually exclusive — `?mode=code` cannot be combined with the `?tools=` / `?groups=`
-classic-mode scoping params, and doing so returns a `400`.
+See [Connect Claude Code](/guides/connect-claude-code) for client-specific configuration.
 
 ## Discover with `search`
 
-`search` queries one knowledge base spanning **both** the operations you can call
-from `run_code` (returned with their full typed signatures) **and** the
-documentation — the guides, concepts, and reference pages. So an agent can learn
-*how the system works*, not just which functions exist.
+`search` queries one knowledge base spanning **both** the operations you can call from `run_code` (returned with their full typed signatures) **and** the documentation — the guides, concepts, and reference pages. So an agent can learn *how the system works*, not just which functions exist.
 
 ```jsonc
 // search
@@ -74,46 +53,33 @@ Results come back segmented by kind:
 }
 ```
 
-Use **specific terms** (`"plural handling"`, `"webhook events"`, `"api key scope"`);
-if the first query is vague, search again with sharper words. Narrow to one kind
-with `"kind"` (`operation`, `guide`, `concept`, `reference`, `overview`).
-`total` / `hasMore` tell you when a list was trimmed. Omit `query` entirely to get
-a cold-start **orientation** — the operation groups plus the core concept pages.
+Use **specific terms** (`"plural handling"`, `"webhook events"`, `"api key scope"`); if the first query is vague, search again with sharper words. Narrow to one kind with `"kind"` (`operation`, `guide`, `concept`, `reference`, `overview`). `total` / `hasMore` tell you when a list was trimmed. Omit `query` entirely to get a cold-start **orientation** — the operation groups plus the core concept pages.
 
-The operation `id`s (`op:<name>`) match the classic-mode tool names, so anything in
-the [MCP tools reference](/reference/mcp-tools) is callable from `run_code`.
+The operation `id`s (`op:<name>`) match the names in the [MCP reference](/reference/mcp-tools), so anything there is callable from `run_code`.
 
 ## Zoom in with `describe`
 
-`search` returns summaries; `describe` returns the full detail for a single result
-`id`. For an operation it returns the typed input fields, output shape, signature,
-and read-only/destructive hints; for a docs result it returns the whole page.
+`search` returns summaries; `describe` returns the full detail for a single result `id`. For an operation it returns the typed input fields, output shape, signature, and read-only/destructive hints; for a docs result it returns the whole page.
 
 ```jsonc
 // describe
 { "id": "op:bulk_set_translations" }
 ```
 
-The pattern is **search → describe → run_code**: find the operation, confirm its
-exact arguments, then write the program — usually without a wasted `run_code`
-probe.
+The pattern is **search → describe → run_code**: find the operation, confirm its exact arguments, then write the program — usually without a wasted `run_code` probe.
 
 ## Run code with `run_code`
 
-Write TypeScript that calls operations as `await turjuman.<operation>(args)` and
-`return` a value. The code runs in an isolated sandbox whose **only** capability
-is the Turjuman SDK — there is no network, filesystem, or environment access, so
-nothing but SDK calls can reach the server.
+Write TypeScript that calls operations as `await turjuman.<operation>(args)` and `return` a value. The code runs in an isolated sandbox whose **only** capability is the Turjuman SDK — there is no network, filesystem, or environment access, so nothing but SDK calls can reach the server.
 
 ```ts
-// run_code — translate every untranslated French key in one round-trip
+// run_code — draft every untranslated French key in one round-trip
 const project = (await turjuman.list_projects({}))[0];
 const { keys } = await turjuman.list_untranslated({ projectId: project.id, locale: "fr" });
 
 const entries = keys.map((k) => ({
   name: k.name,
-  namespace: k.namespace,
-  value: translate(k.baseValue, "fr"), // your own logic / a prior reasoning step
+  value: translate(k.description ?? k.name, "fr"), // your own logic / a prior reasoning step
 }));
 
 const result = await turjuman.bulk_set_translations({
@@ -121,8 +87,10 @@ const result = await turjuman.bulk_set_translations({
   locale: "fr",
   entries,
 });
-return { translated: result.written, skipped: result.skipped };
+return { drafted: result.written, skipped: result.skipped };
 ```
+
+Each drafted cell is now `proposed`. Accept the ones you are confident in with `accept_translation`, which appends a version and advances the cell's `head`. See [Lifecycle](/concepts/lifecycle) for the states and [Translate with MCP](/guides/translate-with-mcp) for the full workflow.
 
 `run_code` returns a structured result:
 
@@ -136,25 +104,7 @@ return { translated: result.written, skipped: result.skipped };
 | `truncated` | Whether `result` was shortened to fit the output cap |
 
 <Warning>
-  Each run is bounded: a wall-clock timeout, a memory cap, an output-size cap, and
-  a limit on the number of operation calls. A script that loops forever or returns
-  a huge payload is stopped with an error rather than hanging the connection.
+  Each run is bounded: a wall-clock timeout, a memory cap, an output-size cap, and a limit on the number of operation calls. A script that loops forever or returns a huge payload is stopped with an error rather than hanging the connection.
 </Warning>
 
-## When to use which mode
-
-<CardGroup cols={2}>
-  <Card title="Use code mode" icon="code">
-    Multi-step jobs (read → transform → write), large intermediate data you don't
-    want in context, or any workflow where you'd otherwise chain many tool calls.
-  </Card>
-  <Card title="Use classic mode" icon="wrench">
-    One-off actions, interactive exploration, or clients that expect a
-    conventional per-tool surface. It's the default and needs no extra setup.
-  </Card>
-</CardGroup>
-
-Errors from inside the sandbox surface the same way as classic-mode tool errors:
-an expected failure (a bad argument, a permission denial, a missing record) comes
-back with its code and message so the agent can react; an unexpected internal
-fault is masked behind a request-id reference and logged server-side.
+Errors from inside the sandbox surface the same way as any other operation error: an expected failure (a bad argument, a permission denial, a missing record) comes back with its code and message so the agent can react; an unexpected internal fault is masked behind a request-id reference and logged server-side.

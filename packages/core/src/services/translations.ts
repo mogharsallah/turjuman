@@ -1,12 +1,16 @@
-import type { Actor, BulkSetResult } from "@turjuman/schema";
+import type { Actor, BulkSetResult, Project } from "@turjuman/schema";
 import {
-	DEFAULT_NAMESPACE,
+	forbidden,
+	MAIN_BRANCH_ID,
 	notFound,
 	type Translation,
 	type TranslationKey,
-	type TranslationStatus,
+	validation,
 } from "@turjuman/schema";
+import type { RepositoryApi } from "../repository/index.js";
 import { BaseService } from "./base.js";
+import type { NamespaceService } from "./namespaces.js";
+import { revisionOf } from "./revision.js";
 import type {
 	BundleEntry,
 	BundlePage,
@@ -15,62 +19,100 @@ import type {
 	TranslationPage,
 } from "./types.js";
 
+/** How a deliverable value is chosen for export. */
+type Slot = "accepted" | "working";
+
+interface BundleCtx {
+	projectId: string;
+	branch: string;
+	isBase: boolean;
+	slot: Slot;
+	fallback: "source" | "omit";
+	keyMeta: Map<string, TranslationKey>;
+	baseValues: Map<string, string>;
+	nsNames: Map<string, string>;
+	excludeStale?: boolean;
+}
+
+/**
+ * Whether a target cell is stale — the **union** of the two invalidation
+ * triggers: an explicit `stale` flag (set by the context-change fan-out) or a
+ * base revision that has since moved on (`sourceRef !== key.sourceRevision`).
+ * The base locale is the source and is never evaluated here.
+ */
+function isStale(cell: Translation, key: TranslationKey): boolean {
+	return (
+		cell.stale ||
+		(cell.sourceRef !== undefined && cell.sourceRef !== key.sourceRevision)
+	);
+}
+
 export class TranslationsService extends BaseService {
+	constructor(
+		repo: RepositoryApi,
+		private readonly namespaces: NamespaceService,
+	) {
+		super(repo);
+	}
+
 	async listForKey(
 		actor: Actor,
 		projectId: string,
 		name: string,
-		namespace = DEFAULT_NAMESPACE,
+		namespace?: string,
+		branch = MAIN_BRANCH_ID,
 	): Promise<Translation[]> {
 		await this.authorizeProject(actor, projectId, "translation.read");
-		return this.repo.listTranslationsByKey(projectId, namespace, name);
+		const { keyId } = await this.resolveKey(projectId, branch, name, namespace);
+		return this.repo.listCellsByKey(projectId, branch, keyId);
 	}
 
 	async listForLocale(
 		actor: Actor,
 		projectId: string,
 		code: string,
+		branch = MAIN_BRANCH_ID,
 	): Promise<Translation[]> {
 		await this.authorizeProject(actor, projectId, "translation.read");
 		await this.requireLocaleExists(projectId, code);
-		return this.repo.listTranslationsByLocale(projectId, code);
+		return this.repo.listCellsByLocale(projectId, branch, code);
 	}
 
-	/**
-	 * One page of a locale's raw translations, so a large locale doesn't force a
-	 * full-partition read on every call. `cursor` is the opaque `nextCursor` from a
-	 * prior page; omit both `limit` and `cursor` and callers should use
-	 * `listForLocale` instead.
-	 */
+	/** One page of a locale's raw cells, so a large locale doesn't force a
+	 * full-partition read on every call. */
 	async listForLocalePage(
 		actor: Actor,
 		projectId: string,
 		code: string,
-		opts: { limit?: number; cursor?: string } = {},
+		opts: { branch?: string; limit?: number; cursor?: string } = {},
 	): Promise<TranslationPage> {
 		await this.authorizeProject(actor, projectId, "translation.read");
 		await this.requireLocaleExists(projectId, code);
-		return this.repo.listTranslationsByLocalePage(projectId, code, opts);
+		const page = await this.repo.listCellsByLocalePage(
+			projectId,
+			opts.branch ?? MAIN_BRANCH_ID,
+			code,
+			{ limit: opts.limit, cursor: opts.cursor },
+		);
+		return { translations: page.cells, nextCursor: page.nextCursor };
 	}
 
 	/**
 	 * Export a locale as adapter-ready entries: each key's deliverable value plus
-	 * the key's description and plural flag (joined from the key metadata). Used by
-	 * the CLI `pull`/`build` so file formats can carry comments and plurals.
-	 *
-	 * By default this ships each key's **approved** value (the `approvedValue`
-	 * snapshot), so in-progress or edited-since-approval work never leaks into
-	 * delivered output. `slot: "working"` ships the live `value` instead (preview /
-	 * staging). The base locale always ships its `value` — it is the source of
-	 * truth. When an approved value is missing, `fallback: "source"` (default)
-	 * fills from the base value; `fallback: "omit"` drops the key.
+	 * its description and plural flag. By default this ships the **accepted** value
+	 * (the cell's head version), so in-progress drafts never leak into delivered
+	 * output; `slot: "working"` ships the live draft value instead (preview /
+	 * staging). The base locale always ships its value — it is the source. When no
+	 * accepted value exists, `fallback: "source"` (default) fills from the base
+	 * value; `fallback: "omit"` drops the key.
 	 */
 	async exportBundle(
 		actor: Actor,
 		projectId: string,
 		code: string,
 		opts: {
-			slot?: "approved" | "working";
+			branch?: string;
+			slot?: Slot;
 			fallback?: "source" | "omit";
 			excludeStale?: boolean;
 		} = {},
@@ -81,55 +123,53 @@ export class TranslationsService extends BaseService {
 			"translation.read",
 		);
 		await this.requireLocaleExists(projectId, code);
-		const slot = opts.slot ?? "approved";
+		const branch = opts.branch ?? MAIN_BRANCH_ID;
+		const slot = opts.slot ?? "accepted";
 		const fallback = opts.fallback ?? "source";
 		const isBase = code === project.baseLocale;
-		const [keys, translations] = await Promise.all([
-			this.repo.listKeys(projectId),
-			this.repo.listTranslationsByLocale(projectId, code),
+		const [keys, cells, nsNames] = await Promise.all([
+			this.repo.listKeyDefs(projectId, branch),
+			this.repo.listCellsByLocale(projectId, branch, code),
+			this.namespaces.nameMap(projectId),
 		]);
-		// Base values feed source-fallback and stale detection.
+		const keyMeta = new Map(
+			keys.filter((k) => k.state !== "deprecated").map((k) => [k.id, k]),
+		);
 		const needBase =
 			!isBase && (fallback === "source" || opts.excludeStale === true);
 		const baseValues = needBase
 			? new Map(
 					(
-						await this.repo.listTranslationsByLocale(
+						await this.repo.listCellsByLocale(
 							projectId,
+							branch,
 							project.baseLocale,
 						)
-					).map((t) => [`${t.namespace}#${t.keyName}`, t.value]),
+					).map((c) => [c.keyId, c.value]),
 				)
 			: new Map<string, string>();
-		// Active keys only — deprecated keys are retained but never exported.
-		const keyMeta = new Map(
-			keys
-				.filter((k) => k.state !== "deprecated")
-				.map((k) => [`${k.namespace}#${k.name}`, k]),
-		);
-		return this.toBundleEntries(translations, {
+		return this.toBundleEntries(cells, {
+			projectId,
+			branch,
 			isBase,
 			slot,
 			fallback,
 			keyMeta,
 			baseValues,
+			nsNames,
 			excludeStale: opts.excludeStale,
 		});
 	}
 
-	/**
-	 * Like `exportBundle`, but returns one page of entries plus an opaque
-	 * `nextCursor`, so the export never materializes a whole locale (and its
-	 * key/base-value joins) at once. The key metadata and base values needed by a
-	 * page are fetched scoped to just that page's keys — bounding per-request work.
-	 * Omit `limit`/`cursor` to walk the whole locale via `exportBundle` instead.
-	 */
+	/** Like {@link exportBundle}, but one page at a time so the export never
+	 * materializes a whole locale (and its joins) at once. */
 	async exportBundlePage(
 		actor: Actor,
 		projectId: string,
 		code: string,
 		opts: {
-			slot?: "approved" | "working";
+			branch?: string;
+			slot?: Slot;
 			fallback?: "source" | "omit";
 			excludeStale?: boolean;
 			limit?: number;
@@ -142,88 +182,80 @@ export class TranslationsService extends BaseService {
 			"translation.read",
 		);
 		await this.requireLocaleExists(projectId, code);
-		const slot = opts.slot ?? "approved";
+		const branch = opts.branch ?? MAIN_BRANCH_ID;
+		const slot = opts.slot ?? "accepted";
 		const fallback = opts.fallback ?? "source";
 		const isBase = code === project.baseLocale;
-		const page = await this.repo.listTranslationsByLocalePage(projectId, code, {
-			limit: opts.limit,
-			cursor: opts.cursor,
-		});
-		// Resolve the joins for only this page's keys, in parallel.
-		const distinct = [
-			...new Map(
-				page.translations.map((t) => [`${t.namespace}#${t.keyName}`, t]),
-			).values(),
-		];
+		const page = await this.repo.listCellsByLocalePage(
+			projectId,
+			branch,
+			code,
+			{
+				limit: opts.limit,
+				cursor: opts.cursor,
+			},
+		);
+		const nsNames = await this.namespaces.nameMap(projectId);
 		const needBase =
 			!isBase && (fallback === "source" || opts.excludeStale === true);
 		const keyMeta = new Map<string, TranslationKey>();
 		const baseValues = new Map<string, string>();
 		await Promise.all(
-			distinct.map(async (t) => {
-				const id = `${t.namespace}#${t.keyName}`;
+			page.cells.map(async (c) => {
 				const [key, base] = await Promise.all([
-					this.repo.getKey(projectId, t.namespace, t.keyName),
+					this.repo.getKeyDef(projectId, branch, c.keyId),
 					needBase
-						? this.repo.getTranslation(
-								projectId,
-								project.baseLocale,
-								t.namespace,
-								t.keyName,
-							)
+						? this.repo.getCell(projectId, branch, c.keyId, project.baseLocale)
 						: Promise.resolve(undefined),
 				]);
-				// Active keys only — deprecated keys are retained but never exported.
-				if (key && key.state !== "deprecated") keyMeta.set(id, key);
-				if (base) baseValues.set(id, base.value);
+				if (key && key.state !== "deprecated") keyMeta.set(c.keyId, key);
+				if (base) baseValues.set(c.keyId, base.value);
 			}),
 		);
-		const entries = this.toBundleEntries(page.translations, {
+		const entries = await this.toBundleEntries(page.cells, {
+			projectId,
+			branch,
 			isBase,
 			slot,
 			fallback,
 			keyMeta,
 			baseValues,
+			nsNames,
 			excludeStale: opts.excludeStale,
 		});
 		return { entries, nextCursor: page.nextCursor };
 	}
 
-	/** Shared per-translation transform for the whole and paged bundle exports. */
-	private toBundleEntries(
-		translations: Translation[],
-		ctx: {
-			isBase: boolean;
-			slot: "approved" | "working";
-			fallback: "source" | "omit";
-			keyMeta: Map<string, TranslationKey>;
-			baseValues: Map<string, string>;
-			excludeStale?: boolean;
-		},
-	): BundleEntry[] {
+	/** Per-cell transform shared by the whole and paged bundle exports. */
+	private async toBundleEntries(
+		cells: Translation[],
+		ctx: BundleCtx,
+	): Promise<BundleEntry[]> {
 		const out: BundleEntry[] = [];
-		for (const t of translations) {
-			const id = `${t.namespace}#${t.keyName}`;
-			const meta = ctx.keyMeta.get(id);
+		for (const c of cells) {
+			const meta = ctx.keyMeta.get(c.keyId);
 			if (!meta) continue; // deprecated or deleted key
 			if (
 				ctx.excludeStale &&
 				!ctx.isBase &&
-				t.sourceRef !== undefined &&
-				t.sourceRef !== ctx.baseValues.get(id)
+				c.sourceRef !== undefined &&
+				c.sourceRef !== meta.sourceRevision
 			) {
-				continue; // stale: the source moved on since this was written
+				continue; // stale: the source moved on since this was accepted
 			}
-			let value =
-				ctx.isBase || ctx.slot === "working"
-					? t.value
-					: (t.approvedValue ?? "");
-			if (value === "" && ctx.fallback === "source" && !ctx.isBase)
-				value = ctx.baseValues.get(id) ?? "";
-			if (value === "") continue;
+			let value: string | undefined;
+			if (ctx.isBase || ctx.slot === "working") value = c.value;
+			else value = await this.acceptedValue(ctx.projectId, ctx.branch, c);
+			if (
+				(value === undefined || value === "") &&
+				ctx.fallback === "source" &&
+				!ctx.isBase
+			)
+				value = ctx.baseValues.get(c.keyId) ?? "";
+			if (value === undefined || value === "") continue;
 			out.push({
-				key: t.keyName,
-				namespace: t.namespace,
+				key: meta.name,
+				namespace: ctx.nsNames.get(meta.namespaceId ?? "") ?? "",
 				value,
 				description: meta.description,
 				plural: meta.plural,
@@ -232,71 +264,80 @@ export class TranslationsService extends BaseService {
 		return out;
 	}
 
-	/** Keys with no value (or an empty value) for the given locale. */
+	/** The cell's accepted (head) value: `cell.value` when the cell is itself
+	 * accepted, else the head version's value, else `undefined` (never accepted). */
+	private async acceptedValue(
+		projectId: string,
+		branch: string,
+		cell: Translation,
+	): Promise<string | undefined> {
+		if (cell.head === undefined) return undefined;
+		if (cell.lifecycle === "accepted") return cell.value;
+		return (
+			await this.repo.getVersion(
+				projectId,
+				branch,
+				cell.keyId,
+				cell.locale,
+				cell.head,
+			)
+		)?.value;
+	}
+
+	/** Keys with no cell (or an empty value) for the given locale. */
 	async listUntranslated(
 		actor: Actor,
 		projectId: string,
 		code: string,
+		branch = MAIN_BRANCH_ID,
 	): Promise<TranslationKey[]> {
 		await this.authorizeProject(actor, projectId, "translation.read");
 		await this.requireLocaleExists(projectId, code);
-		const [keys, translations] = await Promise.all([
-			this.repo.listKeys(projectId),
-			this.repo.listTranslationsByLocale(projectId, code),
+		const [keys, cells] = await Promise.all([
+			this.repo.listKeyDefs(projectId, branch),
+			this.repo.listCellsByLocale(projectId, branch, code),
 		]);
 		const filled = new Set(
-			translations
-				.filter((t) => t.value.trim() !== "")
-				.map((t) => `${t.namespace}#${t.keyName}`),
+			cells.filter((c) => c.value.trim() !== "").map((c) => c.keyId),
 		);
-		return keys.filter(
-			(k) =>
-				k.state !== "deprecated" && !filled.has(`${k.namespace}#${k.name}`),
-		);
+		return keys.filter((k) => k.state !== "deprecated" && !filled.has(k.id));
 	}
 
-	/**
-	 * One page of a locale's untranslated keys, so a large project doesn't force a
-	 * full-project + full-locale read on every call. Pages the key partition via
-	 * the cursor and resolves each page key's value with a point read; like
-	 * {@link KeysService.listPage}, a page may return fewer than `limit` keys
-	 * (already-translated and deprecated keys are filtered out) while still
-	 * yielding a `nextCursor` to continue.
-	 */
+	/** One page of a locale's untranslated keys. */
 	async listUntranslatedPage(
 		actor: Actor,
 		projectId: string,
 		code: string,
-		opts: { limit?: number; cursor?: string } = {},
+		opts: { branch?: string; limit?: number; cursor?: string } = {},
 	): Promise<KeyPage> {
 		await this.authorizeProject(actor, projectId, "translation.read");
 		await this.requireLocaleExists(projectId, code);
-		const page = await this.repo.listKeysPage(projectId, {
+		const branch = opts.branch ?? MAIN_BRANCH_ID;
+		const page = await this.repo.listKeyDefsPage(projectId, branch, {
 			limit: opts.limit,
 			cursor: opts.cursor,
 		});
 		const active = page.keys.filter((k) => k.state !== "deprecated");
-		const values = await Promise.all(
-			active.map((k) =>
-				this.repo.getTranslation(projectId, code, k.namespace, k.name),
-			),
+		const cells = await Promise.all(
+			active.map((k) => this.repo.getCell(projectId, branch, k.id, code)),
 		);
 		const keys = active.filter((_, i) => {
-			const t = values[i];
-			return !t || t.value.trim() === "";
+			const c = cells[i];
+			return !c || c.value.trim() === "";
 		});
 		return { keys, nextCursor: page.nextCursor };
 	}
 
 	/**
-	 * Keys whose translation for the locale was written against a base value that
-	 * has since changed — the source moved on, so the target is stale and should be
-	 * re-translated. The base locale (the source) is never stale.
+	 * Keys whose cell for the locale was translated against a base value that has
+	 * since changed — the source moved on (`cell.sourceRef !== key.sourceRevision`),
+	 * so the target is stale. The base locale is the source and is never stale.
 	 */
 	async listStale(
 		actor: Actor,
 		projectId: string,
 		code: string,
+		branch = MAIN_BRANCH_ID,
 	): Promise<TranslationKey[]> {
 		const { project } = await this.authorizeProject(
 			actor,
@@ -305,40 +346,28 @@ export class TranslationsService extends BaseService {
 		);
 		await this.requireLocaleExists(projectId, code);
 		if (code === project.baseLocale) return [];
-		const [keys, translations, baseTranslations] = await Promise.all([
-			this.repo.listKeys(projectId),
-			this.repo.listTranslationsByLocale(projectId, code),
-			this.repo.listTranslationsByLocale(projectId, project.baseLocale),
+		const [keys, cells] = await Promise.all([
+			this.repo.listKeyDefs(projectId, branch),
+			this.repo.listCellsByLocale(projectId, branch, code),
 		]);
-		const baseValue = new Map(
-			baseTranslations.map((t) => [`${t.namespace}#${t.keyName}`, t.value]),
+		const keyById = new Map(keys.map((k) => [k.id, k]));
+		const staleIds = new Set(
+			cells
+				.filter((c) => {
+					const k = keyById.get(c.keyId);
+					return k !== undefined && isStale(c, k);
+				})
+				.map((c) => c.keyId),
 		);
-		const stale = new Set(
-			translations
-				.filter(
-					(t) =>
-						t.sourceRef !== undefined &&
-						t.sourceRef !== baseValue.get(`${t.namespace}#${t.keyName}`),
-				)
-				.map((t) => `${t.namespace}#${t.keyName}`),
-		);
-		return keys.filter(
-			(k) => k.state !== "deprecated" && stale.has(`${k.namespace}#${k.name}`),
-		);
+		return keys.filter((k) => k.state !== "deprecated" && staleIds.has(k.id));
 	}
 
-	/**
-	 * One page of a locale's stale keys, bounding per-request work the same way as
-	 * {@link listUntranslatedPage}. The base locale is the source, so it is never
-	 * stale and returns an empty page. Pages the key partition and point-reads each
-	 * page key's target and base value; a page may return fewer than `limit` keys
-	 * (current and deprecated keys are filtered out) while still yielding a `nextCursor`.
-	 */
+	/** One page of a locale's stale keys. */
 	async listStalePage(
 		actor: Actor,
 		projectId: string,
 		code: string,
-		opts: { limit?: number; cursor?: string } = {},
+		opts: { branch?: string; limit?: number; cursor?: string } = {},
 	): Promise<KeyPage> {
 		const { project } = await this.authorizeProject(
 			actor,
@@ -346,210 +375,239 @@ export class TranslationsService extends BaseService {
 			"translation.read",
 		);
 		await this.requireLocaleExists(projectId, code);
+		const branch = opts.branch ?? MAIN_BRANCH_ID;
 		if (code === project.baseLocale) return { keys: [], nextCursor: undefined };
-		const page = await this.repo.listKeysPage(projectId, {
+		const page = await this.repo.listKeyDefsPage(projectId, branch, {
 			limit: opts.limit,
 			cursor: opts.cursor,
 		});
 		const active = page.keys.filter((k) => k.state !== "deprecated");
-		const pairs = await Promise.all(
-			active.map(async (k) => {
-				const [target, base] = await Promise.all([
-					this.repo.getTranslation(projectId, code, k.namespace, k.name),
-					this.repo.getTranslation(
-						projectId,
-						project.baseLocale,
-						k.namespace,
-						k.name,
-					),
-				]);
-				return { target, base };
-			}),
+		const cells = await Promise.all(
+			active.map((k) => this.repo.getCell(projectId, branch, k.id, code)),
 		);
-		const keys = active.filter((_, i) => {
-			const { target, base } = pairs[i]!;
-			return (
-				target?.sourceRef !== undefined && target.sourceRef !== base?.value
-			);
+		const keys = active.filter((k, i) => {
+			const c = cells[i];
+			return c !== undefined && isStale(c, k);
 		});
 		return { keys, nextCursor: page.nextCursor };
 	}
 
-	/** Current base-locale value for a key, used to stamp a target's sourceRef. */
-	private async baseValueOf(
-		projectId: string,
-		baseLocale: string,
-		namespace: string,
-		name: string,
-	): Promise<string | undefined> {
-		return (
-			await this.repo.getTranslation(projectId, baseLocale, namespace, name)
-		)?.value;
-	}
-
+	/**
+	 * Write a draft value for a key in a locale. A target write lands as
+	 * `proposed` (awaiting acceptance) and records the base revision it was written
+	 * against. Writing the base locale instead updates the source: it bumps the
+	 * key's `sourceRevision` (staling dependents) and the cell is `accepted` source.
+	 */
 	async set(
 		actor: Actor,
 		projectId: string,
 		code: string,
 		input: SetTranslationInput,
 	): Promise<Translation> {
-		const status = input.status ?? "translated";
 		const { project } = await this.authorizeProject(
 			actor,
 			projectId,
-			status === "approved" ? "translation.review" : "translation.write",
+			"translation.write",
 		);
 		await this.requireLocaleExists(projectId, code);
-		const namespace = input.namespace ?? DEFAULT_NAMESPACE;
-		if (!(await this.repo.getKey(projectId, namespace, input.name))) {
-			throw notFound(`Key ${namespace}/${input.name} not found`);
-		}
-		const existing = await this.repo.getTranslation(
+		const branch = input.branch ?? MAIN_BRANCH_ID;
+		const { keyId, key } = await this.resolveKey(
 			projectId,
-			code,
-			namespace,
+			branch,
 			input.name,
+			input.namespace,
 		);
-		const translation: Translation = {
+		const now = new Date().toISOString();
+		if (code === project.baseLocale) {
+			const rev = revisionOf(input.value);
+			if (rev !== key.sourceRevision)
+				await this.repo.putKeyDef(branch, {
+					...key,
+					sourceRevision: rev,
+					updatedAt: now,
+				});
+			return this.repo.putCell({
+				projectId,
+				branchId: branch,
+				keyId,
+				locale: code,
+				value: input.value,
+				lifecycle: "accepted",
+				stale: false,
+				origin: input.origin ?? "human",
+				updatedBy: actor.userId,
+				updatedAt: now,
+			});
+		}
+		const existing = await this.repo.getCell(projectId, branch, keyId, code);
+		return this.repo.putCell({
 			projectId,
-			localeCode: code,
-			namespace,
-			keyName: input.name,
+			branchId: branch,
+			keyId,
+			locale: code,
 			value: input.value,
-			status,
-			// Promote on approval; otherwise keep the last approved snapshot intact.
-			approvedValue:
-				status === "approved" ? input.value : existing?.approvedValue,
-			// Stamp the base value this target was written against, so we can later
-			// detect when the source has moved on (staleness). The base locale is the
-			// source itself, so it carries no sourceRef.
-			sourceRef:
-				code === project.baseLocale
-					? undefined
-					: await this.baseValueOf(
-							projectId,
-							project.baseLocale,
-							namespace,
-							input.name,
-						),
-			origin: input.origin ?? existing?.origin,
+			head: existing?.head,
+			lifecycle: "proposed",
+			stale: false,
+			sourceRef: key.sourceRevision,
+			origin: input.origin ?? existing?.origin ?? "human",
+			lockedByRunId: existing?.lockedByRunId,
 			updatedBy: actor.userId,
-			updatedAt: new Date().toISOString(),
-		};
-		return this.repo.putTranslation(translation);
+			updatedAt: now,
+		});
 	}
 
-	/** Set many translations for one locale in a single call (LLM bulk-fill). */
+	/** Set many draft values for one locale in a single call (bulk fill). */
 	async bulkSet(
 		actor: Actor,
 		projectId: string,
 		code: string,
 		entries: SetTranslationInput[],
+		branch = MAIN_BRANCH_ID,
 	): Promise<BulkSetResult> {
-		const needsReview = entries.some(
-			(e) => (e.status ?? "translated") === "approved",
-		);
 		const { project } = await this.authorizeProject(
 			actor,
 			projectId,
-			needsReview ? "translation.review" : "translation.write",
+			"translation.write",
 		);
 		await this.requireLocaleExists(projectId, code);
+		const isBase = code === project.baseLocale;
 
-		// Validate against only the namespaces present in this batch, so a large
-		// project isn't fully scanned on every bulk write.
-		const namespaces = new Set(
-			entries.map((e) => e.namespace ?? DEFAULT_NAMESPACE),
+		const allKeys = await this.repo.listKeyDefs(projectId, branch);
+		const nsIds = new Map<string, string | undefined>();
+		for (const ns of new Set(entries.map((e) => e.namespace ?? ""))) {
+			nsIds.set(ns, await this.namespaces.idOf(projectId, ns));
+		}
+		const keyByLabel = new Map(
+			allKeys.map((k) => [`${k.namespaceId ?? "_"}#${k.name}`, k]),
 		);
-		const knownKeys = new Set<string>();
-		await Promise.all(
-			[...namespaces].map(async (ns) => {
-				for (const k of await this.repo.listKeys(projectId, ns))
-					knownKeys.add(`${ns}#${k.name}`);
-			}),
-		);
-		// Existing values for this locale, so a non-approving write preserves the
-		// last approved snapshot (and prior origin) for each key.
 		const prevByKey = new Map(
-			(await this.repo.listTranslationsByLocale(projectId, code)).map((t) => [
-				`${t.namespace}#${t.keyName}`,
-				t,
+			(await this.repo.listCellsByLocale(projectId, branch, code)).map((c) => [
+				c.keyId,
+				c,
 			]),
 		);
-		// Base values, to stamp each target's sourceRef (skipped when writing the
-		// base locale itself, which is the source).
-		const isBase = code === project.baseLocale;
-		const baseByKey = isBase
-			? new Map<string, string>()
-			: new Map(
-					(
-						await this.repo.listTranslationsByLocale(
-							projectId,
-							project.baseLocale,
-						)
-					).map((t) => [`${t.namespace}#${t.keyName}`, t.value]),
-				);
 		const now = new Date().toISOString();
 		const toWrite: Translation[] = [];
+		const baseKeyBumps: TranslationKey[] = [];
 		const skipped: string[] = [];
 		for (const e of entries) {
-			const namespace = e.namespace ?? DEFAULT_NAMESPACE;
-			const id = `${namespace}#${e.name}`;
-			if (!knownKeys.has(id)) {
-				skipped.push(id);
+			const nsId = nsIds.get(e.namespace ?? "");
+			const key = keyByLabel.get(`${nsId ?? "_"}#${e.name}`);
+			if (!key) {
+				skipped.push(e.namespace ? `${e.namespace}/${e.name}` : e.name);
 				continue;
 			}
-			const status = e.status ?? "translated";
-			const prev = prevByKey.get(id);
-			toWrite.push({
-				projectId,
-				localeCode: code,
-				namespace,
-				keyName: e.name,
-				value: e.value,
-				status,
-				approvedValue: status === "approved" ? e.value : prev?.approvedValue,
-				sourceRef: isBase ? undefined : baseByKey.get(id),
-				origin: e.origin ?? prev?.origin,
-				updatedBy: actor.userId,
-				updatedAt: now,
-			});
+			if (isBase) {
+				const rev = revisionOf(e.value);
+				if (rev !== key.sourceRevision)
+					baseKeyBumps.push({ ...key, sourceRevision: rev, updatedAt: now });
+				toWrite.push({
+					projectId,
+					branchId: branch,
+					keyId: key.id,
+					locale: code,
+					value: e.value,
+					lifecycle: "accepted",
+					stale: false,
+					origin: e.origin ?? "import",
+					updatedBy: actor.userId,
+					updatedAt: now,
+				});
+			} else {
+				const prev = prevByKey.get(key.id);
+				toWrite.push({
+					projectId,
+					branchId: branch,
+					keyId: key.id,
+					locale: code,
+					value: e.value,
+					head: prev?.head,
+					lifecycle: "proposed",
+					stale: false,
+					sourceRef: key.sourceRevision,
+					origin: e.origin ?? prev?.origin ?? "agent",
+					lockedByRunId: prev?.lockedByRunId,
+					updatedBy: actor.userId,
+					updatedAt: now,
+				});
+			}
 		}
-		await this.repo.putTranslations(toWrite);
+		for (const k of baseKeyBumps) await this.repo.putKeyDef(branch, k);
+		await this.repo.putCells(toWrite);
 		return { written: toWrite.length, skipped };
 	}
 
-	async setStatus(
+	/**
+	 * Accept a cell's current draft as its new head version (the controlled write
+	 * transition, via the repository's compare-and-swap). Reuses the
+	 * `translation.review` permission. When the project requires human acceptance,
+	 * a run-attributed accept (`runRef`) is rejected — only a person may flip it.
+	 */
+	async accept(
 		actor: Actor,
 		projectId: string,
 		code: string,
 		name: string,
-		status: TranslationStatus,
-		namespace = DEFAULT_NAMESPACE,
+		opts: { namespace?: string; branch?: string; runRef?: string } = {},
 	): Promise<Translation> {
-		await this.authorizeProject(
+		const { project } = await this.authorizeProject(
 			actor,
 			projectId,
-			status === "approved" ? "translation.review" : "translation.write",
+			"translation.review",
 		);
-		const existing = await this.repo.getTranslation(
+		if (opts.runRef && project.requireHumanAccept)
+			throw forbidden(
+				"This project requires a human to accept; a run cannot self-accept.",
+			);
+		await this.requireLocaleExists(projectId, code);
+		const branch = opts.branch ?? MAIN_BRANCH_ID;
+		const { keyId, key } = await this.resolveKey(
 			projectId,
-			code,
-			namespace,
+			branch,
+			name,
+			opts.namespace,
+		);
+		const cell = await this.repo.getCell(projectId, branch, keyId, code);
+		if (!cell) throw notFound(`No ${code} translation for ${name}`);
+		if (cell.value.trim() === "")
+			throw validation("Cannot accept an empty translation");
+		return this.repo.acceptCell({
+			projectId,
+			branchId: branch,
+			keyId,
+			locale: code,
+			value: cell.value,
+			origin: cell.origin,
+			sourceRevision: key.sourceRevision,
+			acceptedBy: opts.runRef ? undefined : actor.userId,
+			runRef: opts.runRef,
+			expectedHead: cell.head,
+			updatedBy: actor.userId,
+		});
+	}
+
+	// ---- internals ------------------------------------------------------------
+
+	private async resolveKey(
+		projectId: string,
+		branch: string,
+		name: string,
+		namespace?: string,
+	): Promise<{ keyId: string; key: TranslationKey }> {
+		const nsId = await this.namespaces.idOf(projectId, namespace);
+		if (namespace && !nsId)
+			throw notFound(`Key ${namespace}/${name} not found`);
+		const keyId = await this.repo.resolveKeyIdByName(
+			projectId,
+			branch,
+			nsId,
 			name,
 		);
-		if (!existing)
-			throw notFound(`No ${code} translation for ${namespace}/${name}`);
-		const updated: Translation = {
-			...existing,
-			status,
-			// Approving promotes the current working value into the approved snapshot;
-			// any other transition leaves the last approved snapshot untouched.
-			approvedValue:
-				status === "approved" ? existing.value : existing.approvedValue,
-			updatedBy: actor.userId,
-			updatedAt: new Date().toISOString(),
-		};
-		return this.repo.putTranslation(updated);
+		const key = keyId
+			? await this.repo.getKeyDef(projectId, branch, keyId)
+			: undefined;
+		if (!keyId || !key) throw notFound(`Key ${name} not found`);
+		return { keyId, key };
 	}
 }

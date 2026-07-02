@@ -1,8 +1,20 @@
 import {
 	type Actor,
 	apiKeyCreatedSchema,
+	branchSchema,
+	briefSchema,
 	bulkSetResultSchema,
+	commentSchema,
+	contextLifecycleSchema,
+	contextOperatorSchema,
+	contextRuleKindSchema,
+	contextRuleSchema,
 	emailSchema,
+	escalationSchema,
+	escalationStatusSchema,
+	exampleQualitySchema,
+	exampleSchema,
+	fieldReportSchema,
 	globalRoleSchema,
 	glossaryTermSchema,
 	keyPageSchema,
@@ -10,20 +22,21 @@ import {
 	localeCodeSchema,
 	localeSchema,
 	membershipSchema,
+	mergeResultSchema,
+	namespaceEntitySchema,
 	namespaceSchema,
 	projectRoleSchema,
 	projectSchema,
 	qaConfigSchema,
 	qaReportSchema,
 	qaSeveritySchema,
-	reviewResultSchema,
-	scoreConfigSchema,
-	scoreValueSchema,
-	settableStatusSchema,
+	releaseSchema,
+	resolvedContextSchema,
 	type TurjumanService,
 	translationKeySchema,
+	translationPageSchema,
+	translationRunSchema,
 	translationSchema,
-	translationStatusSchema,
 	type User,
 	userSchema,
 	webhookSchema,
@@ -33,14 +46,25 @@ import { z } from "zod";
 /** Re-exported so each operation group imports everything it needs from this one
  * module. Output schemas come straight from core (the canonical entity/wire
  * schemas), so the structured result shapes every transport emits can't drift
- * from what the services return. Enum/field schemas (roles, status, severity,
- * locale/namespace) are likewise re-exported from core rather than redefined, so
- * an operation's input validation can't drift from the entity definitions
- * either. */
+ * from what the services return. Enum/field schemas (roles, severity, locale/
+ * namespace) are likewise re-exported from core rather than redefined, so an
+ * operation's input validation can't drift from the entity definitions either. */
 export {
 	apiKeyCreatedSchema,
+	branchSchema,
+	briefSchema,
 	bulkSetResultSchema,
+	commentSchema,
+	contextLifecycleSchema,
+	contextOperatorSchema,
+	contextRuleKindSchema,
+	contextRuleSchema,
 	emailSchema,
+	escalationSchema,
+	escalationStatusSchema,
+	exampleQualitySchema,
+	exampleSchema,
+	fieldReportSchema,
 	globalRoleSchema as globalRole,
 	glossaryTermSchema,
 	keyPageSchema,
@@ -48,6 +72,8 @@ export {
 	localeCodeSchema,
 	localeSchema,
 	membershipSchema,
+	mergeResultSchema,
+	namespaceEntitySchema,
 	namespaceSchema,
 	// The role field helpers used by admin operations are core's canonical enums.
 	projectRoleSchema as projectRole,
@@ -55,13 +81,12 @@ export {
 	qaConfigSchema,
 	qaReportSchema,
 	qaSeveritySchema,
-	reviewResultSchema,
-	scoreConfigSchema,
-	scoreValueSchema,
-	settableStatusSchema,
+	releaseSchema,
+	resolvedContextSchema,
 	translationKeySchema,
+	translationPageSchema,
+	translationRunSchema,
 	translationSchema,
-	translationStatusSchema,
 	userSchema,
 	webhookSchema,
 	z,
@@ -166,10 +191,26 @@ export const projectId = z.string().describe("Project id, e.g. proj_xxx");
 // locale/namespace/email exactly as the service does.
 export const namespace = namespaceSchema
 	.optional()
-	.describe('Key namespace (logical group). Defaults to "default".');
+	.describe("Key namespace (logical grouping by feature/file). Omit for none.");
 export const localeCode = localeCodeSchema.describe(
 	'Locale code, e.g. "fr" or "es-MX"',
 );
+/** Optional branch selector; every read/write defaults to `main`. */
+export const branchInput = z
+	.string()
+	.optional()
+	.describe("Branch to operate on (default main).");
+
+/** A cascade coordinate as supplied by a caller — the project is implied by the
+ * operation's `projectId`. Absent fields broaden the scope (no key = the whole
+ * namespace or project; no locale = all locales). */
+export const scopeInputSchema = z
+	.object({
+		namespaceId: z.string().optional(),
+		keyId: z.string().optional(),
+		locale: localeCodeSchema.optional(),
+	})
+	.describe("Cascade coordinate (namespace / key / locale); project implied.");
 
 // Shared pagination inputs and the locale-scoped key-list output, used by the
 // paged growth/queue operations across groups (translations + scoring). Defined

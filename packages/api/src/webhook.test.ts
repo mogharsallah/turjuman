@@ -106,14 +106,15 @@ describe.skipIf(!endpoint)("webhook dispatcher", () => {
 			events: ["translation.updated"],
 		});
 
-		// Synthetic stream record for a translation change.
+		// Synthetic stream record for a translation cell change — the new-model
+		// attribute names, exactly as the dispatcher reads them off the raw image.
 		const NewImage = marshall({
 			entityType: "Translation",
 			projectId: project.id,
-			namespace: "default",
-			keyName: "greeting",
-			localeCode: "fr",
-			status: "translated",
+			keyId: "key_greeting",
+			branchId: "main",
+			locale: "fr",
+			lifecycle: "accepted",
 			value: "Bonjour",
 		});
 		await handler({
@@ -129,7 +130,7 @@ describe.skipIf(!endpoint)("webhook dispatcher", () => {
 		expect(JSON.parse(body)).toMatchObject({
 			event: "translation.updated",
 			projectId: project.id,
-			data: { key: "greeting", locale: "fr" },
+			data: { keyId: "key_greeting", branchId: "main", locale: "fr" },
 		});
 	}, 30_000);
 });

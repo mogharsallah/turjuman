@@ -77,7 +77,7 @@ export function registerPull(
 		.description(description)
 		.option(
 			"--working",
-			"Ship the in-progress (working) value instead of the approved snapshot",
+			"Ship the in-progress (working) value instead of the accepted value",
 		)
 		.option(
 			"--exclude-stale",

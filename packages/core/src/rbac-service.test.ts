@@ -130,6 +130,11 @@ const DENIED: DeniedCase[] = [
 		call: (s, ro, p) => s.keys.delete(ro, p, "k", true),
 	},
 	{
+		op: "rename_key",
+		action: "key.manage",
+		call: (s, ro, p) => s.keys.rename(ro, p, "k", { name: "k2" }),
+	},
+	{
 		op: "import_keys (CLI)",
 		action: "key.manage",
 		call: (s, ro, p) => s.keys.import(ro, p, [{ name: "k" }]),
@@ -148,9 +153,9 @@ const DENIED: DeniedCase[] = [
 			s.translations.bulkSet(ro, p, "en", [{ name: "k", value: "v" }]),
 	},
 	{
-		op: "set_translation_status",
+		op: "accept_translation",
 		action: "translation.review",
-		call: (s, ro, p) => s.translations.setStatus(ro, p, "en", "k", "approved"),
+		call: (s, ro, p) => s.translations.accept(ro, p, "en", "k", {}),
 	},
 	// ---- glossary ----------------------------------------------------------------
 	{
@@ -167,6 +172,59 @@ const DENIED: DeniedCase[] = [
 		op: "remove_glossary_term",
 		action: "glossary.manage",
 		call: (s, ro, p) => s.glossary.remove(ro, p, "tid"),
+	},
+	// ---- context rules + examples ------------------------------------------------
+	{
+		op: "create_context_rule",
+		action: "glossary.manage",
+		call: (s, ro, p) => s.context.createRule(ro, p, { kind: "voice" }),
+	},
+	{
+		op: "update_context_rule",
+		action: "glossary.manage",
+		call: (s, ro, p) => s.context.updateRule(ro, p, "ctx_x", { hard: true }),
+	},
+	{
+		op: "delete_context_rule",
+		action: "glossary.manage",
+		call: (s, ro, p) => s.context.deleteRule(ro, p, "ctx_x"),
+	},
+	{
+		op: "add_example",
+		action: "glossary.manage",
+		call: (s, ro, p) =>
+			s.examples.add(ro, p, {
+				locale: "en",
+				sourceText: "s",
+				targetText: "t",
+			}),
+	},
+	{
+		op: "remove_example",
+		action: "glossary.manage",
+		call: (s, ro, p) => s.examples.remove(ro, p, "ex_x"),
+	},
+	// ---- escalations -------------------------------------------------------------
+	{
+		op: "escalate_translation",
+		action: "translation.review",
+		call: (s, ro, p) => s.escalations.open(ro, p, "en", "k", { reason: "r" }),
+	},
+	{
+		op: "claim_escalation",
+		action: "translation.review",
+		call: (s, ro, p) => s.escalations.claim(ro, p, "esc_x"),
+	},
+	{
+		op: "resolve_escalation",
+		action: "translation.review",
+		call: (s, ro, p) => s.escalations.resolve(ro, p, "esc_x", {}),
+	},
+	// ---- comments ----------------------------------------------------------------
+	{
+		op: "add_comment",
+		action: "translation.write",
+		call: (s, ro, p) => s.comments.add(ro, p, "en", "k", { body: "b" }),
 	},
 	// ---- webhooks ----------------------------------------------------------------
 	{
@@ -196,28 +254,70 @@ const DENIED: DeniedCase[] = [
 		action: "member.manage",
 		call: (s, ro, p) => s.members.remove(ro, p, "user_x"),
 	},
-	// ---- QA + scoring config -----------------------------------------------------
+	// ---- QA config ---------------------------------------------------------------
 	{
 		op: "set_qa_config",
 		action: "project.update",
 		call: (s, ro, p) =>
 			s.qa.setConfig(ro, p, { checks: { empty: { enabled: false } } }),
 	},
+	// ---- namespaces --------------------------------------------------------------
 	{
-		op: "set_score_config",
-		action: "project.update",
-		call: (s, ro, p) => s.scoring.setConfig(ro, p, { threshold: 50 }),
+		op: "create_namespace",
+		action: "key.manage",
+		call: (s, ro, p) => s.namespaces.create(ro, p, { name: "ns" }),
 	},
 	{
-		op: "score_translation",
+		op: "update_namespace",
+		action: "key.manage",
+		call: (s, ro, p) => s.namespaces.update(ro, p, "nsid", { title: "t" }),
+	},
+	// ---- runs --------------------------------------------------------------------
+	{
+		op: "start_run",
 		action: "translation.write",
-		call: (s, ro, p) => s.scoring.score(ro, p, "en", { name: "k", score: 50 }),
+		call: (s, ro, p) => s.runs.start(ro, p, {}),
 	},
 	{
-		op: "review_translations",
+		op: "finish_run",
+		action: "translation.write",
+		call: (s, ro, p) => s.runs.finish(ro, p, "run_x", {}),
+	},
+	{
+		op: "cancel_run",
+		action: "translation.write",
+		call: (s, ro, p) => s.runs.cancel(ro, p, "run_x"),
+	},
+	// ---- branches / releases / field reports -------------------------------------
+	{
+		op: "create_branch",
+		action: "translation.write",
+		call: (s, ro, p) => s.branches.create(ro, p, { name: "feature" }),
+	},
+	{
+		op: "merge_branch",
+		action: "translation.review",
+		call: (s, ro, p) => s.branches.merge(ro, p, "br_x"),
+	},
+	{
+		op: "create_release",
+		action: "translation.write",
+		call: (s, ro, p) => s.releases.create(ro, p, { label: "v1" }),
+	},
+	{
+		op: "file_field_report",
 		action: "translation.write",
 		call: (s, ro, p) =>
-			s.scoring.reviewBatch(ro, p, "en", [{ name: "k", score: 50 }]),
+			s.fieldReports.file(ro, p, {
+				locale: "en",
+				name: "k",
+				description: "wrong",
+			}),
+	},
+	{
+		op: "resolve_field_report",
+		action: "translation.review",
+		call: (s, ro, p) => s.fieldReports.resolve(ro, p, "fr_x", {}),
 	},
 ];
 

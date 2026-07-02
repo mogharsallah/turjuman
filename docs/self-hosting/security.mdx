@@ -38,7 +38,7 @@ A key inherits its user's roles, but you can tighten it further at creation time
 | `expiresAt` | An ISO-8601 timestamp after which the key returns `401` on every request. Expired keys remain listed but cannot be reactivated. |
 
 <Tip>
-  Issue a DEVELOPER-scoped key to your CI pipeline and an EDITOR-scoped key to your AI translation agent. A misconfigured pipeline then can't approve translations, and the agent still gets the writing surface it needs. The MCP server also filters its advertised tools to match the key — see [MCP tool scoping](/reference/mcp-tools).
+  Issue a DEVELOPER-scoped key to your CI pipeline and an EDITOR-scoped key to your AI translation agent. A misconfigured pipeline then can't accept translations, and the agent still gets the writing surface it needs. The MCP authorizes every operation against the key in the core — see [Roles & permissions](/concepts/roles-and-permissions).
 </Tip>
 
 ## Revoke a compromised key

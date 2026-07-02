@@ -1,66 +1,55 @@
 ---
 title: "How AI agents use Turjuman over MCP"
 sidebarTitle: "How agents use Turjuman"
-description: "How an agent drives Turjuman: it connects over MCP with a bearer key, discovers capability, and calls tools — in classic mode or token-saving code mode."
+description: "How an agent drives Turjuman: it connects over MCP with a bearer key, discovers operations with search and describe, and runs them from a sandboxed program."
 ---
 
-An AI agent drives Turjuman by connecting to the [MCP server](/reference/mcp-tools) with a bearer API key and calling tools. What tools it sees, how it discovers them, and how its calls are authorized all follow from a few deliberate design choices. This page explains the interaction model; for step-by-step usage, see [Translate with MCP](/guides/translate-with-mcp) and [Code mode](/guides/code-mode).
+An AI agent drives Turjuman by connecting to the [MCP](/reference/mcp-tools) with a bearer API key, discovering the operations it needs, and running them. The MCP is a single **code surface**: rather than advertising one tool per capability, it exposes three — `search`, `describe`, and `run_code` — and the agent writes short programs against the operation catalogue. This page explains the interaction model; for step-by-step usage, see [Drive Turjuman over MCP](/guides/code-mode) and [Translate with MCP](/guides/translate-with-mcp).
 
 ## The interaction loop
 
 Every agent session follows the same shape:
 
 1. **Connect** — the agent opens a Streamable HTTP connection to the MCP Function URL, passing `Authorization: Bearer <api-key>` on every request. The connection is stateless: there is no session to manage, and the agent can retry or reconnect freely.
-2. **Discover** — the agent learns which capabilities exist, either by listing the tool catalogue (classic mode) or by searching (code mode).
-3. **Act** — the agent calls operations to read and change translation data. Each call is dispatched to the shared service layer, which enforces authorization before anything runs.
+2. **Discover** — the agent calls `search` to find the operations (and docs) it needs, then `describe` to confirm exact arguments.
+3. **Act** — the agent writes a TypeScript program that calls `await turjuman.<operation>(args)` and runs it with `run_code`. Each call is dispatched to the shared service layer, which enforces authorization before anything runs.
 
 Because the server holds no per-connection state, the agent's only durable context is what Turjuman stores and what the agent keeps in its own reasoning.
 
-## Two modes: classic and code
+## The translate-and-judge loop
 
-A connection runs in exactly one of two **mutually exclusive** modes, chosen with the `mode` URL parameter.
+The operations exist to serve one loop: **Define → Brief → Translate → Judge → Record → Ship → Stay-correct**. The agent owns the middle of it; humans curate the context it draws on and resolve the rare escalation.
 
-| | Classic mode (default) | Code mode (`?mode=code`) |
-|---|---|---|
-| **Advertised tools** | Every operation as its own tool | Just `search`, `describe`, `run_code` |
-| **How the agent acts** | One tool call per step | Writes a TypeScript program that calls many operations, runs once |
-| **Best for** | One-off actions, interactive exploration, conventional clients | Multi-step jobs, large intermediate data, minimizing context tokens |
+1. **Define.** A developer (or an import) adds a `TranslationKey` — the source string plus whatever context is cheap to attach. The agent reads the keys that need a locale with `list_untranslated` or `list_stale`.
+2. **Brief.** Before translating a string, the agent calls `get_brief` for the `key × locale`. The brief resolves the whole [context cascade](/concepts/context-cascade) — the key, its base value, the voice, the constraints, the in-scope glossary, ranked examples, and the locale shape — into one read. `find_examples` fetches extra few-shot guidance, and `list_comments` surfaces any human discussion on the string.
+3. **Translate.** The agent writes a draft `value` with `set_translation` (or `bulk_set_translations`); the cell becomes `proposed`. Verifiable constraints from the brief — placeholders, ICU, length, glossary survival — are enforced *inside* generation, reject-and-retry like a compiler, never as a separate gate.
+4. **Judge — the router.** The agent judges its own output and picks an exit: **accept** (confident — call `accept_translation`), **re-loop** (unsure — feed the objection back as new context and regenerate, which is roughly free), or **escalate** (an irreducible judgment a human should make — `escalate_translation`).
+5. **Record.** An accept appends an immutable version and advances the cell's `head`. History holds every accepted value, non-destructively.
+6. **Ship.** `create_release` pins a branch's accepted view into an immutable snapshot — what is live. CI pulls a release with `get_release` for a reproducible bundle. See [Branching & releases](/concepts/branching-and-releases).
+7. **Stay correct.** A changed base string or context re-stales dependent cells; a `file_field_report` from production reopens a shipped string the agent couldn't have known was wrong, so the fix re-enters the loop.
 
-### Classic mode
+The human is the *terminal* exit, not a line-by-line reviewer. There is no quality score to submit — the cell's [lifecycle state](/concepts/lifecycle) is the entire verdict. A project that wants a person to sign off sets `requireHumanAccept: true`, which stops a run from accepting its own work.
 
-The agent calls `tools/list`, receives the full catalogue, and invokes tools one at a time by name. It's the default and needs no setup — ideal for interactive work and clients that expect a conventional per-tool surface.
+### Escalation hands a decision to a human
 
-### Code mode
-
-Instead of the full catalogue, the server advertises three tools. The agent uses `search` to find what it needs, `describe` to confirm exact arguments, then writes a short TypeScript program that calls `turjuman.<operation>(args)` and runs it with `run_code`. The program executes in an isolated QuickJS-WASM sandbox whose only capability is the Turjuman SDK — no network, filesystem, or environment access — and only the final result returns.
-
-Code mode exists to cut **context tokens**. In classic mode, every tool's name, description, and schema sits in the model's context on every turn — a tax that grows with the toolset. Code mode keeps the catalogue out of context and collapses a multi-step job (read untranslated keys → translate → write them back) into a single round-trip, so intermediate data never passes through the model.
+When judgment is genuinely irreducible — a legal nuance, a restrict conflict the cascade surfaced — the agent calls `escalate_translation`, which flips the cell to `escalated` and opens an escalation with a reason. A human then `claim_escalation`s it (a compare-and-swap, so a second concurrent claim loses) and `resolve_escalation`s it by accepting the chosen value. Resolving can **spawn a gold example or a glossary term**, so the human decision becomes reusable context the cascade feeds back into the next brief — the loop gets better without anyone training a model. See [the escalation flow](/concepts/lifecycle#escalations-resolve-the-escalated-state).
 
 ## Discovery spans operations *and* docs
 
-In code mode, `search` queries one knowledge index that covers both the **operations** (returned with full typed signatures) and the **documentation** — these guides, concepts, and reference pages. So an agent can learn *how the system works*, not merely which functions exist: a search for "webhook events" surfaces both the relevant operations and the concept page that explains them. This is why the docs are treated as a first-class agent surface, not just a human one.
+`search` queries one knowledge index that covers both the **operations** (returned with full typed signatures) and the **documentation** — these guides, concepts, and reference pages. So an agent can learn *how the system works*, not merely which functions exist: a search for "context cascade" surfaces both `get_brief` and the concept page that explains how the brief is resolved. This is why the docs are treated as a first-class agent surface, not just a human one.
 
-## Authorization is the same in every mode
+## Authorization is enforced in the core
 
-The mode changes the *surface*, never the *permissions*. Whether an agent calls a tool directly, or calls an operation from inside a `run_code` sandbox, the request is dispatched to the same handler in the shared service layer with the same authenticated context. A read-only key still can't write in code mode — the write is denied in the core, not merely hidden.
+The surface never changes the *permissions*. Whether an agent calls an operation directly or from inside a `run_code` sandbox, the request is dispatched to the same handler in the shared service layer with the same authenticated context. A read-only key still can't write — the write is denied in the core, not merely hidden.
 
-The server also tailors what an agent can see and do to the key it presents:
-
-- **Tool scoping by key.** When the agent lists tools, the catalogue is filtered to the operations the key's roles permit. An EDITOR key never sees MANAGER-only tools; a read-only key sees only read tools.
-- **Tool scoping by URL.** You can narrow the surface further at connect time with `?tools=` or `?groups=` (classic mode only) — useful for restricting a reviewer agent to exactly the tools it needs.
-
-See [Roles & permissions](/concepts/roles-and-permissions) for the underlying model.
-
-## When to reach for which
-
-Use **classic mode** when you're exploring interactively or performing a single action — it's the zero-setup default. Switch to **code mode** when you're running multi-step jobs, moving large intermediate data you don't want in context, or chaining many calls you'd rather express as one program. The two are chosen per connection, so you can run both side by side with different keys.
+The key an agent presents determines what it can do: a **read-only key** can only invoke read operations, and a key with global **MEMBER** role cannot invoke org-level administration operations. See [Roles & permissions](/concepts/roles-and-permissions) for the underlying model.
 
 ## Common misconceptions
 
 <Note>
-  **"Code mode lets the agent run arbitrary code on my server."** It runs the agent's TypeScript in a sandbox whose only capability is the Turjuman SDK — no network, filesystem, environment, or access to the discovery tools. Every operation call still passes through the same authorization as a normal tool call.
+  **"`run_code` lets the agent run arbitrary code on my server."** It runs the agent's TypeScript in a sandbox whose only capability is the Turjuman SDK — no network, filesystem, environment, or access to the discovery tools. Every operation call still passes through the same authorization as any other request.
 </Note>
 
 <Note>
-  **"I have to pick a mode for my whole instance."** Mode is per connection, set by a URL parameter. Different agents (or the same agent in different contexts) can connect in different modes against the same deployment.
+  **"The agent submits a quality score."** It does not. Quality is a lifecycle state, not a number — the agent accepts, re-loops, or escalates, and a stored score would only go stale. See [Lifecycle](/concepts/lifecycle).
 </Note>

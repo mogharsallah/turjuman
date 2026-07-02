@@ -87,13 +87,13 @@ Environment variables take precedence over `~/.turjuman/auth.json` when both are
 | `pull [--working] [--exclude-stale]` | Download translations from Turjuman and write locale files to disk |
 | `build` | Alias for `pull` — useful in build scripts |
 | `push [--prune] [--dry-run] [--check]` | Read locale files and upload translations to Turjuman |
-| `check [--locale <code>] [--check <id...>] [--approved]` | Run advisory QA checks and print the findings report |
+| `check [--locale <code>] [--check <id...>]` | Run advisory QA checks and print the findings report |
 
 ### `pull` options
 
 | Flag | Effect |
 |---|---|
-| `--working` | Pull the current working (draft) values instead of the last-approved values |
+| `--working` | Pull the current working (draft) values instead of the accepted values |
 | `--exclude-stale` | Skip translations whose source value has changed since they were last written |
 
 ### `push` options
@@ -110,7 +110,6 @@ Environment variables take precedence over `~/.turjuman/auth.json` when both are
 |---|---|
 | `--locale <code>` | Restrict checks to a single locale (may be repeated) |
 | `--check <id>` | Run only the specified check(s) (may be repeated) |
-| `--approved` | Only check translations that have been approved (skips draft values) |
 
 ---
 

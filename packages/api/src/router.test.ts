@@ -131,22 +131,22 @@ describe("REST router", () => {
 			ref(addLocale?.responses?.["201"]?.content?.["application/json"].schema),
 		).toBe("#/components/schemas/Locale");
 
-		// score_translation (projected): a richer request body + response, both $ref'd.
-		const score = spec.paths["/v1/projects/{id}/translations/score"]?.post;
-		expect(ref(score?.requestBody?.content["application/json"].schema)).toBe(
-			"#/components/schemas/ScoreTranslationBody",
+		// run_qa_checks (projected): a richer request body + response, both $ref'd.
+		const checks = spec.paths["/v1/projects/{id}/checks"]?.post;
+		expect(ref(checks?.requestBody?.content["application/json"].schema)).toBe(
+			"#/components/schemas/RunChecksBody",
 		);
 		expect(
-			ref(score?.responses?.["200"]?.content?.["application/json"].schema),
-		).toBe("#/components/schemas/Translation");
+			ref(checks?.responses?.["200"]?.content?.["application/json"].schema),
+		).toBe("#/components/schemas/QaReport");
 
 		// Each referenced component is defined exactly once.
 		for (const name of [
 			"Project",
 			"Locale",
 			"AddLocaleBody",
-			"ScoreTranslationBody",
-			"Translation",
+			"RunChecksBody",
+			"QaReport",
 		]) {
 			expect(spec.components.schemas[name]).toBeDefined();
 		}

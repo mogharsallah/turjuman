@@ -16,7 +16,7 @@ export const qaOps: Operation[] = [
 	op({
 		name: "run_qa_checks",
 		description:
-			"Run deterministic QA checks on translations (ICU/placeholder/plural/markup/length/whitespace/punctuation/empty/glossary/duplicate/stale). Advisory — run this before approving, then fix any errors. Returns findings grouped by locale with error/warning/info counts. Prefer passing a single `locale`.",
+			"Run deterministic QA checks on translations (ICU/placeholder/plural/markup/length/whitespace/punctuation/empty/glossary/duplicate/stale). Advisory — run this before accepting, then fix any errors. Returns findings grouped by locale with error/warning/info counts. Prefer passing a single `locale`.",
 		input: z.object({
 			projectId,
 			locale: localeCode
@@ -29,10 +29,10 @@ export const qaOps: Operation[] = [
 					"Limit to specific check ids; omit to run all enabled checks.",
 				),
 			slot: z
-				.enum(["working", "approved"])
+				.enum(["working", "accepted"])
 				.optional()
 				.describe(
-					'Which value to check: the working draft (default) or the "approved" snapshot.',
+					"Which value to check: the working draft (default) or the accepted head.",
 				),
 		}),
 		output: qaReportSchema,

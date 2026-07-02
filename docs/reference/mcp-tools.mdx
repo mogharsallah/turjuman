@@ -1,84 +1,182 @@
 ---
-title: "MCP tools reference — Turjuman translation management server"
+title: "MCP reference: the three tools and the operation catalogue"
 sidebarTitle: "MCP Tools"
-description: "Complete catalogue of all Turjuman MCP tools — projects, keys, translations, glossary, QA, scoring, webhooks, and user administration."
+description: "Turjuman's MCP exposes three tools — search, describe, run_code — over the full operation catalogue: projects, keys, translations, runs, glossary, QA, and administration."
 ---
 
-Turjuman's MCP server exposes tools that cover every management operation — from creating projects and managing keys to running QA checks and administering users. Every tool call is authenticated with `Authorization: Bearer <api-key>`. You can mount the server directly in any MCP-compatible agent and start managing your translations programmatically.
+Turjuman's MCP is a single **code surface**. Instead of advertising one tool per capability, it exposes exactly three tools and lets the agent write code against the whole operation catalogue. Every call is authenticated with `Authorization: Bearer <api-key>`, and every operation runs through the same shared service layer — and the same authorization — as the REST API.
 
-## Projects & Locales
+## The three tools
 
 | Tool | Purpose |
+|---|---|
+| `search` | Search one knowledge base spanning the operations (with typed signatures) **and** the docs (guides, concepts, reference); results are segmented by kind with `total`/`hasMore`. Pass a `query` (narrow with `kind`), or omit it for a cold-start orientation. |
+| `describe` | Full detail for one result `id` — an operation's typed input fields, output, signature, and hints, or a whole docs page. |
+| `run_code` | Run TypeScript that calls `await turjuman.<operation>(args)` and returns a value; the sandbox has no network or filesystem, and only the final result returns. |
+
+The pattern is **search → describe → run_code**: find the operation, confirm its exact arguments, then write the program. The operation `id`s that `search` returns (`op:<name>`) match the operation names in the catalogue below, and every one is callable from `run_code`. See the [MCP guide](/guides/code-mode) for worked examples and the `run_code` result shape.
+
+## The operation catalogue
+
+These are the operations you call from `run_code` (and that the REST API projects where they are file-shaped). Discover them at runtime with `search`/`describe`; this catalogue is the human-readable index.
+
+### Projects & locales
+
+| Operation | Purpose |
 |---|---|
 | `list_projects` | List all projects you can access |
 | `get_project` | Fetch a single project by ID |
 | `create_project` | Create a new project (requires `baseLocale`) |
-| `update_project` | Update project settings (name, base locale, etc.) |
+| `update_project` | Update project settings — name, base locale, and `requireHumanAccept` |
 | `list_locales` | List all locales configured for a project |
 | `add_locale` | Add a new target locale to a project |
 
-## Keys
+### Branches
 
-| Tool | Purpose |
+A **branch** is a copy-on-write line of work over a project's keys and translations; `main` always exists and is the safe root. See [Branching & releases](/concepts/branching-and-releases). These operations are **MCP-only** — there is no REST binding for them.
+
+| Operation | Purpose |
+|---|---|
+| `list_branches` | List a project's branches (`main` always exists) |
+| `get_branch` | Fetch a single branch by ID |
+| `create_branch` | Fork a copy-on-write branch off a parent (default `main`) — for a feature, experiment, or A/B variant; needs a write role |
+| `merge_branch` | Merge a branch into its parent: transport its accepted values (spends no budget), surface any two-sided change as an escalation, then close the branch (`merged`). Review-level |
+
+### Namespaces
+
+| Operation | Purpose |
+|---|---|
+| `list_namespaces` | List a project's namespaces |
+| `get_namespace` | Fetch a single namespace by ID or name |
+| `create_namespace` | Create a namespace (an optional grouping of keys) |
+| `update_namespace` | Update a namespace's title, description, or lifecycle |
+
+### Keys
+
+| Operation | Purpose |
 |---|---|
 | `list_keys` | List keys in a project (paged: `limit` + `nextCursor`) |
 | `search_keys` | Full-text search across key names and descriptions (paged) |
-| `get_key` | Fetch a single key by ID or name |
-| `create_key` | Create a key — optionally set `description`, `tags`, `maxLength`, `plural` |
+| `get_key` | Fetch a single key and its translations, by name (optionally within a namespace) |
+| `create_key` | Create a key — optionally set `namespace`, `description`, `tags`, `maxLength`, `plural`, `baseValue` |
 | `update_key` | Update key metadata (description, tags, maxLength, plural) |
+| `rename_key` | Rename or re-namespace a key, preserving its id and all translations |
 | `delete_key` | Hard-delete a key and all its translations — requires `confirm: true` |
 
-## Translations
+### Translations
 
-| Tool | Purpose |
+| Operation | Purpose |
 |---|---|
 | `get_translations` | Fetch translations by key (all locales) or by locale (paged) |
 | `list_untranslated` | List keys that have no value for a given locale (paged) |
-| `list_stale` | List translations whose source value has changed since they were written (paged) |
-| `set_translation` | Write a single working `value` for a key/locale pair |
-| `bulk_set_translations` | Write up to 500 translation entries in one call; unknown keys are silently skipped |
-| `set_translation_status` | Advance the workflow status of a translation (e.g. `approved`) |
+| `list_stale` | List cells whose source value has changed since they were written (paged) |
+| `set_translation` | Write a working draft `value` for a key/locale; the cell becomes `proposed` |
+| `bulk_set_translations` | Write up to 500 draft entries in one call; unknown keys are silently skipped |
+| `accept_translation` | Accept a proposed value: append a version and advance the cell's `head` (a compare-and-swap). Honors `requireHumanAccept` |
 
-## Glossary & Translation Memory
+### Runs
 
-| Tool | Purpose |
+A **run** is the controlled write primitive that records what an agent did across a set of cells — it gives idempotency, resumability, and a recorded budget.
+
+| Operation | Purpose |
+|---|---|
+| `start_run` | Open a run on a branch (records `trigger`, `valueSource`, `idempotencyKey`) |
+| `get_run` | Fetch a run's status and progress |
+| `list_runs` | List runs for a project or branch |
+| `finish_run` | Close a run, recording its final status and `budgetSpent` |
+| `cancel_run` | Cancel an in-flight run |
+
+### Releases
+
+A **release** is an immutable shipped snapshot that pins one branch's accepted view; **"live" is the latest release**, and CI pulls one to build a reproducible bundle. See [Branching & releases](/concepts/branching-and-releases). These operations are **MCP-only** — there is no REST binding for them.
+
+| Operation | Purpose |
+|---|---|
+| `create_release` | Cut an immutable release pinning a branch's accepted view (own cells + fall-through) as fixed `{ keyId, locale, versionRef }` entries; supersedes the prior open release on the same branch. `locales` defaults to all. Needs a write role |
+| `list_releases` | List the project's releases (metadata only) — read-only |
+| `get_release` | Fetch one release with its full pinned entries (the snapshot of what shipped) — read-only |
+
+### Field reports
+
+A **field report** is production reporting that a shipped string is wrong — the one fact the in-loop agent can't know from its own context. Filing reopens the cell for a fix; resolving compounds the correction into reusable context. See [Branching & releases](/concepts/branching-and-releases). These operations are **MCP-only** — there is no REST binding for them.
+
+| Operation | Purpose |
+|---|---|
+| `file_field_report` | Report a shipped string as wrong — reopens the targeted cell (`accepted → proposed`) so a run can fix it; `releaseRef` names the release that was live. Needs a write role |
+| `list_field_reports` | List the project's field reports — read-only |
+| `resolve_field_report` | Close a report and optionally spawn a gold example (base → the fix) or a glossary term, so the correction becomes reusable context. Review-level |
+
+### Context
+
+The **context cascade** is the curated context an agent translates against — scoped voice, constraints, glossary, and examples, folded for one `key × locale`. See [The context cascade](/concepts/context-cascade).
+
+| Operation | Purpose |
+|---|---|
+| `list_context_rules` | List the project's context rules (voice / length / format / compliance), each scoped and folded by its merge operator |
+| `create_context_rule` | Create a scoped context rule; `kind` picks the payload shape and `operator` defaults from it (voice→override, compliance→restrict) |
+| `update_context_rule` | Update a rule's payload, operator, `hard` flag, or lifecycle (retire it with `retired`/`archived`) |
+| `delete_context_rule` | Delete a context rule |
+| `resolve_context` | Resolve the folded cascade for one key × locale: voice, constraints, glossary, examples, provenance, conflicts, locale shape, and the review-depth signal |
+| `get_brief` | The agent briefing for one key × locale — the key, its base value, and the resolved cascade. The single read to make before translating a string |
+
+### Examples
+
+| Operation | Purpose |
+|---|---|
+| `find_examples` | Retrieve the most relevant examples for one key × locale, ranked by proximity → quality → recency (deterministic, no embeddings) |
+| `list_examples` | List the project's stored translation examples (the corpus) |
+| `add_example` | Add a `source → target` example, scoped for retrieval; use `gold` quality for vetted human pairs |
+| `remove_example` | Delete a stored example |
+
+### Glossary
+
+A glossary term may carry a `scope` (absent = project-wide) and merges into the cascade by **union**; both `add_glossary_term` and `update_glossary_term` accept it, and `update_glossary_term` also takes a `lifecycle` to retire a term.
+
+| Operation | Purpose |
 |---|---|
 | `list_glossary` | List all glossary terms for a project |
-| `add_glossary_term` | Add a new term to the glossary |
-| `update_glossary_term` | Update an existing glossary term |
+| `add_glossary_term` | Add a new term to the glossary — optional `scope` narrows it to a namespace/key |
+| `update_glossary_term` | Update an existing glossary term — translations, flags, `scope`, or `lifecycle` |
 | `remove_glossary_term` | Remove a term from the glossary |
-| `lookup_translation_memory` | Find prior phrasings for a value — searches exact, normalized, and bigram-fuzzy matches |
 
-## Quality (QA)
+### Quality (QA)
 
-| Tool | Purpose |
+| Operation | Purpose |
 |---|---|
-| `run_qa_checks` | Run advisory checks — accepts `{ projectId, locale?, checks?, slot? }` |
+| `run_qa_checks` | Run advisory checks — accepts `{ projectId, locale?, checks?, slot? }`, where `slot` is `working` or `accepted` |
 | `get_qa_config` | Read the per-project QA configuration |
 | `set_qa_config` | Write the per-project QA configuration (enable/disable checks, remap severities, add ignores) |
 
-## Webhooks & Lifecycle
+### Escalations
 
-| Tool | Purpose |
+An **escalation** is the review router's human terminal exit — opened only for an irreducible judgment the agent can't resolve by re-looping. See [the escalation flow](/concepts/lifecycle#escalations-resolve-the-escalated-state).
+
+| Operation | Purpose |
+|---|---|
+| `escalate_translation` | Flip the cell to `escalated` and open an escalation with a reason — for irreducible judgment only |
+| `list_escalations` | List the project's escalations, optionally filtered by status (`open` / `resolved`) |
+| `claim_escalation` | Claim an open escalation (a compare-and-swap — a second concurrent claim loses) |
+| `resolve_escalation` | Accept the chosen value and optionally spawn a gold example or glossary term so the decision becomes reusable context |
+
+### Comments
+
+| Operation | Purpose |
+|---|---|
+| `add_comment` | Add a comment to a `(key, locale)` string — threaded discussion shared across branches; use `parentId` to reply |
+| `list_comments` | List the comment thread on a `(key, locale)` string |
+
+### Webhooks & lifecycle
+
+| Operation | Purpose |
 |---|---|
 | `list_webhooks` | List all webhooks registered for a project |
 | `add_webhook` | Register a new webhook — the signing secret is returned only once at creation time |
 | `remove_webhook` | Remove a registered webhook |
 | `delete_project` | Permanently delete a project and all its data — requires `confirm: true` |
 
-## Quality Scoring
+### Administration
 
-| Tool | Purpose |
-|---|---|
-| `score_translation` | Submit an MQM quality score (0–100) for a single translation; routes to `needs_review` or `approved` based on project threshold |
-| `review_translations` | Submit batch review decisions for multiple translations in one call |
-| `list_for_review` | List translations that are currently in the `needs_review` state (paged) |
-| `get_score_config` | Read the per-project scoring configuration (threshold, auto-approve settings) |
-| `set_score_config` | Write the per-project scoring configuration |
-
-## Administration
-
-| Tool | Purpose |
+| Operation | Purpose |
 |---|---|
 | `list_users` | List users in your organisation |
 | `create_user` | Create a new user account |
@@ -91,11 +189,9 @@ Turjuman's MCP server exposes tools that cover every management operation — fr
 | `list_api_keys` | List all API keys in your organisation |
 | `revoke_api_key` | Permanently revoke an API key |
 
----
-
 ## Paging
 
-Tools that return lists support cursor-based pagination. Pass `limit` (default `100`, max `200`) to control page size. When there are more results, the response includes a `nextCursor` field — pass it back as `cursor` in your next call to retrieve the following page. Continue until `nextCursor` is absent or `null`.
+List operations support cursor-based pagination. Pass `limit` (default `100`, max `200`) to control page size. When there are more results, the response includes a `nextCursor` — pass it back as `cursor` in your next call. Continue until `nextCursor` is absent or `null`.
 
 ```json
 // First call
@@ -105,78 +201,25 @@ Tools that return lists support cursor-based pagination. Pass `limit` (default `
 { "projectId": "proj_xxx", "limit": 50, "cursor": "eyJpZCI6Mn0" }
 ```
 
----
+## Authorization scales with the key
 
-## Code mode
+The mode never changes the *permissions*. Whether an operation is called directly or from inside a `run_code` sandbox, the request is dispatched to the same handler with the same authenticated context, and authorization is enforced in the core — not merely hidden from a tool list.
 
-A connection runs in one of two **mutually exclusive** modes, chosen with the
-`mode` URL parameter:
+- A **read-only key** (`readOnly: true`) can only perform read operations (`list_*`, `get_*`, `search_*`); a write is denied in the core.
+- A key inherits its user's roles, so a key with global **MEMBER** role cannot invoke org-level administration operations.
 
-| Mode | URL | Advertised tools |
+See [Roles & permissions](/concepts/roles-and-permissions) for the underlying model.
+
+## Operation hints
+
+Each operation declares behaviour hints in its schema, visible through `describe`, so an agent framework can make safer decisions (for example, confirming before a destructive action).
+
+| Property | Operations where set | Meaning |
 |---|---|---|
-| **Classic** (default) | `…/` or `…/?mode=classic` | The full catalogue above |
-| **Code** | `…/?mode=code` | Only `search` + `describe` + `run_code` |
-
-In code mode the agent calls operations from inside a sandboxed TypeScript program
-instead of one tool at a time, which collapses a multi-step job into a single call
-and keeps the full catalogue out of the model's context.
-
-| Tool | Purpose |
-|---|---|
-| `search` | Search one knowledge base spanning the operations (with typed signatures) **and** the docs (guides, concepts, reference); results are segmented by kind with `total`/`hasMore`. Pass a `query` (narrow with `kind`), or omit it for a cold-start orientation |
-| `describe` | Full detail for one result `id` — an operation's typed input fields, output, signature, and hints, or a whole docs page |
-| `run_code` | Run TypeScript that calls `await turjuman.<operation>(args)` and returns a value; the sandbox has no network/filesystem, and only the final result is returned |
-
-Code mode runs the same operations with the same authorization — it is a
-different surface, not a different permission set. See the
-[Code mode guide](/guides/code-mode) for usage and the result shape. `?mode=code`
-cannot be combined with the `tools` / `groups` scoping params below.
-
----
-
-## Toolset scoping
-
-You can limit which tools are exposed when you mount the MCP server. This is useful for read-only agents, narrowly scoped workflows, or least-privilege API keys.
-
-### Scoping by API key
-
-The tools available to an agent are automatically constrained by the permissions of the API key used to authenticate:
-
-- A **read-only key** can only invoke read tools (`list_*`, `get_*`, `search_*`, `lookup_*`).
-- A key with global **MEMBER** role cannot invoke org-level administration tools.
-
-### Scoping by URL parameters
-
-You can further restrict tools at mount time using query parameters on the MCP server URL:
-
-| Parameter | Value | Effect |
-|---|---|---|
-| `tools` | Comma-separated tool names | Expose only the listed tools |
-| `groups` | Comma-separated group names | Expose only tools in the listed groups |
-
-Available group names: `projects`, `keys`, `translations`, `glossary`, `webhooks`, `qa`, `scoring`, `admin`, `read`.
-
-The `read` group is a convenience alias that includes all list/get/search/lookup tools across every resource type.
-
-```
-https://<your-mcp-url>/?groups=read,translations
-https://<your-mcp-url>/?tools=list_keys,get_key,set_translation
-```
-
----
-
-## Tool behavior hints
-
-These hints are declared in each tool's MCP schema so compatible agent frameworks can make safer decisions (e.g. confirming before a destructive action).
-
-| Property | Tools where set | Meaning |
-|---|---|---|
-| `readOnlyHint: true` | All `list_*`, `get_*`, `search_*`, `lookup_*` | Tool does not modify any server state |
-| `destructiveHint: true` | `delete_key`, `delete_project`, `remove_webhook`, `revoke_api_key`, `remove_member`, `remove_glossary_term` | Tool permanently removes data |
-| `idempotentHint: true` | `set_translation`, `set_translation_status`, `set_qa_config`, `set_user_role`, `set_member_role` | Calling the tool multiple times with the same arguments produces the same result |
-
----
+| `readOnlyHint: true` | All `list_*`, `get_*`, `search_*` | The operation does not modify any server state |
+| `destructiveHint: true` | `delete_key`, `delete_project`, `remove_webhook`, `revoke_api_key`, `remove_member`, `remove_glossary_term` | The operation permanently removes data |
+| `idempotentHint: true` | e.g. `set_translation`, `set_qa_config`, `set_user_role`, `set_member_role` | Calling it again with the same arguments produces the same result |
 
 <Note>
-When a tool encounters a validation or API error, it returns the error message as MCP `content` with `isError: true` rather than throwing. This means your agent can read the error description and adjust its next action without the tool call itself failing the chain.
+When an operation hits a validation or API error, it returns the error message as MCP `content` with `isError: true` rather than throwing. Your agent can read the error description and adjust its next action without the call itself failing the chain.
 </Note>

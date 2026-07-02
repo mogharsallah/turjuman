@@ -183,6 +183,14 @@
             "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$",
             "description": "Source locale every key is authored in, e.g. \"en\"."
           },
+          "contextRevision": {
+            "type": "integer",
+            "description": "Monotonic counter bumped on any scoped context write (context-staleness)."
+          },
+          "requireHumanAccept": {
+            "type": "boolean",
+            "description": "When true, only a human (not a run) may accept a proposed translation."
+          },
           "createdAt": {
             "type": "string"
           },
@@ -196,6 +204,8 @@
           "name",
           "slug",
           "baseLocale",
+          "contextRevision",
+          "requireHumanAccept",
           "createdAt",
           "updatedAt"
         ]
@@ -214,6 +224,13 @@
           "name": {
             "type": "string"
           },
+          "lifecycle": {
+            "type": "string",
+            "enum": [
+              "active",
+              "deprecated"
+            ]
+          },
           "createdAt": {
             "type": "string"
           }
@@ -221,6 +238,7 @@
         "required": [
           "projectId",
           "code",
+          "lifecycle",
           "createdAt"
         ]
       },
@@ -260,13 +278,16 @@
       "TranslationKey": {
         "type": "object",
         "properties": {
+          "id": {
+            "type": "string",
+            "description": "Opaque key identity (stable across renames)."
+          },
           "projectId": {
             "type": "string"
           },
-          "namespace": {
+          "namespaceId": {
             "type": "string",
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
-            "description": "Logical grouping (file/feature). Defaults to \"default\"."
+            "description": "Namespace grouping (FK); absent = no namespace."
           },
           "name": {
             "type": "string",
@@ -297,6 +318,42 @@
             ],
             "description": "\"active\" when present in the latest source import; \"deprecated\" when absent but retained."
           },
+          "noTranslate": {
+            "type": "boolean",
+            "description": "Keep the whole key verbatim across locales (brand names, codes)."
+          },
+          "sourceRevision": {
+            "type": "string",
+            "description": "Revision token of the base value; bumps on a base edit and stales dependents."
+          },
+          "introducedOnBranchId": {
+            "type": "string"
+          },
+          "placements": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "surface": {
+                  "type": "string"
+                },
+                "screen": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string"
+                },
+                "order": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "surface",
+                "screen",
+                "role"
+              ]
+            }
+          },
           "lastSeenAt": {
             "type": "string",
             "description": "ISO timestamp of the last import that created, updated, or reactivated this key."
@@ -309,12 +366,13 @@
           }
         },
         "required": [
+          "id",
           "projectId",
-          "namespace",
           "name",
           "plural",
           "tags",
           "state",
+          "sourceRevision",
           "createdAt",
           "updatedAt"
         ]
@@ -397,75 +455,52 @@
           "projectId": {
             "type": "string"
           },
-          "localeCode": {
+          "branchId": {
+            "type": "string"
+          },
+          "keyId": {
+            "type": "string"
+          },
+          "locale": {
             "type": "string",
             "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$"
-          },
-          "namespace": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
-          },
-          "keyName": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
           },
           "value": {
             "type": "string",
             "description": "ICU MessageFormat string (plain string for simple values)."
           },
-          "status": {
+          "head": {
+            "type": "integer",
+            "description": "Seq of the current accepted version (the branch-head / CAS token)."
+          },
+          "lifecycle": {
             "type": "string",
             "enum": [
               "untranslated",
-              "translated",
-              "needs_review",
-              "approved"
+              "proposed",
+              "accepted",
+              "escalated",
+              "retired"
             ]
           },
-          "approvedValue": {
-            "type": "string",
-            "description": "Last approved value — the snapshot delivery ships. Set only on approval (status → \"approved\")."
+          "stale": {
+            "type": "boolean"
           },
           "sourceRef": {
             "type": "string",
-            "description": "The base value this working `value` was written against; used to derive staleness."
+            "description": "The base revision this value was written against; derives staleness."
           },
           "origin": {
             "type": "string",
             "enum": [
               "human",
-              "llm",
-              "tm",
-              "mt",
+              "agent",
               "import"
             ],
             "description": "How the current `value` was produced. Absent when unknown."
           },
-          "score": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 100,
-            "description": "Latest AI quality score (0–100) for the working value; absent until scored."
-          },
-          "scoreComment": {
-            "type": "string",
-            "description": "The reviewer model's rationale for the latest score."
-          },
-          "scoredBy": {
-            "type": "string",
-            "description": "userId of the key that submitted the latest score."
-          },
-          "scoredAt": {
-            "type": "string",
-            "description": "ISO timestamp of the latest score."
-          },
-          "scoreModel": {
-            "type": "string",
-            "description": "Identifier of the model that produced the latest score (provenance)."
-          },
-          "promptVersion": {
-            "type": "string",
-            "description": "Version of the scoring methodology/prompt the latest score was produced under."
+          "lockedByRunId": {
+            "type": "string"
           },
           "updatedBy": {
             "type": "string",
@@ -477,11 +512,12 @@
         },
         "required": [
           "projectId",
-          "localeCode",
-          "namespace",
-          "keyName",
+          "branchId",
+          "keyId",
+          "locale",
           "value",
-          "status",
+          "lifecycle",
+          "stale",
           "updatedBy",
           "updatedAt"
         ]
@@ -551,13 +587,6 @@
                 },
                 "value": {
                   "type": "string"
-                },
-                "status": {
-                  "type": "string",
-                  "enum": [
-                    "translated",
-                    "approved"
-                  ]
                 }
               },
               "required": [
@@ -698,13 +727,6 @@
             "items": {
               "type": "string"
             }
-          },
-          "slot": {
-            "type": "string",
-            "enum": [
-              "working",
-              "approved"
-            ]
           }
         }
       },
@@ -813,204 +835,6 @@
                 }
               }
             }
-          }
-        }
-      },
-      "ScoreTranslationBody": {
-        "type": "object",
-        "properties": {
-          "locale": {
-            "type": "string",
-            "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$"
-          },
-          "name": {
-            "type": "string"
-          },
-          "namespace": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
-          },
-          "score": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 100
-          },
-          "comment": {
-            "type": "string"
-          },
-          "model": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "locale",
-          "name",
-          "score"
-        ]
-      },
-      "ReviewResult": {
-        "type": "object",
-        "properties": {
-          "written": {
-            "type": "integer"
-          },
-          "skipped": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "approved": {
-            "type": "integer",
-            "description": "How many writes auto-promoted to approved."
-          },
-          "flagged": {
-            "type": "integer",
-            "description": "How many writes were flagged needs_review."
-          }
-        },
-        "required": [
-          "written",
-          "skipped",
-          "approved",
-          "flagged"
-        ]
-      },
-      "ReviewTranslationsBody": {
-        "type": "object",
-        "properties": {
-          "locale": {
-            "type": "string",
-            "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$"
-          },
-          "entries": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string"
-                },
-                "namespace": {
-                  "type": "string",
-                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
-                },
-                "score": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 100
-                },
-                "comment": {
-                  "type": "string"
-                },
-                "model": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "name",
-                "score"
-              ]
-            },
-            "minItems": 1,
-            "maxItems": 500
-          }
-        },
-        "required": [
-          "locale",
-          "entries"
-        ]
-      },
-      "ScorePrompt": {
-        "type": "object",
-        "properties": {
-          "messages": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ScorePromptMessage"
-            }
-          },
-          "promptVersion": {
-            "type": "string",
-            "description": "Version of the scoring methodology; stamp this when submitting the score."
-          },
-          "nextCursor": {
-            "type": "string",
-            "description": "Opaque cursor for the next page of the batch (review_locale) form."
-          }
-        },
-        "required": [
-          "messages",
-          "promptVersion"
-        ]
-      },
-      "ScorePromptMessage": {
-        "type": "object",
-        "properties": {
-          "role": {
-            "type": "string",
-            "enum": [
-              "user",
-              "assistant"
-            ]
-          },
-          "text": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "role",
-          "text"
-        ]
-      },
-      "ScoreConfig": {
-        "type": "object",
-        "properties": {
-          "projectId": {
-            "type": "string"
-          },
-          "threshold": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 100,
-            "description": "Minimum score (0–100) to be eligible for auto-approve."
-          },
-          "autoApprove": {
-            "type": "boolean",
-            "description": "When true, a high score on machine-origin work auto-promotes it to approved."
-          },
-          "guidance": {
-            "type": "string",
-            "description": "Per-project evaluation guidance, merged into the scoring prompt."
-          },
-          "updatedBy": {
-            "type": "string"
-          },
-          "updatedAt": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "projectId",
-          "threshold",
-          "autoApprove",
-          "updatedBy",
-          "updatedAt"
-        ]
-      },
-      "ScoreConfigBody": {
-        "type": "object",
-        "properties": {
-          "threshold": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 100
-          },
-          "autoApprove": {
-            "type": "boolean"
-          },
-          "guidance": {
-            "type": "string"
           }
         }
       }
@@ -1733,7 +1557,7 @@
       "get": {
         "operationId": "getV1ProjectsByIdBundle",
         "summary": "Export a delivery bundle for a locale",
-        "description": "Approved values by default; pass slot=working to ship drafts. Paginate with limit + cursor.",
+        "description": "Accepted values by default; pass slot=working to ship drafts. Paginate with limit + cursor.",
         "tags": [
           "Translations"
         ],
@@ -1756,7 +1580,7 @@
                 "working"
               ]
             },
-            "description": "working = ship drafts instead of approved"
+            "description": "working = ship drafts instead of accepted"
           },
           {
             "in": "query",
@@ -2173,547 +1997,6 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/QaConfigBody"
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "in": "path",
-            "name": "id",
-            "required": true
-          }
-        ]
-      }
-    },
-    "/v1/projects/{id}/translations/score": {
-      "post": {
-        "operationId": "postV1ProjectsByIdTranslationsScore",
-        "summary": "Submit an AI quality score for one translation",
-        "description": "Record an MQM 0–100 score and route the translation (needs_review / translated / approved).",
-        "tags": [
-          "Scoring"
-        ],
-        "responses": {
-          "200": {
-            "description": "The updated translation, with its new status and score",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Translation"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid API key",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ScoreTranslationBody"
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "in": "path",
-            "name": "id",
-            "required": true
-          }
-        ]
-      }
-    },
-    "/v1/projects/{id}/translations/review": {
-      "post": {
-        "operationId": "postV1ProjectsByIdTranslationsReview",
-        "summary": "Submit AI quality scores for many translations in a locale",
-        "tags": [
-          "Scoring"
-        ],
-        "responses": {
-          "200": {
-            "description": "Review summary (written/approved/flagged + skipped keys)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReviewResult"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid API key",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReviewTranslationsBody"
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "in": "path",
-            "name": "id",
-            "required": true
-          }
-        ]
-      }
-    },
-    "/v1/projects/{id}/translations/for-review": {
-      "get": {
-        "operationId": "getV1ProjectsByIdTranslationsForReview",
-        "summary": "List keys flagged needs_review for a locale",
-        "description": "Keys whose translation scored below the project threshold. Paginate with limit + cursor.",
-        "tags": [
-          "Scoring"
-        ],
-        "parameters": [
-          {
-            "in": "query",
-            "name": "locale",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Locale code"
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Page size; enables pagination"
-          },
-          {
-            "in": "query",
-            "name": "cursor",
-            "schema": {
-              "type": "string"
-            },
-            "description": "Opaque cursor from a previous page"
-          },
-          {
-            "schema": {
-              "type": "string"
-            },
-            "in": "path",
-            "name": "id",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Flagged keys (and nextCursor when paginated)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "locale": {
-                      "type": "string"
-                    },
-                    "keys": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/TranslationKey"
-                      }
-                    },
-                    "nextCursor": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "locale",
-                    "keys"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid API key",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/projects/{id}/translations/score-prompt": {
-      "get": {
-        "operationId": "getV1ProjectsByIdTranslationsScorePrompt",
-        "summary": "Fetch the assembled MQM scoring prompt for a locale",
-        "description": "Returns the rubric + project guidance + glossary + source/target for one key (pass name) or a page of the locale (omit name). Grade it, then POST the score back.",
-        "tags": [
-          "Scoring"
-        ],
-        "parameters": [
-          {
-            "in": "query",
-            "name": "locale",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Locale code"
-          },
-          {
-            "in": "query",
-            "name": "name",
-            "schema": {
-              "type": "string"
-            },
-            "description": "Key name (single-string prompt); omit for a page"
-          },
-          {
-            "in": "query",
-            "name": "namespace",
-            "schema": {
-              "type": "string"
-            },
-            "description": "Key namespace (with name)"
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Page size for the batch form"
-          },
-          {
-            "in": "query",
-            "name": "cursor",
-            "schema": {
-              "type": "string"
-            },
-            "description": "Opaque cursor for the batch form"
-          },
-          {
-            "schema": {
-              "type": "string"
-            },
-            "in": "path",
-            "name": "id",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "The assembled scoring prompt (messages + promptVersion)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScorePrompt"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid API key",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/projects/{id}/score-config": {
-      "get": {
-        "operationId": "getV1ProjectsByIdScoreConfig",
-        "summary": "Get the project's AI-scoring configuration",
-        "tags": [
-          "Scoring"
-        ],
-        "responses": {
-          "200": {
-            "description": "The project's AI-scoring configuration",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScoreConfig"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid API key",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "in": "path",
-            "name": "id",
-            "required": true
-          }
-        ]
-      },
-      "put": {
-        "operationId": "putV1ProjectsByIdScoreConfig",
-        "summary": "Set the project's AI-scoring configuration",
-        "tags": [
-          "Scoring"
-        ],
-        "responses": {
-          "200": {
-            "description": "The updated AI-scoring configuration",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScoreConfig"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid API key",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ScoreConfigBody"
               }
             }
           }

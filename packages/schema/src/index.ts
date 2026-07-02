@@ -7,13 +7,13 @@
  * in no AWS SDK, so the developer CLI and any third-party tooling can depend on
  * it without the DynamoDB/server weight (that lives in `@turjuman/core`).
  */
+export * from "./cascade.js";
 export * from "./domain.js";
 export * from "./errors.js";
 export * from "./ids.js";
 export * from "./plural.js";
 export * as qa from "./qa/index.js";
 export * from "./rbac.js";
-export * as scoring from "./scoring/index.js";
 export * from "./transport.js";
 export * from "./validation.js";
 export * from "./wire.js";

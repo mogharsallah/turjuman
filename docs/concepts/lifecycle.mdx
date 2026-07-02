@@ -1,138 +1,175 @@
 ---
-title: "Continuous localization lifecycle: how Turjuman manages strings"
+title: "Translation lifecycle: cells, versions, and the five states"
 sidebarTitle: "Lifecycle"
-description: "How Turjuman moves source strings from ingest through translation and approval to delivery, and how key and translation state is tracked throughout."
+description: "How Turjuman models each translation as a living cell over an immutable version history — the five lifecycle states, acceptance, staleness, and delivery."
 ---
 
-Continuous localization means your translations move with your code rather than in a separate, infrequent release cycle. Just as you run tests on every commit, you push new source strings to Turjuman on every relevant change, let the translation pipeline run, and pull approved translations back in before shipping. Turjuman is designed around this loop: every stage is event-driven and automatable, and the state model ensures that nothing stale or unapproved reaches your users unless you explicitly ask for it.
+Continuous localization means your translations move with your code rather than in a separate release cycle. You push source strings on every relevant change, an agent translates each one, you accept the results, and you pull accepted translations back before shipping. Turjuman is built around this loop: every stage is automatable, and the state model keeps anything stale or unaccepted out of your delivery output unless you explicitly ask for it.
 
 ## The loop at a glance
 
 | # | Stage | Who drives it | What happens |
 |---|---|---|---|
-| 0 | **Provision** | Operator (OWNER/ADMIN) | Create the Turjuman project, set the base locale, configure settings. |
-| 1 | **Setup** | Operator | Add target locales, invite members, create a glossary, configure webhooks. |
-| 2 | **Ingest** | Developer / CI | Push new and changed source strings from your codebase into Turjuman. |
-| 3 | **Enrich** | Developer / Agent | Add context — descriptions, tags, glossary terms — to help translators and AI. |
-| 4 | **Translate** | Agent (LLM) / Human editor | Produce translations for each locale. Fills the working `value` slot. |
-| 5 | **Approve** | Reviewer (MANAGER/EDITOR) | Sign off on translations. Snapshots `value` into `approvedValue`. |
-| 6 | **Deliver** | Developer / CI | Pull approved translations out of Turjuman into your app's locale files. |
-| 7 | **Loop** | — | New source changes re-enter at Ingest; the cycle continues. |
+| 1 | **Define** | Developer / CI | Push source strings into Turjuman. New keys arrive `untranslated`; a changed base value re-stales its translations. |
+| 2 | **Translate** | Agent (LLM) / Human | Write a draft `value` for a locale. The cell becomes `proposed`. |
+| 3 | **Judge** | Agent / Human | Decide the draft is good enough (`accept`), feed an objection back and translate again (re-loop), or hand it to a human. |
+| 4 | **Accept** | Agent or Reviewer | Append an immutable version and advance the cell's `head`. The cell becomes `accepted`. |
+| 5 | **Deliver** | Developer / CI | Pull accepted translations into your app's locale files. |
+| 6 | **Stay correct** | — | A later edit to the source marks dependent cells `stale`; they re-enter the loop at step 2. |
 
-## Stage-by-stage breakdown
+There is no quality score and no threshold anywhere in this loop. The only stored quality signal is the cell's lifecycle state — the agent (or a human) re-judges faithfulness and tone against the *current* value every time it looks, so a frozen number would only go stale.
+
+## The cell: one living record per locale
+
+A **translation cell** is the living record for a single string in a single locale, identified by three coordinates — `(branchId, keyId, locale)`. It holds the working draft and all of its mutable state; the accepted history lives separately (see [Accepting appends a version](#accepting-appends-a-version)).
+
+| Field | Meaning |
+|---|---|
+| `value` | The working draft — the only mutable text. An ICU MessageFormat string. |
+| `lifecycle` | The entire review verdict (one of five states, below). No score. |
+| `head` | Pointer to the current accepted version (a version `seq`). Absent until the first accept. |
+| `stale` | `true` when the source value has moved on since this cell was written. Derived from `sourceRef`. |
+| `sourceRef` | The base revision this draft was translated *from*, captured when the draft was written. |
+| `origin` | How the current `value` was produced: `human`, `agent`, or `import`. |
+| `lockedByRunId` | Set while a [run](/reference/mcp-tools#runs) owns the cell, for in-flight exclusivity. |
+
+Because a cell is addressed by the key's opaque `keyId` rather than its name, renaming or moving a key never touches its translation cells — the data stays put while the label changes. See [Keys carry a stable identity](/concepts/architecture#keys-carry-a-stable-identity).
+
+## The five lifecycle states
+
+A cell's `lifecycle` is the whole answer to "can we ship this string?" It moves through five states:
+
+```
+untranslated ──► proposed ──► accepted
+                    ▲             │
+                    └──── escalated ────► (human decides)
+                                  │
+                              retired
+```
+
+| State | Meaning |
+|---|---|
+| `untranslated` | No value yet for this locale. |
+| `proposed` | A draft value is written and awaiting acceptance. |
+| `accepted` | The value is signed off — the agent self-accepted, or a human flipped it. Its text is committed to history. |
+| `escalated` | An irreducible judgment was routed to a human, who makes the call. |
+| `retired` | The cell is soft-deleted because its key was retired; the value is retained, not destroyed. |
+
+<Note>
+  The states form a router, not a one-way gate. An `accepted` cell whose source later changes is re-flagged `stale` and re-enters at `proposed`; an `escalated` cell returns to `proposed` or `accepted` once a human decides. A [field report](/concepts/branching-and-releases#field-reports-close-the-production-loop) against a shipped string is a third return edge — it reopens the cell `accepted → proposed` (marked `stale`) so a run fixes it. Regeneration is cheap, so most "failures" simply loop again rather than blocking.
+</Note>
+
+### Escalations resolve the `escalated` state
+
+`escalated` is the agent's *terminal* exit — reserved for an irreducible judgment it can't settle by re-looping (a legal nuance, a [restrict conflict](/concepts/context-cascade#cross-tier-overrides-raise-the-review-depth) the cascade surfaced). It opens a small escalation record and routes the cell to a human, who resolves it:
 
 <Steps>
 
-<Step title="Provision">
-An OWNER or ADMIN creates a project and sets its `baseLocale` — the language your developers write strings in. This is a one-time setup step. Everything else in the project is scoped to that base locale.
+<Step title="Open">
+The agent calls `escalate_translation` with a reason. The cell flips to `escalated`, and an escalation opens against it (assigned to the project MANAGER by default). An `escalation.opened` [webhook](/guides/webhooks) fires.
 </Step>
 
-<Step title="Setup">
-With a project in place, an OWNER or ADMIN adds the target locales you want to support, invites team members and assigns them project roles, populates the glossary with preferred translations and terms that must not be translated, and optionally configures webhooks to notify external systems when translation events occur.
+<Step title="Claim">
+A human calls `claim_escalation` to take ownership. Claiming is a **compare-and-swap** on the assignee — if two people claim at once, the first wins and the second is rejected — so no two reviewers work the same cell.
 </Step>
 
-<Step title="Ingest">
-Your developers or CI pipeline calls `turjuman push` (or the equivalent REST import endpoint) to sync the current set of source strings into Turjuman. Turjuman compares the incoming keys against what it already holds:
-
-- **New keys** are created with status `untranslated` in every target locale.
-- **Changed base values** cause all existing translations for that key to be flagged `stale`.
-- **Keys that no longer appear** are marked `deprecated` within their namespace. If a deprecated key reappears in a later push, it is automatically restored to `active`.
-
-<Note>
-  Ingest is namespace-scoped. You can push one namespace at a time, which makes it safe to integrate into incremental CI jobs that only touch changed parts of your codebase.
-</Note>
-</Step>
-
-<Step title="Enrich">
-After ingestion, you (or an AI agent) can add context to keys: human-readable `description` fields, `tags` for filtering, and links to glossary terms. This step is optional but significantly improves translation quality, especially when using LLM-based translation. Good descriptions tell a translator where the string appears and what tone is appropriate.
-</Step>
-
-<Step title="Translate">
-An AI agent with an EDITOR role (or a human translator) writes translations into the working `value` slot. Translations start at status `untranslated` and move to `translated` once a value is written.
-
-The `origin` field is set automatically based on how the translation was produced:
-
-| Origin value | Meaning |
-|---|---|
-| `llm` | Written by a large language model via the MCP server |
-| `human` | Written by a person in the editor UI or via MCP |
-| `tm` | Matched from translation memory |
-| `mt` | Produced by a machine translation service |
-| `import` | Loaded via file import |
-</Step>
-
-<Step title="Approve">
-A reviewer with EDITOR or MANAGER role inspects the translated strings and approves the ones that meet quality standards. On approval:
-
-1. The translation's `status` moves from `translated` to `approved`.
-2. The current `value` is copied into the `approvedValue` snapshot.
-3. The `stale` flag is cleared (if it was set).
-
-Approval is the gate between "being worked on" and "ready to ship". Until a translation is approved, it will not appear in the default delivery output.
-</Step>
-
-<Step title="Deliver">
-Your developer or CI pipeline calls `turjuman pull` to export the approved translations as locale files. By default, `turjuman pull` outputs the `approvedValue` for every key — the stable, reviewed snapshot.
-
-```bash
-# Pull approved translations (default)
-turjuman pull
-
-# Pull working drafts instead
-turjuman pull --working
-```
-
-Use `--working` only in development environments where you want to preview in-progress translations before they are approved.
+<Step title="Resolve and accept">
+`resolve_escalation` accepts the chosen value (the cell's draft by default), which advances the cell to `accepted` exactly like a normal accept. Resolving may also **spawn a gold [example](/concepts/context-cascade#examples-are-retrieved-deterministically) or a glossary term**, so the human's decision becomes reusable context the next brief draws on.
 </Step>
 
 </Steps>
 
-## State model
+This is the whole human-review subsystem: a routed exit and a comment thread (`add_comment` / `list_comments`), with the cell's lifecycle as the entire verdict — no score, no review rounds.
 
-Understanding how Turjuman tracks state helps you predict what happens as strings and translations evolve.
+## Accepting appends a version
 
-### Key lifecycle: `active` and `deprecated`
+Accepting a translation does **not** overwrite anything. It appends an immutable **TranslationVersion** — a commit — to the cell's history and advances the cell's `head` to point at it. The accepted text lives in that version chain; the cell's mutable `value` is only ever the working draft.
 
-A TranslationKey is always in one of two states within its namespace:
+<Steps>
 
-- **`active`** — the key is present in the current source. It is pushed regularly and translations are expected to be maintained.
-- **`deprecated`** — the key was not present in the most recent push for its namespace. Turjuman retains deprecated keys and their translations rather than deleting them.
+<Step title="Propose">
+An agent or a person writes a draft with `set_translation`. The cell moves to `proposed` and records `sourceRef` — the base revision it was written against.
+</Step>
 
-If a deprecated key reappears in a subsequent push, Turjuman restores it to `active` automatically. This means renaming a namespace or temporarily removing a string does not destroy translation history.
+<Step title="Accept">
+`accept_translation` appends a new version (`seq = head + 1`) carrying the value, its `origin`, who accepted it (`acceptedBy` for a human, `runRef` for a run), and the base `sourceRevision` at accept time. The cell's `head` advances to the new `seq` and its `lifecycle` becomes `accepted`.
+</Step>
 
-<Warning>
-  Deprecation is namespace-scoped. If you push namespace `common` and omit a key that exists in namespace `auth`, the `auth` key is not affected. Always push the full contents of each namespace you intend to update.
-</Warning>
+<Step title="Re-accept later">
+Each subsequent accept appends another version and links it to the previous one (`prevVersionRef`), so the full accepted history of every string is preserved non-destructively.
+</Step>
 
-### Translation status: `untranslated → translated → approved`
+</Steps>
 
-Each translation moves forward along this chain:
+### The head pointer is the concurrency guard
+
+`head` does double duty as an optimistic lock. An accept is a **compare-and-swap**: it succeeds only if the cell's `head` is still the one the accepting party read. If two parties try to accept off the same `head`, the first wins and the second is rejected with a conflict — it then re-enters the loop with the winner's value as new context. There is no separate version integer to manage; the `head` pointer *is* the guard.
+
+## Who may accept: `requireHumanAccept`
+
+Each project carries a `requireHumanAccept` boolean.
+
+- **`false` (default)** — an agent's run can accept its own work. The loop is fully autonomous: translate, self-judge, accept.
+- **`true`** — a run-attributed accept is **rejected**; a run can only leave cells `proposed`. Only a human-attributed accept (no `runRef`) flips `proposed → accepted`. This is the one knob that puts a person in the loop — a single boolean, not a review subsystem.
+
+<Tip>
+  Set `requireHumanAccept: true` on `update_project` when you want a person to sign off on every string. Leave it `false` to let a trusted agent ship autonomously and reserve humans for escalations.
+</Tip>
+
+## Origin: where a value came from
+
+Every value records its `origin` — read-only provenance you can use to audit how much content was human-written versus model-produced.
+
+| Origin | Meaning |
+|---|---|
+| `human` | A person typed the value. |
+| `agent` | The connected model decided the value. |
+| `import` | The value was loaded from a file via the CLI or REST import. |
+
+A merge keeps a transported value's original origin, so there is no separate `merge` origin.
+
+## Staleness: when the source — or the context — moves
+
+A cell goes `stale` when the translation may no longer match what it should be. There are **two** triggers, and staleness is their union.
+
+**1. The base string changed (primary).** Each key carries a `sourceRevision` — a revision token derived from its base value. When you edit the base string, `sourceRevision` bumps. Every dependent cell stores the `sourceRef` it was translated against, and `stale` is simply the comparison:
 
 ```
-untranslated ──► translated ──► approved
+stale  ⇔  cell.sourceRef ≠ key.sourceRevision
 ```
 
-Status never moves backward automatically. If an approved translation is edited, it returns to `translated` (not `approved`) until it is reviewed again.
+**2. The context changed (secondary).** Because the [context cascade](/concepts/context-cascade) is the product, a change to it invalidates translations too. Any scoped context write — a new voice rule, a glossary term, a length constraint — bumps the project's `contextRevision` and marks the in-scope cells `stale`, so a string re-translates against the context it should now honour.
 
-### Dual-slot: `value` and `approvedValue`
+A stale translation is not blocked from delivery — you can still ship it — but the flag tells the loop the translation may be out of date, so the cell re-enters at `proposed`. List the affected cells with `list_stale`, and re-translate them inside a budgeted [run](/reference/mcp-tools#runs) — the run's budget ceiling is the natural back-pressure, so staleness only ever *marks* cells, never auto-translates. Accepting against the current source and context clears the flag.
 
-Every translation record holds two string slots:
+## Delivery: accepted values, with a working slot
 
-- **`value`** — the working draft. Updated on every write, regardless of who or what produced it.
-- **`approvedValue`** — the delivery snapshot. Only updated when the translation is approved.
+`turjuman pull` (or the REST bundle endpoint) exports the **accepted** value of every key — the text at the cell's `head`. A key that has never been accepted falls back to its source value, so an export is always complete.
 
-This separation means you can have active editing and a stable delivery channel running in parallel. Your app always sees the last approved version via `turjuman pull`, even while an editor is revising the draft.
+```bash
+# Pull accepted translations (default)
+turjuman pull
 
-### Staleness
+# Pull the in-progress working drafts instead
+turjuman pull --working
 
-When the base-locale `value` for a TranslationKey changes (for example, an English source string is reworded), all existing translations for that key in every target locale are automatically flagged `stale = true`. A stale translation is not blocked from delivery — you can still ship it — but the flag tells reviewers that the translation may no longer match the source.
+# Skip translations whose source has since changed
+turjuman pull --exclude-stale
+```
 
-Approving a stale translation clears the flag and takes a new `approvedValue` snapshot.
+Use `--working` only in development, when you want to preview drafts before they are accepted. Because the accepted history is immutable, your delivery channel stays stable even while an editor revises the working `value`.
 
-### Origin provenance
+## Branches and namespaces
 
-The `origin` field on every translation records how it was produced. This is read-only metadata — you cannot set it manually. It is useful for filtering translations by quality tier or for auditing how much of your content was human-reviewed versus AI-generated.
+Two optional axes organise the cells; most self-host projects use neither and never notice them.
 
-## Git as the release layer
+- **Branch.** Every project has a `main` branch that always exists and is the safe root. Cells and key definitions are **copy-on-write** per branch: a branch stores only what it changes, and an unwritten cell falls through to its parent. Merging a branch transports its accepted values onto the parent, and a cell the parent changed on the other side of the fork point surfaces as an `escalated` cell rather than a silent overwrite. See [Branching & releases](/concepts/branching-and-releases).
+- **Namespace.** A key may belong to an optional namespace — a grouping by feature-area (a file, a screen). A namespace is a first-class entity with its own stable id; its name is a renamable label. A key with no namespace is distinct from one with the same name under a namespace.
 
-Turjuman does not have its own concept of releases or versioned snapshots. Your locale files are plain text — commit them to your repository like any other source file. A git tag or a deploy commit is your frozen release. This keeps the delivery model simple: `turjuman pull` writes files, your CI commits them, your deploy process picks them up. There are no over-the-air translation objects to manage.
+## Keys: `active` and `deprecated`
+
+Independently of its translations, a key is either `active` (present in the latest source import) or `deprecated` (absent from the most recent import, but retained). A deprecated key and its translation history are kept, and a key that reappears in a later import is restored to `active` — so temporarily removing a string never destroys its translations.
+
+## Git is the release layer
+
+Turjuman has no over-the-air translation objects to manage. Your locale files are plain text: `turjuman pull` writes them, your CI commits them, your deploy process picks them up. A git tag or a deploy commit is your frozen release.

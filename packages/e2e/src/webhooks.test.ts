@@ -2,7 +2,7 @@ import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { loadEnv, modeOf } from "./helpers/env.js";
 import { uniq } from "./helpers/fixtures.js";
-import { makeMcpClient } from "./helpers/mcp.js";
+import { makeOpClient } from "./helpers/mcp.js";
 import { type CapturedRequest, startReceiver } from "./helpers/receiver.js";
 
 /**
@@ -29,7 +29,7 @@ function expectSigned(delivery: CapturedRequest, secret: string): void {
 }
 
 describe.skipIf(mode !== "deployed")("P1 webhooks (Streams -> Lambda)", () => {
-	const mcp = makeMcpClient(e.mcpUrl, e.apiKey);
+	const mcp = makeOpClient(e.mcpUrl, e.apiKey);
 
 	it("delivers a distinct signed event for each change type", async () => {
 		const receiver = await startReceiver();
@@ -91,7 +91,7 @@ describe.skipIf(mode !== "deployed")("P1 webhooks (Streams -> Lambda)", () => {
 			});
 			expect(JSON.parse(updated.body)).toMatchObject({
 				event: "translation.updated",
-				data: { key: "greeting", locale: "fr" },
+				data: { locale: "fr" },
 			});
 			expect(JSON.parse(deleted.body)).toMatchObject({
 				event: "key.deleted",
@@ -124,7 +124,7 @@ describe.skipIf(mode !== "deployed")("P1 webhooks (Streams -> Lambda)", () => {
 			});
 
 			// A key.created (ignored by the narrow hook) and a translation.updated.
-			await mcp("create_key", {
+			const alpha = await mcp<{ id: string }>("create_key", {
 				projectId: project.id,
 				name: "alpha",
 				description: "A",
@@ -138,7 +138,7 @@ describe.skipIf(mode !== "deployed")("P1 webhooks (Streams -> Lambda)", () => {
 			// Fence: the control hook proves BOTH events flowed through the pipeline.
 			await control.waitFor(byEvent("key.created"), WAIT);
 			await control.waitFor(
-				(r) => byEvent("translation.updated")(r) && r.body.includes("alpha"),
+				(r) => byEvent("translation.updated")(r) && r.body.includes(alpha.id),
 				WAIT,
 			);
 			// The narrow hook got the translation but never the key.created.
@@ -150,7 +150,7 @@ describe.skipIf(mode !== "deployed")("P1 webhooks (Streams -> Lambda)", () => {
 				projectId: project.id,
 				webhookId: narrow.id,
 			});
-			await mcp("create_key", {
+			const beta = await mcp<{ id: string }>("create_key", {
 				projectId: project.id,
 				name: "beta",
 				description: "B",
@@ -161,10 +161,14 @@ describe.skipIf(mode !== "deployed")("P1 webhooks (Streams -> Lambda)", () => {
 				entries: [{ name: "beta", value: "Beta-fr" }],
 			});
 
-			// Fence again on the control hook for the post-removal event...
-			await control.waitFor((r) => r.body.includes("beta"), WAIT);
-			// ...by which point the removed hook must not have seen anything about beta.
-			expect(filtered.received().some((r) => r.body.includes("beta"))).toBe(
+			// Fence again on the control hook for beta's post-removal translation event
+			// (the cell payload carries the opaque keyId, not the key name)...
+			await control.waitFor(
+				(r) => byEvent("translation.updated")(r) && r.body.includes(beta.id),
+				WAIT,
+			);
+			// ...by which point the removed hook must not have seen beta's translation.
+			expect(filtered.received().some((r) => r.body.includes(beta.id))).toBe(
 				false,
 			);
 		} finally {

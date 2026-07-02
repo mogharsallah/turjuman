@@ -1,10 +1,10 @@
 ---
-title: "Translate with AI agents using Turjuman's MCP server"
+title: "Translate with AI agents using Turjuman's MCP"
 sidebarTitle: "Translate with MCP"
-description: "Connect your MCP client (Claude Code or any MCP-compatible agent) to Turjuman and manage translations in natural language using 40+ tools."
+description: "Connect your MCP client (Claude Code or any MCP-compatible agent) to Turjuman and drive your whole translation workflow in natural language."
 ---
 
-The MCP server is Turjuman's primary interface. Connect any MCP-compatible agent — Claude Code, a custom agent loop, or any other client — and drive your entire translation workflow in natural language. The server exposes 40+ tools covering projects, keys, translations, glossaries, translation memory, QA, members, and API keys.
+The MCP is Turjuman's primary interface. Connect any MCP-compatible agent — Claude Code, a custom agent loop, or any other client — and drive your entire translation workflow in natural language. The MCP exposes three tools (`search`, `describe`, `run_code`) over the full operation catalogue covering projects, keys, translations, runs, glossary, QA, members, and API keys. See [Drive the MCP](/guides/code-mode) for the discovery-and-run mechanics.
 
 ## Connect your MCP client
 
@@ -25,11 +25,11 @@ Add the following to your `.mcp.json` (or equivalent client config) to register 
 Replace `<your-mcp-function-url>` with your self-hosted MCP endpoint and `<your-api-key>` with a valid API key.
 
 <Tip>
-  Scope the toolset your agent can see by appending `?tools=` or `?groups=` query parameters to the URL. For example, `?groups=read,translations` exposes only read tools and translation-management tools — useful for restricting a reviewer agent to the capabilities it actually needs.
+  Scope an agent by the **key** it presents, not the URL. A `readOnly` key can only read, and a key's roles bound what it can do — give a reviewer agent an EDITOR key and a CI account a DEVELOPER key. See [Roles & permissions](/concepts/roles-and-permissions).
 </Tip>
 
 <Warning>
-  Your API key grants full access to your Turjuman instance. Never commit it to version control. Use an environment variable or a secrets manager, and reference it from your MCP config at runtime.
+  Your API key grants access to your Turjuman instance at the level of its roles. Never commit it to version control. Use an environment variable or a secrets manager, and reference it from your MCP config at runtime.
 </Warning>
 
 ## Example workflows
@@ -40,51 +40,62 @@ Replace `<your-mcp-function-url>` with your self-hosted MCP endpoint and `<your-
 
     > "Create a project called 'Marketing Site', add English as the base locale and French and German as targets, then translate all strings."
 
-    **What the agent calls:**
+    **What the agent does:**
 
     1. `create_project` — creates the project and returns a `projectId`
-    2. `add_locale` — adds `en` (base), `fr`, and `de`
-    3. `bulk_create_keys` — imports your source strings
-    4. `bulk_set_translations` — sets base-locale values
-    5. `translate_keys` — triggers AI translation into `fr` and `de`
+    2. `add_locale` — adds `fr` and `de` as targets
+    3. `create_key` — adds source keys with their base (English) values
+    4. `set_translation` / `bulk_set_translations` — writes a draft `value` per target locale (each cell becomes `proposed`)
+    5. `accept_translation` — accepts the drafts it is confident in, appending a version and advancing each cell's `head`
   </Accordion>
 
-  <Accordion title="Run a review pass">
+  <Accordion title="Re-translate strings whose source changed">
     **Prompt your agent:**
 
-    > "Review all French translations in the 'Marketing Site' project and flag any that sound unnatural or don't match our tone."
+    > "Some English strings changed. Re-translate the affected French strings and accept the good ones."
 
-    **What the agent calls:**
+    **What the agent does:**
 
-    1. `list_untranslated` — finds strings still needing attention
-    2. `list_stale` — surfaces strings whose source has changed since last translation
-    3. `get_translation` — fetches individual values for inspection
-    4. `set_translation` — updates values the agent corrects
-    5. `run_qa_checks` — validates the final state before sign-off
+    1. `list_stale` — finds cells whose source value moved since they were written
+    2. `get_translations` — fetches the current values and the new source for context
+    3. `set_translation` — writes a fresh draft against the current source
+    4. `run_qa_checks` — validates the drafts before sign-off
+    5. `accept_translation` — accepts each fixed cell, clearing its `stale` flag
   </Accordion>
 
-  <Accordion title="Translate with glossary and memory">
+  <Accordion title="Translate respecting the glossary">
     **Prompt your agent:**
 
-    > "Translate the new keys in the 'Dashboard' namespace into Spanish, respecting our glossary and reusing any existing approved translations."
+    > "Translate the untranslated keys in the 'Dashboard' namespace into Spanish, respecting our glossary."
 
-    **What the agent calls:**
+    **What the agent does:**
 
-    1. `list_glossary` — retrieves your glossary terms so the agent can enforce consistent terminology
-    2. `lookup_translation_memory` — checks for previously approved translations that match the source string
-    3. `bulk_set_translations` — writes new translations, pre-populated from memory hits
-    4. `translate_keys` — fills remaining strings using AI, informed by the glossary context
+    1. `list_untranslated` — finds keys with no Spanish value
+    2. `list_glossary` — retrieves the glossary so the agent enforces consistent terminology and preserves do-not-translate terms
+    3. `bulk_set_translations` — writes the new drafts, honouring the glossary
+    4. `accept_translation` — accepts each one it is confident in
+  </Accordion>
+
+  <Accordion title="Require a human to sign off">
+    **Prompt your agent:**
+
+    > "Turn on human acceptance for this project so my drafts wait for review."
+
+    **What the agent does:**
+
+    1. `update_project` — sets `requireHumanAccept: true`
+    2. From now on the agent's runs leave cells `proposed`; a person (an EDITOR or MANAGER) accepts them. See [Lifecycle](/concepts/lifecycle#who-may-accept-requirehumanaccept).
   </Accordion>
 
   <Accordion title="Grant access to a teammate">
     **Prompt your agent:**
 
-    > "Add alice@example.com as a translator and generate a scoped API key she can use with the CLI."
+    > "Add alice@example.com as a translator and generate an API key she can use with the CLI."
 
-    **What the agent calls:**
+    **What the agent does:**
 
-    1. `add_member` — invites the user and assigns the `translator` role
-    2. `create_api_key` — creates a key with a meaningful description (e.g. `"alice CLI key"`) and appropriate scope
+    1. `add_member` — adds the user with the `EDITOR` role (write and accept translations)
+    2. `create_api_key` — creates a key with a meaningful description (e.g. `"alice CLI key"`)
   </Accordion>
 
   <Accordion title="Revoke a leaked key">
@@ -92,19 +103,21 @@ Replace `<your-mcp-function-url>` with your self-hosted MCP endpoint and `<your-
 
     > "One of our API keys was leaked in a log file. Find it and revoke it."
 
-    **What the agent calls:**
+    **What the agent does:**
 
     1. `list_api_keys` — returns all keys with their descriptions and metadata so you can identify the compromised one
     2. `revoke_api_key` — permanently revokes the key by ID
   </Accordion>
 </AccordionGroup>
 
-## Tips for working with the MCP server
+## Tips for working with the MCP
 
-**Give keys meaningful descriptions.** When you call `create_api_key`, always set a `description` like `"CI pipeline – main branch"` or `"Alice CLI key"`. It makes `list_api_keys` output actionable and makes revocation straightforward.
+**Give keys meaningful descriptions.** When you call `create_api_key`, always set a `description` like `"CI pipeline – main branch"` or `"Alice CLI key"`. It makes `list_api_keys` output actionable and revocation straightforward.
 
-**`bulk_set_translations` skips unknown keys.** If you pass a key name that doesn't exist in the project, the tool skips it and reports it in the response rather than failing the whole batch. Check the response for a `skipped` array if you suspect a mismatch.
+**`bulk_set_translations` skips unknown keys.** If you pass a key name that doesn't exist in the project, the operation skips it and reports it in the response rather than failing the whole batch. Check the response for a `skipped` array if you suspect a mismatch.
 
-**Paginate large result sets.** Tools like `list_keys`, `list_untranslated`, and `list_stale` accept a `limit` parameter and return a `nextCursor` when there are more results. Pass that cursor back as `cursor` in the next call to page through the full set.
+**Accepting is a compare-and-swap.** `accept_translation` advances the cell's `head` only if no one else accepted in the meantime; a losing accept comes back as a conflict, and the agent re-reads and retries. See [Lifecycle](/concepts/lifecycle#the-head-pointer-is-the-concurrency-guard).
 
-**The server is stateless.** There is no session to manage and no state that persists between tool calls beyond what's stored in Turjuman itself. Your agent can call tools in any order, retry failed calls freely, and reconnect without ceremony.
+**Paginate large result sets.** Operations like `list_keys`, `list_untranslated`, and `list_stale` accept a `limit` and return a `nextCursor` when there are more results. Pass that cursor back as `cursor` in the next call to page through the full set.
+
+**The server is stateless.** There is no session to manage and no state that persists between calls beyond what's stored in Turjuman itself. Your agent can act in any order, retry freely, and reconnect without ceremony.

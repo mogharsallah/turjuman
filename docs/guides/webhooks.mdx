@@ -28,12 +28,27 @@ Manage your webhooks with:
 
 | Event | Fired when |
 |---|---|
-| `translation.updated` | A translation's value or status changes |
+| `translation.updated` | A translation cell's value or lifecycle changes |
 | `translation.stale` | A base value changes and dependent translations are flagged stale |
 | `key.created` | A new key is added to the project |
 | `key.updated` | A key's metadata (name, namespace, description) is edited |
 | `key.deleted` | A key is deleted from the project |
 | `locale.added` | A new locale is added to the project |
+| `run.started` | A translation run (the agent write primitive) starts |
+| `run.finished` | A translation run finishes |
+| `escalation.opened` | A translation is escalated to a human (the cell flips to `escalated`) |
+| `escalation.claimed` | A human claims an open escalation |
+| `escalation.resolved` | An escalation is resolved and its cell accepted |
+| `field-report.opened` | A field report is filed against a shipped string, reopening the targeted cell for a fix |
+| `field-report.resolved` | A field report is resolved and closed |
+
+The `escalation.*` events drive a review queue: notify a reviewer on `escalation.opened`, then track ownership and completion with `escalation.claimed` and `escalation.resolved`. See [the escalation flow](/concepts/lifecycle#escalations-resolve-the-escalated-state).
+
+The two `field-report.*` events close the production loop: filing a report reopens the bad cell so a run can fix it, and resolving it can spawn reusable context. See [Branching & releases](/concepts/branching-and-releases#field-reports-close-the-production-loop).
+
+<Note>
+  A **merge** is a translation run, so merging a branch fires `run.started` / `run.finished` (and `escalation.opened` for any conflict), not a dedicated event. **Releases emit no webhook events** — cutting or superseding a release is a deliberate, pull-based action, so nothing is pushed.
+</Note>
 
 ## Payload format
 
@@ -44,11 +59,20 @@ Every event delivers a JSON payload with the same envelope:
   "event": "translation.updated",
   "projectId": "proj_x",
   "timestamp": "2024-01-15T10:30:00Z",
-  "data": { "key": "greeting", "locale": "fr", "status": "translated" }
+  "data": { "keyId": "key_3f9c", "branchId": "main", "locale": "fr", "lifecycle": "proposed" }
 }
 ```
 
-The shape of `data` varies by event type but always contains the identifiers relevant to what changed.
+The shape of `data` varies by event type but always contains the identifiers relevant to what changed. The three `escalation.*` events carry the escalation's identity and current status:
+
+```json
+{
+  "event": "escalation.opened",
+  "projectId": "proj_x",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "data": { "escalationId": "esc_8a1d", "branchId": "main", "keyId": "key_3f9c", "locale": "fr", "status": "open" }
+}
+```
 
 ## Request headers
 
