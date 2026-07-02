@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { loadEnv, modeOf } from "./helpers/env.js";
 import { uniq } from "./helpers/fixtures.js";
-import { makeMcpClient } from "./helpers/mcp.js";
+import { makeOpClient } from "./helpers/mcp.js";
 import { makeRestClient } from "./helpers/rest.js";
 
 /**
@@ -17,8 +17,8 @@ const e = env ?? { mcpUrl: "", apiUrl: "", tableName: "", apiKey: "" };
 interface Key {
 	name: string;
 }
-interface Translation {
-	keyName: string;
+interface Cell {
+	locale: string;
 	value: string;
 }
 interface BundleEntry {
@@ -27,7 +27,7 @@ interface BundleEntry {
 }
 
 describe.skipIf(mode !== "inprocess")("P1 developer CI sync (REST)", () => {
-	const mcp = makeMcpClient(e.mcpUrl, e.apiKey);
+	const mcp = makeOpClient(e.mcpUrl, e.apiKey);
 	const rest = makeRestClient(e.apiUrl, e.apiKey);
 
 	it("imports keys + translations and exports them back over the Function URL", async () => {
@@ -66,18 +66,17 @@ describe.skipIf(mode !== "inprocess")("P1 developer CI sync (REST)", () => {
 		expect(keysImport.status).toBe(200);
 		expect(keysImport.json.created).toBe(2);
 
-		// CI push: upload translations for a locale.
+		// CI push: upload translations for a locale. Imported values land as drafts
+		// (proposed), so the round-trip below pulls the working slot to read them back.
 		const trImport = await rest<{ written: number }>(
 			"POST",
 			`v1/projects/${project.id}/translations/import`,
 			{
 				body: {
 					locale: "fr",
-					// Approved so the export bundle (which ships the approved snapshot)
-					// delivers these values rather than falling back to source.
 					entries: [
-						{ name: "nav.home", value: "Accueil", status: "approved" },
-						{ name: "nav.about", value: "À propos", status: "approved" },
+						{ name: "nav.home", value: "Accueil" },
+						{ name: "nav.about", value: "À propos" },
 					],
 				},
 			},
@@ -85,21 +84,20 @@ describe.skipIf(mode !== "inprocess")("P1 developer CI sync (REST)", () => {
 		expect(trImport.status).toBe(200);
 		expect(trImport.json.written).toBe(2);
 
-		// CI pull: read translations and the export-ready bundle back.
-		const translations = await rest<{
-			locale: string;
-			translations: Translation[];
-		}>("GET", `v1/projects/${project.id}/translations?locale=fr`);
+		// CI pull: the locale's cells carry the pushed values.
+		const translations = await rest<{ locale: string; translations: Cell[] }>(
+			"GET",
+			`v1/projects/${project.id}/translations?locale=fr`,
+		);
 		expect(translations.status).toBe(200);
-		expect(
-			Object.fromEntries(
-				translations.json.translations.map((t) => [t.keyName, t.value]),
-			),
-		).toMatchObject({ "nav.home": "Accueil", "nav.about": "À propos" });
+		expect(translations.json.translations.map((t) => t.value).sort()).toEqual(
+			["Accueil", "À propos"].sort(),
+		);
 
+		// CI pull: the export bundle (working slot ships drafts) delivers them by name.
 		const bundle = await rest<{ locale: string; entries: BundleEntry[] }>(
 			"GET",
-			`v1/projects/${project.id}/bundle?locale=fr`,
+			`v1/projects/${project.id}/bundle?locale=fr&slot=working`,
 		);
 		expect(bundle.status).toBe(200);
 		expect(
