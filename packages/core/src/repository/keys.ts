@@ -36,6 +36,10 @@ export const qaConfigSK = () => "QACONFIG";
 export const branchSK = (branchId: string) => `BRANCH#${branchId}`;
 /** A namespace (opaque-id grouping of keys) lives under its project partition. */
 export const namespaceSK = (namespaceId: string) => `NS#${namespaceId}`;
+/** Companion uniqueness guard reserving a namespace `name` within a project, so
+ * two concurrent creates can't both take it (mirrors the `KEYNAME#` lookup row).
+ * Written in the same transaction as the namespace, moved on rename. */
+export const namespaceNameSK = (name: string) => `NSNAME#${name}`;
 /** A translation run (the agent write primitive) lives under its project partition. */
 export const runSK = (runId: string) => `RUN#${runId}`;
 

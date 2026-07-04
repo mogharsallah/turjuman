@@ -24,7 +24,11 @@ import type {
 } from "@turjuman/schema";
 import { conflict, MAIN_BRANCH_ID } from "@turjuman/schema";
 import { authenticate, bootstrapOwner } from "../auth.js";
-import type { AcceptCellParams, RepositoryApi } from "../repository/index.js";
+import type {
+	AcceptCellParams,
+	RepositoryApi,
+	Resolved,
+} from "../repository/index.js";
 import { TurjumanService } from "../services/index.js";
 
 /**
@@ -58,8 +62,13 @@ export class FakeRepo implements RepositoryApi {
 	locales = new Map<string, Locale>(); // `${projectId}#${code}`
 	branches = new Map<string, Branch>(); // `${projectId}#${branchId}`
 	namespaces = new Map<string, Namespace>(); // `${projectId}#${namespaceId}`
+	namespaceNames = new Map<string, string>(); // `${projectId}#${name}` -> namespaceId (uniqueness guard)
 	keyDefs = new Map<string, TranslationKey>(); // `${projectId}#${branchId}#${keyId}`
 	keyNames = new Map<string, string>(); // `${projectId}#${branchId}#${ns}#${name}` -> keyId
+	// Per-branch tombstones shadowing an inherited key def / name row (the physical
+	// `deleted` marker the real repo writes). Keyed `${projectId}#${branchId}`.
+	keyDefTombstones = new Map<string, Set<string>>(); // -> set of tombstoned keyIds
+	keyNameTombstones = new Map<string, Set<string>>(); // -> set of tombstoned `${ns ?? "_"}#${name}`
 	cells = new Map<string, Translation>(); // `${projectId}#${branchId}#${locale}#${keyId}`
 	versions = new Map<string, TranslationVersion>(); // cellKey + `#${seq}`
 	glossary = new Map<string, Map<string, GlossaryTerm>>(); // projectId -> termId -> term
@@ -79,26 +88,52 @@ export class FakeRepo implements RepositoryApi {
 		`${p}#${b}#${ns ?? "_"}#${n}`;
 	private cellK = (p: string, b: string, loc: string, id: string) =>
 		`${p}#${b}#${loc}#${id}`;
+	private brK = (p: string, b: string) => `${p}#${b}`;
+	private nameTombK = (ns: string | undefined, n: string) =>
+		`${ns ?? "_"}#${n}`;
+	private defTombs(p: string, b: string): Set<string> {
+		const k = this.brK(p, b);
+		let s = this.keyDefTombstones.get(k);
+		if (!s) this.keyDefTombstones.set(k, (s = new Set()));
+		return s;
+	}
+	private nameTombs(p: string, b: string): Set<string> {
+		const k = this.brK(p, b);
+		let s = this.keyNameTombstones.get(k);
+		if (!s) this.keyNameTombstones.set(k, (s = new Set()));
+		return s;
+	}
+
+	/**
+	 * Copy-on-write read reporting which branch a value resolved from, mirroring the
+	 * real repo's provenance walk. An optional `isTomb` predicate short-circuits the
+	 * walk to `undefined` when the nearest branch has tombstoned the row.
+	 */
+	private provenance<T>(
+		projectId: string,
+		branchId: string,
+		get: (branchId: string) => T | undefined,
+		isTomb?: (branchId: string) => boolean,
+	): Resolved<T> | undefined {
+		let current: string | null | undefined = branchId;
+		while (current) {
+			const hit = get(current);
+			if (hit !== undefined) return { value: hit, branchId: current };
+			if (isTomb?.(current)) return undefined; // shadowed here — stop the walk
+			if (current === MAIN_BRANCH_ID) break;
+			current = this.branches.get(`${projectId}#${current}`)?.parentBranchId;
+		}
+		return undefined;
+	}
 
 	/** Copy-on-write read: the branch's own value, else the first ancestor's. */
 	private fallthrough<T>(
 		projectId: string,
 		branchId: string,
 		get: (branchId: string) => T | undefined,
+		isTomb?: (branchId: string) => boolean,
 	): T | undefined {
-		const own = get(branchId);
-		if (own !== undefined) return own;
-		if (branchId === MAIN_BRANCH_ID) return undefined;
-		let current: string | null | undefined = this.branches.get(
-			`${projectId}#${branchId}`,
-		)?.parentBranchId;
-		while (current) {
-			const hit = get(current);
-			if (hit !== undefined) return hit;
-			if (current === MAIN_BRANCH_ID) break;
-			current = this.branches.get(`${projectId}#${current}`)?.parentBranchId;
-		}
-		return undefined;
+		return this.provenance(projectId, branchId, get, isTomb)?.value;
 	}
 
 	// ---- users ----------------------------------------------------------------
@@ -214,7 +249,28 @@ export class FakeRepo implements RepositoryApi {
 	}
 
 	// ---- namespaces -----------------------------------------------------------
+	/** Mirrors the real repo's create transaction: a companion name guard rejects a
+	 * duplicate name (all-or-nothing). */
+	async createNamespace(ns: Namespace): Promise<Namespace> {
+		const nameKey = `${ns.projectId}#${ns.name}`;
+		if (this.namespaceNames.has(nameKey))
+			throw conflict(`Namespace "${ns.name}" already exists`);
+		this.namespaces.set(`${ns.projectId}#${ns.id}`, ns);
+		this.namespaceNames.set(nameKey, ns.id);
+		return ns;
+	}
+	/** Metadata-only overwrite (name unchanged) — leaves the name guard as-is. */
 	async putNamespace(ns: Namespace): Promise<Namespace> {
+		this.namespaces.set(`${ns.projectId}#${ns.id}`, ns);
+		return ns;
+	}
+	/** Move the name guard atomically; a taken new name conflicts. */
+	async renameNamespace(ns: Namespace, fromName: string): Promise<Namespace> {
+		const nameKey = `${ns.projectId}#${ns.name}`;
+		if (this.namespaceNames.has(nameKey))
+			throw conflict(`Namespace "${ns.name}" already exists`);
+		this.namespaceNames.delete(`${ns.projectId}#${fromName}`);
+		this.namespaceNames.set(nameKey, ns.id);
 		this.namespaces.set(`${ns.projectId}#${ns.id}`, ns);
 		return ns;
 	}
@@ -277,10 +333,16 @@ export class FakeRepo implements RepositoryApi {
 		key: TranslationKey,
 	): Promise<TranslationKey> {
 		const nk = this.nameK(key.projectId, branchId, key.namespaceId, key.name);
+		// A name is taken only by a LIVE row; a tombstoned name is free to reclaim
+		// (tombstoning removes the live entry, so `has(nk)` already reflects this).
 		if (this.keyNames.has(nk))
 			throw conflict(`Key "${key.name}" already exists`);
 		this.keyDefs.set(this.defK(key.projectId, branchId, key.id), key);
 		this.keyNames.set(nk, key.id);
+		this.defTombs(key.projectId, branchId).delete(key.id);
+		this.nameTombs(key.projectId, branchId).delete(
+			this.nameTombK(key.namespaceId, key.name),
+		);
 		return key;
 	}
 	async putKeyDef(
@@ -301,8 +363,18 @@ export class FakeRepo implements RepositoryApi {
 		this.keyNames.delete(
 			this.nameK(key.projectId, branchId, from.namespaceId, from.name),
 		);
+		// On a child branch shadow the old name (it may live on an ancestor); on
+		// `main` it is owned here, so the plain delete above suffices.
+		if (branchId !== MAIN_BRANCH_ID)
+			this.nameTombs(key.projectId, branchId).add(
+				this.nameTombK(from.namespaceId, from.name),
+			);
 		this.keyNames.set(nk, key.id);
+		this.nameTombs(key.projectId, branchId).delete(
+			this.nameTombK(key.namespaceId, key.name),
+		);
 		this.keyDefs.set(this.defK(key.projectId, branchId, key.id), key);
+		this.defTombs(key.projectId, branchId).delete(key.id);
 		return key;
 	}
 	async getKeyDef(
@@ -310,8 +382,23 @@ export class FakeRepo implements RepositoryApi {
 		branchId: string,
 		keyId: string,
 	): Promise<TranslationKey | undefined> {
-		return this.fallthrough(projectId, branchId, (br) =>
-			this.keyDefs.get(this.defK(projectId, br, keyId)),
+		return this.fallthrough(
+			projectId,
+			branchId,
+			(br) => this.keyDefs.get(this.defK(projectId, br, keyId)),
+			(br) => this.defTombs(projectId, br).has(keyId),
+		);
+	}
+	async getKeyDefResolved(
+		projectId: string,
+		branchId: string,
+		keyId: string,
+	): Promise<Resolved<TranslationKey> | undefined> {
+		return this.provenance(
+			projectId,
+			branchId,
+			(br) => this.keyDefs.get(this.defK(projectId, br, keyId)),
+			(br) => this.defTombs(projectId, br).has(keyId),
 		);
 	}
 	async resolveKeyIdByName(
@@ -320,8 +407,12 @@ export class FakeRepo implements RepositoryApi {
 		namespaceId: string | undefined,
 		name: string,
 	): Promise<string | undefined> {
-		return this.fallthrough(projectId, branchId, (br) =>
-			this.keyNames.get(this.nameK(projectId, br, namespaceId, name)),
+		return this.fallthrough(
+			projectId,
+			branchId,
+			(br) => this.keyNames.get(this.nameK(projectId, br, namespaceId, name)),
+			(br) =>
+				this.nameTombs(projectId, br).has(this.nameTombK(namespaceId, name)),
 		);
 	}
 	async listKeyDefs(
@@ -352,28 +443,38 @@ export class FakeRepo implements RepositoryApi {
 		projectId: string,
 		branchId: string,
 	): Promise<TranslationKey[]> {
-		// Walk the parent chain like the real repo's branchChain, nearest branch
-		// winning per keyId — the copy-on-write key overlay.
-		const byId = new Map<string, TranslationKey>();
+		// Walk the parent chain nearest-first: a live def surfaces a keyId, a
+		// tombstone at a nearer branch buries it even if an ancestor still has it.
+		const decided = new Map<string, TranslationKey | null>();
 		let current: string | null | undefined = branchId;
 		while (current) {
 			for (const k of await this.listKeyDefs(projectId, current))
-				if (!byId.has(k.id)) byId.set(k.id, k);
+				if (!decided.has(k.id)) decided.set(k.id, k);
+			for (const id of this.defTombs(projectId, current))
+				if (!decided.has(id)) decided.set(id, null);
 			if (current === MAIN_BRANCH_ID) break;
 			current = this.branches.get(`${projectId}#${current}`)?.parentBranchId;
 		}
-		return [...byId.values()];
+		return [...decided.values()].filter((k): k is TranslationKey => k !== null);
 	}
 	async deleteKeyDefsCascade(
 		projectId: string,
 		branchId: string,
 		keys: Pick<TranslationKey, "id" | "namespaceId" | "name">[],
 	): Promise<void> {
+		const onChild = branchId !== MAIN_BRANCH_ID;
 		for (const key of keys) {
 			this.keyDefs.delete(this.defK(projectId, branchId, key.id));
 			this.keyNames.delete(
 				this.nameK(projectId, branchId, key.namespaceId, key.name),
 			);
+			// On a child branch shadow the key so an inherited copy stops resolving.
+			if (onChild) {
+				this.defTombs(projectId, branchId).add(key.id);
+				this.nameTombs(projectId, branchId).add(
+					this.nameTombK(key.namespaceId, key.name),
+				);
+			}
 			const cellPrefix = `${projectId}#${branchId}#`;
 			const cellSuffix = `#${key.id}`;
 			for (const [k] of this.cells)
@@ -403,6 +504,34 @@ export class FakeRepo implements RepositoryApi {
 			this.cells.get(this.cellK(projectId, br, locale, keyId)),
 		);
 	}
+	async getCellResolved(
+		projectId: string,
+		branchId: string,
+		keyId: string,
+		locale: string,
+	): Promise<Resolved<Translation> | undefined> {
+		return this.provenance(projectId, branchId, (br) =>
+			this.cells.get(this.cellK(projectId, br, locale, keyId)),
+		);
+	}
+	async materializeCell(
+		projectId: string,
+		branchId: string,
+		keyId: string,
+		locale: string,
+	): Promise<Translation | undefined> {
+		const resolved = await this.getCellResolved(
+			projectId,
+			branchId,
+			keyId,
+			locale,
+		);
+		if (!resolved) return undefined;
+		if (resolved.branchId === branchId) return resolved.value; // already owned
+		const copy: Translation = { ...resolved.value, branchId };
+		this.cells.set(this.cellK(projectId, branchId, locale, keyId), copy);
+		return copy;
+	}
 	async listCellsByLocale(
 		projectId: string,
 		branchId: string,
@@ -416,6 +545,24 @@ export class FakeRepo implements RepositoryApi {
 					c.locale === locale,
 			)
 			.sort((a, b) => compareSk(`KEY#${a.keyId}`, `KEY#${b.keyId}`));
+	}
+	async listCellsByLocaleResolved(
+		projectId: string,
+		branchId: string,
+		locale: string,
+	): Promise<Translation[]> {
+		const byKey = new Map<string, Translation>();
+		let current: string | null | undefined = branchId;
+		while (current) {
+			for (const c of await this.listCellsByLocale(projectId, current, locale))
+				if (!byKey.has(c.keyId)) byKey.set(c.keyId, c); // nearest branch wins
+			if (current === MAIN_BRANCH_ID) break;
+			current = this.branches.get(`${projectId}#${current}`)?.parentBranchId;
+		}
+		const visible = new Set(
+			(await this.listKeyDefsResolved(projectId, branchId)).map((k) => k.id),
+		);
+		return [...byKey.values()].filter((c) => visible.has(c.keyId));
 	}
 	async listCellsByLocalePage(
 		projectId: string,
@@ -435,11 +582,33 @@ export class FakeRepo implements RepositoryApi {
 		branchId: string,
 		keyId: string,
 	): Promise<Translation[]> {
-		return [...this.cells.values()].filter(
-			(c) =>
-				c.projectId === projectId &&
-				c.branchId === branchId &&
-				c.keyId === keyId,
+		// The real repo lists via GSI3 (GSI3SK = `LOC#<code>`), so results come back
+		// in locale order — sort to match, or a test could assert an order the
+		// deployed repo doesn't produce.
+		return [...this.cells.values()]
+			.filter(
+				(c) =>
+					c.projectId === projectId &&
+					c.branchId === branchId &&
+					c.keyId === keyId,
+			)
+			.sort((a, b) => compareSk(`LOC#${a.locale}`, `LOC#${b.locale}`));
+	}
+	async listCellsByKeyResolved(
+		projectId: string,
+		branchId: string,
+		keyId: string,
+	): Promise<Translation[]> {
+		const byLocale = new Map<string, Translation>();
+		let current: string | null | undefined = branchId;
+		while (current) {
+			for (const c of await this.listCellsByKey(projectId, current, keyId))
+				if (!byLocale.has(c.locale)) byLocale.set(c.locale, c);
+			if (current === MAIN_BRANCH_ID) break;
+			current = this.branches.get(`${projectId}#${current}`)?.parentBranchId;
+		}
+		return [...byLocale.values()].sort((a, b) =>
+			compareSk(`LOC#${a.locale}`, `LOC#${b.locale}`),
 		);
 	}
 	async deleteCell(
@@ -487,7 +656,9 @@ export class FakeRepo implements RepositoryApi {
 			head: seq,
 			lifecycle: "accepted",
 			stale: false,
-			sourceRef: params.sourceRevision,
+			// The real repo only SETs sourceRef when a sourceRevision is supplied,
+			// leaving the prior value intact otherwise — preserve it here too.
+			sourceRef: params.sourceRevision ?? existing.sourceRef,
 			origin: params.origin ?? existing.origin,
 			lockedByRunId: undefined,
 			updatedBy: params.updatedBy,
@@ -505,6 +676,17 @@ export class FakeRepo implements RepositoryApi {
 	): Promise<TranslationVersion | undefined> {
 		return this.versions.get(
 			`${this.cellK(projectId, branchId, locale, keyId)}#${seq}`,
+		);
+	}
+	async getVersionResolved(
+		projectId: string,
+		branchId: string,
+		keyId: string,
+		locale: string,
+		seq: number,
+	): Promise<TranslationVersion | undefined> {
+		return this.fallthrough(projectId, branchId, (br) =>
+			this.versions.get(`${this.cellK(projectId, br, locale, keyId)}#${seq}`),
 		);
 	}
 	async getCellHistory(
@@ -787,8 +969,11 @@ export class FakeRepo implements RepositoryApi {
 		dropByPrefix(this.locales);
 		dropByPrefix(this.branches);
 		dropByPrefix(this.namespaces);
+		dropByPrefix(this.namespaceNames);
 		dropByPrefix(this.keyDefs);
 		dropByPrefix(this.keyNames);
+		dropByPrefix(this.keyDefTombstones);
+		dropByPrefix(this.keyNameTombstones);
 		dropByPrefix(this.cells);
 		dropByPrefix(this.versions);
 		dropByPrefix(this.runs);

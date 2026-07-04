@@ -1,6 +1,7 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
 	BatchWriteCommand,
+	type BatchWriteCommandInput,
 	DeleteCommand,
 	DynamoDBDocumentClient,
 	GetCommand,
@@ -8,6 +9,7 @@ import {
 	QueryCommand,
 	type QueryCommandInput,
 	TransactWriteCommand,
+	type TransactWriteCommandInput,
 	UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 import type {
@@ -33,7 +35,7 @@ import type {
 	User,
 	Webhook,
 } from "@turjuman/schema";
-import { conflict, MAIN_BRANCH_ID } from "@turjuman/schema";
+import { conflict, MAIN_BRANCH_ID, validation } from "@turjuman/schema";
 import { decodeCursor, encodeCursor } from "./cursor.js";
 import type { IndexName, Item } from "./item.js";
 import {
@@ -55,6 +57,7 @@ import {
 	keyNameSK,
 	localeSK,
 	memberSK,
+	namespaceNameSK,
 	namespaceSK,
 	orgGSI1PK,
 	orgOwnerPK,
@@ -72,7 +75,9 @@ import {
 	cellItem,
 	isConditionalFailure,
 	keyDefItem,
+	keyDefTombstone,
 	keyNameItem,
+	keyNameTombstone,
 	releaseEntryItem,
 	toApiKey,
 	toBranch,
@@ -128,6 +133,17 @@ export interface RepositoryOptions {
 	tableName: string;
 	/** Optional override (used for dynamodb-local in tests). */
 	client?: DynamoDBClient;
+}
+
+/**
+ * A copy-on-write read that also reports **which branch** the value resolved
+ * from. `branchId === the queried branch` means the branch owns the row; a
+ * different id means it was inherited from that ancestor (so a mutation must
+ * first {@link Repository.materializeCell copy it down}).
+ */
+export interface Resolved<T> {
+	value: T;
+	branchId: string;
 }
 
 /** Inputs to {@link Repository.acceptCell}: the value to commit plus attribution. */
@@ -449,6 +465,54 @@ export class Repository {
 
 	// ---- namespaces -----------------------------------------------------------
 
+	/**
+	 * Create a namespace together with a companion `NSNAME#<name>` uniqueness guard,
+	 * in one transaction guarded by `attribute_not_exists` on both — so two
+	 * concurrent creates of the same name can't both win (mirrors the email- and
+	 * key-name uniqueness transactions). Throws CONFLICT on a duplicate name.
+	 */
+	async createNamespace(ns: Namespace): Promise<Namespace> {
+		try {
+			await this.doc.send(
+				new TransactWriteCommand({
+					TransactItems: [
+						{
+							Put: {
+								TableName: this.table,
+								Item: {
+									PK: projectPK(ns.projectId),
+									SK: namespaceSK(ns.id),
+									entityType: "Namespace",
+									...ns,
+								} satisfies Item,
+								ConditionExpression: "attribute_not_exists(PK)",
+							},
+						},
+						{
+							Put: {
+								TableName: this.table,
+								Item: {
+									PK: projectPK(ns.projectId),
+									SK: namespaceNameSK(ns.name),
+									entityType: "NamespaceName",
+									namespaceId: ns.id,
+								} satisfies Item,
+								ConditionExpression: "attribute_not_exists(PK)",
+							},
+						},
+					],
+				}),
+			);
+		} catch (err) {
+			if (isConditionalFailure(err))
+				throw conflict(`Namespace "${ns.name}" already exists`);
+			throw err;
+		}
+		return ns;
+	}
+
+	/** Overwrite a namespace in place (metadata / lifecycle). The name is unchanged,
+	 * so the `NSNAME#` guard is left as-is; use {@link renameNamespace} to change it. */
 	async putNamespace(ns: Namespace): Promise<Namespace> {
 		await this.putItem({
 			PK: projectPK(ns.projectId),
@@ -456,6 +520,60 @@ export class Repository {
 			entityType: "Namespace",
 			...ns,
 		});
+		return ns;
+	}
+
+	/**
+	 * Rename a namespace: claim the new `NSNAME#` guard (`attribute_not_exists`),
+	 * free the old one, and overwrite the namespace — all in one transaction, so a
+	 * name can never be double-claimed and the guard never drifts from the record.
+	 * `ns` already carries the new name; `fromName` is the prior name.
+	 */
+	async renameNamespace(ns: Namespace, fromName: string): Promise<Namespace> {
+		try {
+			await this.doc.send(
+				new TransactWriteCommand({
+					TransactItems: [
+						{
+							Put: {
+								TableName: this.table,
+								Item: {
+									PK: projectPK(ns.projectId),
+									SK: namespaceNameSK(ns.name),
+									entityType: "NamespaceName",
+									namespaceId: ns.id,
+								} satisfies Item,
+								ConditionExpression: "attribute_not_exists(PK)",
+							},
+						},
+						{
+							Delete: {
+								TableName: this.table,
+								Key: {
+									PK: projectPK(ns.projectId),
+									SK: namespaceNameSK(fromName),
+								},
+							},
+						},
+						{
+							Put: {
+								TableName: this.table,
+								Item: {
+									PK: projectPK(ns.projectId),
+									SK: namespaceSK(ns.id),
+									entityType: "Namespace",
+									...ns,
+								} satisfies Item,
+							},
+						},
+					],
+				}),
+			);
+		} catch (err) {
+			if (isConditionalFailure(err))
+				throw conflict(`Namespace "${ns.name}" already exists`);
+			throw err;
+		}
 		return ns;
 	}
 
@@ -587,42 +705,56 @@ export class Repository {
 	}
 
 	/**
-	 * Move a key to a new `(namespace, name)`: write the new lookup row
-	 * (`attribute_not_exists` so a taken name conflicts), tombstone the old one,
-	 * and overwrite the key definition — all in one transaction. `key` already
-	 * carries the new label; `from` is the prior `(namespaceId, name)`.
+	 * Move a key to a new `(namespace, name)`: write the new lookup row (blocked
+	 * only by a **live** name, so a tombstoned one is free to reclaim), free the
+	 * old name, and overwrite/materialize the key definition — all in one
+	 * transaction. `key` already carries the new label; `from` is the prior
+	 * `(namespaceId, name)`. On `main` the old name is owned here so it is
+	 * hard-deleted; on a child branch it may live on an ancestor, so it is shadowed
+	 * with a **tombstone** (a plain delete would no-op and the ancestor name would
+	 * keep resolving through fall-through). Writing the key definition into the
+	 * branch's own partition copies an inherited key down.
 	 */
 	async renameKeyDef(
 		branchId: string,
 		key: TranslationKey,
 		from: { namespaceId?: string; name: string },
 	): Promise<TranslationKey> {
+		const items: NonNullable<TransactWriteCommandInput["TransactItems"]> = [
+			{
+				Put: {
+					TableName: this.table,
+					Item: keyNameItem(branchId, key),
+					ConditionExpression: "attribute_not_exists(SK) OR #deleted = :true",
+					ExpressionAttributeNames: { "#deleted": "deleted" },
+					ExpressionAttributeValues: { ":true": true },
+				},
+			},
+			branchId === MAIN_BRANCH_ID
+				? {
+						Delete: {
+							TableName: this.table,
+							Key: {
+								PK: keyDefPK(key.projectId, branchId),
+								SK: keyNameSK(from.namespaceId, from.name),
+							},
+						},
+					}
+				: {
+						Put: {
+							TableName: this.table,
+							Item: keyNameTombstone(
+								key.projectId,
+								branchId,
+								from.namespaceId,
+								from.name,
+							),
+						},
+					},
+			{ Put: { TableName: this.table, Item: keyDefItem(branchId, key) } },
+		];
 		try {
-			await this.doc.send(
-				new TransactWriteCommand({
-					TransactItems: [
-						{
-							Put: {
-								TableName: this.table,
-								Item: keyNameItem(branchId, key),
-								ConditionExpression: "attribute_not_exists(SK)",
-							},
-						},
-						{
-							Delete: {
-								TableName: this.table,
-								Key: {
-									PK: keyDefPK(key.projectId, branchId),
-									SK: keyNameSK(from.namespaceId, from.name),
-								},
-							},
-						},
-						{
-							Put: { TableName: this.table, Item: keyDefItem(branchId, key) },
-						},
-					],
-				}),
-			);
+			await this.doc.send(new TransactWriteCommand({ TransactItems: items }));
 		} catch (err) {
 			if (isConditionalFailure(err))
 				throw conflict(`Key "${key.name}" already exists`);
@@ -638,6 +770,22 @@ export class Repository {
 		keyId: string,
 	): Promise<TranslationKey | undefined> {
 		return this.getWithFallthrough(
+			projectId,
+			branchId,
+			(br) => keyDefPK(projectId, br),
+			keyDefSK(keyId),
+			toKey,
+		);
+	}
+
+	/** {@link getKeyDef} that also reports which branch the definition resolved
+	 * from — used by the resolve-then-materialize (rename/delete) paths. */
+	async getKeyDefResolved(
+		projectId: string,
+		branchId: string,
+		keyId: string,
+	): Promise<Resolved<TranslationKey> | undefined> {
+		return this.getWithProvenance(
 			projectId,
 			branchId,
 			(br) => keyDefPK(projectId, br),
@@ -663,12 +811,16 @@ export class Repository {
 		);
 	}
 
-	/** Every key definition written on this branch (no parent overlay in B1). */
+	/** Every **live** key definition written on this branch — tombstones excluded,
+	 * and no parent overlay (use {@link listKeyDefsResolved} for the copy-on-write
+	 * view that unions in inherited keys). */
 	async listKeyDefs(
 		projectId: string,
 		branchId: string,
 	): Promise<TranslationKey[]> {
-		return this.listByPrefix(keyDefPK(projectId, branchId), "KEY#", toKey);
+		return (await this.keyDefRows(projectId, branchId))
+			.filter((row) => row.deleted !== true)
+			.map(toKey);
 	}
 
 	/** One page of this branch's key definitions. `cursor` is the opaque token
@@ -687,11 +839,16 @@ export class Repository {
 					":s": "KEY#",
 				},
 				Limit: opts.limit,
-				ExclusiveStartKey: decodeCursor(opts.cursor),
+				ExclusiveStartKey: this.startKey(
+					opts.cursor,
+					keyDefPK(projectId, branchId),
+				),
 			}),
 		);
 		return {
-			keys: ((res.Items as Item[] | undefined) ?? []).map(toKey),
+			keys: ((res.Items as Item[] | undefined) ?? [])
+				.filter((row) => row.deleted !== true)
+				.map(toKey),
 			nextCursor: encodeCursor(
 				res.LastEvaluatedKey as Record<string, unknown> | undefined,
 			),
@@ -710,37 +867,66 @@ export class Repository {
 		branchId: string,
 	): Promise<TranslationKey[]> {
 		const chain = await this.branchChain(projectId, branchId);
-		const byId = new Map<string, TranslationKey>();
+		// Nearest branch decides each keyId — a live definition surfaces it, a
+		// tombstone (`deleted`) buries it even if an ancestor still has it live.
+		const decided = new Map<string, TranslationKey | null>();
 		for (const br of chain)
-			for (const k of await this.listKeyDefs(projectId, br))
-				if (!byId.has(k.id)) byId.set(k.id, k); // nearest branch wins
-		return [...byId.values()];
+			for (const row of await this.keyDefRows(projectId, br)) {
+				const id = row.id as string;
+				if (!decided.has(id))
+					decided.set(id, row.deleted === true ? null : toKey(row));
+			}
+		return [...decided.values()].filter((k): k is TranslationKey => k !== null);
 	}
 
 	/**
-	 * Hard-delete keys and everything beneath them on one branch: each key's
-	 * definition row, its `KEYNAME#` lookup row, and every locale's live cell plus
-	 * the cell's append-only version chain. Batched into 25-item BatchWrite chunks.
+	 * Remove keys and everything beneath them on one branch. A key **owned** by
+	 * this branch is hard-deleted — its definition row, `KEYNAME#` lookup row, and
+	 * every locale's live cell plus the cell's version chain. A key only
+	 * **inherited** from an ancestor can't be physically deleted here, so it is
+	 * shadowed with a **tombstone** (a `deleted` definition + name row on this
+	 * branch) that stops it resolving through fall-through; any cells this branch
+	 * materialized for it are still hard-deleted. On `main` every key is owned, so
+	 * this is a pure hard-delete. Batched into 25-item BatchWrite chunks.
 	 */
 	async deleteKeyDefsCascade(
 		projectId: string,
 		branchId: string,
 		keys: Pick<TranslationKey, "id" | "namespaceId" | "name">[],
 	): Promise<void> {
+		const onChild = branchId !== MAIN_BRANCH_ID;
 		const toDelete: { PK: string; SK: string }[] = [];
+		const tombstones: Item[] = [];
 		for (const key of keys) {
-			toDelete.push({
-				PK: keyDefPK(projectId, branchId),
-				SK: keyDefSK(key.id),
-			});
-			toDelete.push({
-				PK: keyDefPK(projectId, branchId),
-				SK: keyNameSK(key.namespaceId, key.name),
-			});
+			// Cells and versions have no fall-through, so any this branch materialized
+			// are always hard-deleted.
 			for (const k of await this.cellRowKeys(projectId, branchId, key.id))
 				toDelete.push(k);
+			if (onChild) {
+				// Overwrite the def + name rows with tombstones: on a child branch a
+				// plain delete can't reach an ancestor's copy, and even a copy this
+				// branch owns (e.g. from a rename) would let the ancestor resurface —
+				// the tombstone shadows both, and is harmless for a child-only key.
+				tombstones.push(keyDefTombstone(projectId, branchId, key.id));
+				tombstones.push(
+					keyNameTombstone(projectId, branchId, key.namespaceId, key.name),
+				);
+			} else {
+				toDelete.push({
+					PK: keyDefPK(projectId, branchId),
+					SK: keyDefSK(key.id),
+				});
+				toDelete.push({
+					PK: keyDefPK(projectId, branchId),
+					SK: keyNameSK(key.namespaceId, key.name),
+				});
+			}
 		}
 		await this.batchDelete(toDelete);
+		if (tombstones.length)
+			await this.batchWrite(
+				tombstones.map((Item) => ({ PutRequest: { Item } })),
+			);
 	}
 
 	// ---- translation cells ----------------------------------------------------
@@ -750,20 +936,11 @@ export class Repository {
 		return cell;
 	}
 
-	/** Write many live cells efficiently (25 per batch). */
+	/** Write many live cells efficiently (25 per batch, retrying throttled items). */
 	async putCells(list: Translation[]): Promise<void> {
-		for (let i = 0; i < list.length; i += 25) {
-			const chunk = list.slice(i, i + 25);
-			await this.doc.send(
-				new BatchWriteCommand({
-					RequestItems: {
-						[this.table]: chunk.map((c) => ({
-							PutRequest: { Item: cellItem(c) },
-						})),
-					},
-				}),
-			);
-		}
+		await this.batchWrite(
+			list.map((c) => ({ PutRequest: { Item: cellItem(c) } })),
+		);
 	}
 
 	/** The live cell for `(branchId, keyId, locale)`, resolved through the branch
@@ -783,6 +960,62 @@ export class Repository {
 		);
 	}
 
+	/** {@link getCell} that also reports which branch the cell resolved from —
+	 * used by the resolve-then-mutate paths (accept / escalate / field report). */
+	async getCellResolved(
+		projectId: string,
+		branchId: string,
+		keyId: string,
+		locale: string,
+	): Promise<Resolved<Translation> | undefined> {
+		return this.getWithProvenance(
+			projectId,
+			branchId,
+			(br) => cellPK(projectId, br, locale),
+			cellSK(keyId),
+			toCell,
+		);
+	}
+
+	/**
+	 * Copy-on-write a cell into `branchId` if it is currently **inherited** from an
+	 * ancestor, so a subsequent compare-and-swap (accept) has a real child row to
+	 * update. Returns the cell now resident on `branchId`, or `undefined` if no
+	 * cell exists anywhere in the chain. On `main`, or when the branch already owns
+	 * the cell, this is a single read and no write.
+	 *
+	 * Idempotent and race-safe: the child Put is guarded `attribute_not_exists(SK)`,
+	 * so a losing concurrent materialize just reads back the winner's child row.
+	 * Re-stamping `branchId` rebuilds the cell's PK/SK **and** its `GSI3PK`, so the
+	 * copy lands in the branch's own partition and by-key index. It never advances
+	 * `head`, so a following {@link acceptCell} collapses to the ordinary accept
+	 * CAS (Put + conditional-Update of one item can't share a transaction).
+	 */
+	async materializeCell(
+		projectId: string,
+		branchId: string,
+		keyId: string,
+		locale: string,
+	): Promise<Translation | undefined> {
+		const resolved = await this.getCellResolved(
+			projectId,
+			branchId,
+			keyId,
+			locale,
+		);
+		if (!resolved) return undefined;
+		if (resolved.branchId === branchId) return resolved.value; // already owned
+		const copy: Translation = { ...resolved.value, branchId };
+		try {
+			await this.putItem(cellItem(copy), "attribute_not_exists(SK)");
+		} catch (err) {
+			if (!isConditionalFailure(err)) throw err;
+			// Lost a concurrent materialize — the child row now exists; read it back.
+			return (await this.getCell(projectId, branchId, keyId, locale)) ?? copy;
+		}
+		return copy;
+	}
+
 	/** Every live cell in one branch×locale (the export/build query). Excludes the
 	 * version rows, which share the partition under the `VER#` prefix. */
 	async listCellsByLocale(
@@ -795,6 +1028,29 @@ export class Repository {
 			"KEY#",
 			toCell,
 		);
+	}
+
+	/**
+	 * Every cell **visible** in one branch×locale: the branch's own cells overlaid
+	 * on the parent chain (nearest branch wins per key), the copy-on-write export
+	 * view. Cells whose key was tombstoned on the branch are dropped (their key no
+	 * longer resolves). On `main` this is exactly {@link listCellsByLocale}.
+	 * Unpaged by design — an overlaid union can't ride a single `LastEvaluatedKey`.
+	 */
+	async listCellsByLocaleResolved(
+		projectId: string,
+		branchId: string,
+		locale: string,
+	): Promise<Translation[]> {
+		const chain = await this.branchChain(projectId, branchId);
+		const byKey = new Map<string, Translation>();
+		for (const br of chain)
+			for (const c of await this.listCellsByLocale(projectId, br, locale))
+				if (!byKey.has(c.keyId)) byKey.set(c.keyId, c); // nearest branch wins
+		const visible = new Set(
+			(await this.listKeyDefsResolved(projectId, branchId)).map((k) => k.id),
+		);
+		return [...byKey.values()].filter((c) => visible.has(c.keyId));
 	}
 
 	/** One page of a branch×locale's live cells. `cursor` is the opaque token
@@ -814,7 +1070,10 @@ export class Repository {
 					":s": "KEY#",
 				},
 				Limit: opts.limit,
-				ExclusiveStartKey: decodeCursor(opts.cursor),
+				ExclusiveStartKey: this.startKey(
+					opts.cursor,
+					cellPK(projectId, branchId, locale),
+				),
 			}),
 		);
 		return {
@@ -840,6 +1099,24 @@ export class Repository {
 			},
 		});
 		return items.map(toCell);
+	}
+
+	/** Every locale's cell for one key **visible** on a branch: the branch's own
+	 * cells overlaid on the parent chain (nearest branch wins per locale) — the
+	 * copy-on-write view for a resolve-then-read. Callers resolve the key first,
+	 * so a tombstoned key never reaches here. On `main` this is
+	 * {@link listCellsByKey}. */
+	async listCellsByKeyResolved(
+		projectId: string,
+		branchId: string,
+		keyId: string,
+	): Promise<Translation[]> {
+		const chain = await this.branchChain(projectId, branchId);
+		const byLocale = new Map<string, Translation>();
+		for (const br of chain)
+			for (const c of await this.listCellsByKey(projectId, br, keyId))
+				if (!byLocale.has(c.locale)) byLocale.set(c.locale, c);
+		return [...byLocale.values()];
 	}
 
 	async deleteCell(
@@ -982,6 +1259,29 @@ export class Repository {
 	): Promise<TranslationVersion | undefined> {
 		return this.getItem(
 			cellPK(projectId, branchId, locale),
+			versionSK(keyId, seq),
+			toVersion,
+		);
+	}
+
+	/**
+	 * {@link getVersion} resolved through the branch's parent chain. A child branch
+	 * that accepted a value owns only its own version rows; an inherited head (or
+	 * any older version) lives on an ancestor. Versions are immutable, so this
+	 * fall-through is always safe — it fixes reading a pinned/accepted value from a
+	 * child branch whose cell was inherited, not written.
+	 */
+	async getVersionResolved(
+		projectId: string,
+		branchId: string,
+		keyId: string,
+		locale: string,
+		seq: number,
+	): Promise<TranslationVersion | undefined> {
+		return this.getWithFallthrough(
+			projectId,
+			branchId,
+			(br) => cellPK(projectId, br, locale),
 			versionSK(keyId, seq),
 			toVersion,
 		);
@@ -1206,6 +1506,13 @@ export class Repository {
 	 * Mark every live, translated cell of one key (all locales on one branch)
 	 * `stale = true` — the context-change fan-out. Dependents re-enter the router
 	 * and are re-translated inside a budgeted run. Returns the count touched.
+	 *
+	 * Each cell is flipped with a **targeted conditional `SET stale`** — never a
+	 * full-item rewrite — so a value/`head` that a concurrent accept advanced
+	 * between this read and write is left untouched (a whole-item `putCells` here
+	 * would regress the head). `updatedAt` is deliberately left alone: staleness is
+	 * a flag, not an edit, and bumping it would spuriously trip merge-conflict
+	 * detection.
 	 */
 	async markCellsStaleByKey(
 		projectId: string,
@@ -1213,16 +1520,34 @@ export class Repository {
 		keyId: string,
 	): Promise<number> {
 		const cells = await this.listCellsByKey(projectId, branchId, keyId);
-		const touched = cells
-			.filter(
-				(c) =>
-					!c.stale &&
-					c.lifecycle !== "untranslated" &&
-					c.lifecycle !== "retired",
-			)
-			.map((c) => ({ ...c, stale: true }));
-		await this.putCells(touched);
-		return touched.length;
+		const targets = cells.filter(
+			(c) =>
+				!c.stale && c.lifecycle !== "untranslated" && c.lifecycle !== "retired",
+		);
+		await Promise.all(
+			targets.map((c) =>
+				this.doc
+					.send(
+						new UpdateCommand({
+							TableName: this.table,
+							Key: {
+								PK: cellPK(projectId, branchId, c.locale),
+								SK: cellSK(keyId),
+							},
+							UpdateExpression: "SET #stale = :true",
+							ExpressionAttributeNames: { "#stale": "stale" },
+							ExpressionAttributeValues: { ":true": true },
+							ConditionExpression: "attribute_exists(PK)",
+						}),
+					)
+					// A cell deleted between the read and this write is a benign no-op —
+					// don't resurrect it (the old full-item write would have) or throw.
+					.catch((err) => {
+						if (!isConditionalFailure(err)) throw err;
+					}),
+			),
+		);
+		return targets.length;
 	}
 
 	// ---- webhooks -------------------------------------------------------------
@@ -1311,19 +1636,13 @@ export class Repository {
 			entityType: "Release",
 			...meta,
 		});
-		const rows = entries.map((e) =>
-			releaseEntryItem(release.projectId, release.id, e),
+		await this.batchWrite(
+			entries.map((e) => ({
+				PutRequest: {
+					Item: releaseEntryItem(release.projectId, release.id, e),
+				},
+			})),
 		);
-		for (let i = 0; i < rows.length; i += 25) {
-			const chunk = rows.slice(i, i + 25);
-			await this.doc.send(
-				new BatchWriteCommand({
-					RequestItems: {
-						[this.table]: chunk.map((Item) => ({ PutRequest: { Item } })),
-					},
-				}),
-			);
-		}
 		return release;
 	}
 
@@ -1473,12 +1792,8 @@ export class Repository {
 		return item ? map(item) : undefined;
 	}
 
-	/**
-	 * Copy-on-write read: try the branch's own partition first, then fall through
-	 * to each ancestor up to the root. Returns the first hit mapped to its domain
-	 * shape. On `main` (or any branch that wrote the row) this is a single get; the
-	 * ancestor walk only runs on a miss against a non-root branch.
-	 */
+	/** Copy-on-write read (value only) — a thin wrapper over
+	 * {@link getWithProvenance} for the callers that don't need the source branch. */
 	private async getWithFallthrough<T>(
 		projectId: string,
 		branchId: string,
@@ -1486,13 +1801,40 @@ export class Repository {
 		sk: string,
 		map: (i: Item) => T,
 	): Promise<T | undefined> {
+		return (await this.getWithProvenance(projectId, branchId, pkFor, sk, map))
+			?.value;
+	}
+
+	/**
+	 * Copy-on-write read reporting **which branch** the value resolved from: try the
+	 * branch's own partition first, then fall through to each ancestor up to the
+	 * root, returning the first hit mapped to its domain shape plus its branch. On
+	 * `main` (or any branch that wrote the row) this is a single get; the ancestor
+	 * walk only runs on a miss against a non-root branch.
+	 *
+	 * A **tombstone** (a row carrying `deleted: true`) short-circuits the walk to
+	 * `undefined`: a child branch that deleted/renamed an inherited row writes this
+	 * marker so the ancestor's live row stops resolving here.
+	 */
+	private async getWithProvenance<T>(
+		projectId: string,
+		branchId: string,
+		pkFor: (branchId: string) => string,
+		sk: string,
+		map: (i: Item) => T,
+	): Promise<Resolved<T> | undefined> {
 		const own = await this.getRaw(pkFor(branchId), sk);
-		if (own) return map(own);
+		if (own)
+			return own.deleted === true ? undefined : { value: map(own), branchId };
 		if (branchId === MAIN_BRANCH_ID) return undefined; // root has no parent
 		const chain = await this.branchChain(projectId, branchId);
 		for (let i = 1; i < chain.length; i++) {
-			const hit = await this.getRaw(pkFor(chain[i]!), sk);
-			if (hit) return map(hit);
+			const br = chain[i]!;
+			const hit = await this.getRaw(pkFor(br), sk);
+			if (hit)
+				return hit.deleted === true
+					? undefined
+					: { value: map(hit), branchId: br };
 		}
 		return undefined;
 	}
@@ -1542,6 +1884,23 @@ export class Repository {
 		return out;
 	}
 
+	/** Raw `KEY#` key-definition rows on one branch — **including tombstones**
+	 * (`deleted` rows), so the resolved overlay can see a child's shadow of an
+	 * inherited key. The public list methods map/filter these. */
+	private async keyDefRows(
+		projectId: string,
+		branchId: string,
+	): Promise<Item[]> {
+		return this.queryAll({
+			TableName: this.table,
+			KeyConditionExpression: "PK = :p AND begins_with(SK, :s)",
+			ExpressionAttributeValues: {
+				":p": keyDefPK(projectId, branchId),
+				":s": "KEY#",
+			},
+		});
+	}
+
 	/**
 	 * Query every item in a partition whose sort key begins with `prefix`,
 	 * following pagination, and map each to its domain shape. Pass an `index` to
@@ -1584,16 +1943,55 @@ export class Repository {
 
 	/** Delete many items by primary key, batched into 25-item BatchWrite chunks. */
 	private async batchDelete(keys: { PK: string; SK: string }[]): Promise<void> {
-		for (let i = 0; i < keys.length; i += 25) {
-			const chunk = keys.slice(i, i + 25);
-			await this.doc.send(
-				new BatchWriteCommand({
-					RequestItems: {
-						[this.table]: chunk.map((Key) => ({ DeleteRequest: { Key } })),
-					},
-				}),
-			);
+		await this.batchWrite(keys.map((Key) => ({ DeleteRequest: { Key } })));
+	}
+
+	/**
+	 * Run a BatchWrite to completion in 25-item chunks, **retrying any
+	 * `UnprocessedItems`** with exponential backoff until they drain. A plain
+	 * `BatchWriteCommand` returns partial success under throttling or item-size
+	 * pressure; ignoring `UnprocessedItems` silently drops those writes, so every
+	 * batched put/delete funnels through here.
+	 */
+	private async batchWrite(
+		requests: NonNullable<BatchWriteCommandInput["RequestItems"]>[string],
+	): Promise<void> {
+		for (let i = 0; i < requests.length; i += 25) {
+			let pending = requests.slice(i, i + 25);
+			for (let attempt = 0; pending.length > 0; attempt++) {
+				const res = await this.doc.send(
+					new BatchWriteCommand({ RequestItems: { [this.table]: pending } }),
+				);
+				pending = (res.UnprocessedItems?.[this.table] ?? []) as typeof pending;
+				if (pending.length === 0) break;
+				if (attempt >= 7)
+					throw new Error(
+						`BatchWrite left ${pending.length} unprocessed item(s) after ${attempt + 1} attempts`,
+					);
+				await this.sleep(2 ** attempt * 20);
+			}
 		}
+	}
+
+	/** Sleep helper for backoff between BatchWrite retries. */
+	private sleep(ms: number): Promise<void> {
+		return new Promise((resolve) => setTimeout(resolve, ms));
+	}
+
+	/**
+	 * Decode a pagination cursor and reject one that belongs to a **different
+	 * partition** than the query it's about to drive. A cursor minted for another
+	 * collection would make DynamoDB throw a `ValidationException` (masked as a
+	 * 500); this turns it into a `VALIDATION` (400) up front.
+	 */
+	private startKey(
+		cursor: string | undefined,
+		expectedPK: string,
+	): Record<string, unknown> | undefined {
+		const key = decodeCursor(cursor);
+		if (key && key.PK !== expectedPK)
+			throw validation("Pagination cursor does not match the requested list.");
+		return key;
 	}
 
 	/** Run a query to completion, following pagination. */

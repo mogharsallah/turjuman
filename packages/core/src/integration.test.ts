@@ -765,4 +765,224 @@ describe.skipIf(!endpoint)("single-table invariants (DynamoDB)", () => {
 		expect(new Set(seen).size).toBe(total); // no duplicates across page boundaries
 		expect([...seen].sort()).toEqual([...whole].sort()); // no gaps: union == whole
 	});
+
+	// ---- copy-on-write write paths (the systemic branching fix) --------------
+
+	it("materializes an inherited cell so an accept on a child branch lands", async () => {
+		const project = await newProject(owner, "Materialize", ["fr"]);
+		const key = await svc.keys.create(owner, project.id, {
+			name: "greeting",
+			baseValue: "Hello",
+		});
+		await svc.translations.set(owner, project.id, "fr", {
+			name: "greeting",
+			value: "Bonjour",
+		});
+		await svc.translations.accept(owner, project.id, "fr", "greeting"); // main head = 1
+		const branch = await svc.branches.create(owner, project.id, {
+			name: "feature",
+		});
+		const coords = {
+			projectId: project.id,
+			branchId: branch.id,
+			keyId: key.id,
+			locale: "fr",
+			updatedBy: owner.userId,
+		};
+		// Accepting straight onto the child fails: its partition has no cell row for
+		// the CAS to update — this is the bug materializeCell closes.
+		await expect(
+			repo.acceptCell({ ...coords, value: "Salut", expectedHead: 1 }),
+		).rejects.toMatchObject({ code: "CONFLICT" });
+
+		const copied = await repo.materializeCell(
+			project.id,
+			branch.id,
+			key.id,
+			"fr",
+		);
+		expect(copied?.branchId).toBe(branch.id);
+		expect(copied?.head).toBe(1);
+		// Idempotent: a second call returns the same child row, no throw, no advance.
+		const again = await repo.materializeCell(
+			project.id,
+			branch.id,
+			key.id,
+			"fr",
+		);
+		expect(again?.head).toBe(1);
+
+		const accepted = await repo.acceptCell({
+			...coords,
+			value: "Salut",
+			expectedHead: 1,
+		});
+		expect(accepted.head).toBe(2);
+		expect(
+			(await repo.getCell(project.id, branch.id, key.id, "fr"))?.value,
+		).toBe("Salut");
+		// main is untouched — the child copy is isolated.
+		expect(
+			(await repo.getCell(project.id, MAIN_BRANCH_ID, key.id, "fr"))?.head,
+		).toBe(1);
+		expect(
+			(await repo.getCell(project.id, MAIN_BRANCH_ID, key.id, "fr"))?.value,
+		).toBe("Bonjour");
+	});
+
+	it("resolves an inherited version through the parent chain", async () => {
+		const project = await newProject(owner, "VerFall", ["fr"]);
+		const key = await svc.keys.create(owner, project.id, {
+			name: "greeting",
+			baseValue: "Hello",
+		});
+		await svc.translations.set(owner, project.id, "fr", {
+			name: "greeting",
+			value: "Bonjour",
+		});
+		await svc.translations.accept(owner, project.id, "fr", "greeting"); // main seq 1
+		const branch = await svc.branches.create(owner, project.id, {
+			name: "feature",
+		});
+		// The branch never wrote a version, so its own partition has none…
+		expect(
+			await repo.getVersion(project.id, branch.id, key.id, "fr", 1),
+		).toBeUndefined();
+		// …but the resolved read falls through to main's immutable version.
+		expect(
+			(await repo.getVersionResolved(project.id, branch.id, key.id, "fr", 1))
+				?.value,
+		).toBe("Bonjour");
+	});
+
+	it("tombstones an inherited key on a child: parent intact, child can't see it", async () => {
+		const project = await newProject(owner, "Tombstone", ["fr"]);
+		const key = await svc.keys.create(owner, project.id, {
+			name: "greeting",
+			baseValue: "Hello",
+		});
+		const branch = await svc.branches.create(owner, project.id, {
+			name: "feature",
+		});
+		await repo.deleteKeyDefsCascade(project.id, branch.id, [
+			{ id: key.id, namespaceId: key.namespaceId, name: key.name },
+		]);
+		// The child no longer resolves the key, by id or by name…
+		expect(await repo.getKeyDef(project.id, branch.id, key.id)).toBeUndefined();
+		expect(
+			await repo.resolveKeyIdByName(
+				project.id,
+				branch.id,
+				undefined,
+				"greeting",
+			),
+		).toBeUndefined();
+		expect(
+			(await repo.listKeyDefsResolved(project.id, branch.id)).map((k) => k.id),
+		).not.toContain(key.id);
+		// …while main is untouched.
+		expect((await repo.getKeyDef(project.id, MAIN_BRANCH_ID, key.id))?.id).toBe(
+			key.id,
+		);
+		expect(
+			await repo.resolveKeyIdByName(
+				project.id,
+				MAIN_BRANCH_ID,
+				undefined,
+				"greeting",
+			),
+		).toBe(key.id);
+	});
+
+	it("renames an inherited key on a child: old name freed there, ancestor untouched", async () => {
+		const project = await newProject(owner, "Rename", ["fr"]);
+		const key = await svc.keys.create(owner, project.id, {
+			name: "greeting",
+			baseValue: "Hello",
+		});
+		const branch = await svc.branches.create(owner, project.id, {
+			name: "feature",
+		});
+		const def = await repo.getKeyDef(project.id, MAIN_BRANCH_ID, key.id);
+		await repo.renameKeyDef(
+			branch.id,
+			{ ...def!, name: "hello", updatedAt: new Date().toISOString() },
+			{ namespaceId: def!.namespaceId, name: "greeting" },
+		);
+		// On the child the new name resolves and the old one is shadowed…
+		expect(
+			await repo.resolveKeyIdByName(project.id, branch.id, undefined, "hello"),
+		).toBe(key.id);
+		expect(
+			await repo.resolveKeyIdByName(
+				project.id,
+				branch.id,
+				undefined,
+				"greeting",
+			),
+		).toBeUndefined();
+		// …and main still knows only the original name.
+		expect(
+			await repo.resolveKeyIdByName(
+				project.id,
+				MAIN_BRANCH_ID,
+				undefined,
+				"greeting",
+			),
+		).toBe(key.id);
+		expect(
+			await repo.resolveKeyIdByName(
+				project.id,
+				MAIN_BRANCH_ID,
+				undefined,
+				"hello",
+			),
+		).toBeUndefined();
+	});
+
+	it("marks a cell stale without regressing its accepted head or value", async () => {
+		const project = await newProject(owner, "Stale", ["fr"]);
+		const key = await svc.keys.create(owner, project.id, {
+			name: "greeting",
+			baseValue: "Hello",
+		});
+		await svc.translations.set(owner, project.id, "fr", {
+			name: "greeting",
+			value: "Bonjour",
+		});
+		await svc.translations.accept(owner, project.id, "fr", "greeting"); // head = 1
+		const touched = await repo.markCellsStaleByKey(
+			project.id,
+			MAIN_BRANCH_ID,
+			key.id,
+		);
+		expect(touched).toBeGreaterThanOrEqual(1);
+		const cell = await repo.getCell(project.id, MAIN_BRANCH_ID, key.id, "fr");
+		expect(cell?.stale).toBe(true);
+		expect(cell?.head).toBe(1); // the conditional SET never rewrote head…
+		expect(cell?.value).toBe("Bonjour"); // …or the value
+	});
+
+	it("guards namespace-name uniqueness with a transacted companion item", async () => {
+		const project = await newProject(owner, "NsUnique", []);
+		await repo.createNamespace({
+			id: "ns_a",
+			projectId: project.id,
+			name: "web",
+			lifecycle: "active",
+			createdAt: new Date().toISOString(),
+			updatedAt: new Date().toISOString(),
+		});
+		// A second create of the same name — different id — loses the transaction.
+		await expect(
+			repo.createNamespace({
+				id: "ns_b",
+				projectId: project.id,
+				name: "web",
+				lifecycle: "active",
+				createdAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString(),
+			}),
+		).rejects.toMatchObject({ code: "CONFLICT" });
+	});
 });

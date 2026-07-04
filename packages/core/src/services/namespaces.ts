@@ -1,6 +1,5 @@
 import type { Actor, Namespace } from "@turjuman/schema";
 import {
-	conflict,
 	NAMESPACE_RE,
 	newId,
 	notFound,
@@ -51,8 +50,8 @@ export class NamespaceService extends BaseService {
 	): Promise<Namespace> {
 		await this.authorizeProject(actor, projectId, "key.manage");
 		const name = requirePattern(input.name, NAMESPACE_RE, "namespace");
-		const existing = await this.findByName(projectId, name);
-		if (existing) throw conflict(`Namespace "${name}" already exists`);
+		// The create transaction's companion name-guard enforces uniqueness
+		// race-safely, throwing CONFLICT on a duplicate — no read-then-write gap.
 		return this.write(projectId, {
 			name,
 			title: input.title,
@@ -73,8 +72,6 @@ export class NamespaceService extends BaseService {
 			patch.name !== undefined
 				? requirePattern(patch.name, NAMESPACE_RE, "namespace")
 				: ns.name;
-		if (name !== ns.name && (await this.findByName(projectId, name)))
-			throw conflict(`Namespace "${name}" already exists`);
 		const updated: Namespace = {
 			...ns,
 			name,
@@ -83,7 +80,11 @@ export class NamespaceService extends BaseService {
 			lifecycle: patch.lifecycle ?? ns.lifecycle,
 			updatedAt: new Date().toISOString(),
 		};
-		return this.repo.putNamespace(updated);
+		// A rename moves the uniqueness guard atomically (conflicting on a taken
+		// name); a metadata-only change leaves the guard untouched.
+		return name !== ns.name
+			? this.repo.renameNamespace(updated, ns.name)
+			: this.repo.putNamespace(updated);
 	}
 
 	// ---- internal (trusted; caller authorizes) --------------------------------
@@ -101,10 +102,16 @@ export class NamespaceService extends BaseService {
 		const trimmed = name?.trim();
 		if (!trimmed) return undefined;
 		const valid = requirePattern(trimmed, NAMESPACE_RE, "namespace");
-		return (
-			(await this.findByName(projectId, valid)) ??
-			(await this.write(projectId, { name: valid }))
-		);
+		const existing = await this.findByName(projectId, valid);
+		if (existing) return existing;
+		try {
+			return await this.write(projectId, { name: valid });
+		} catch (err) {
+			// Lost a concurrent create of the same name — return the winner.
+			const winner = await this.findByName(projectId, valid);
+			if (winner) return winner;
+			throw err;
+		}
 	}
 
 	/** Map of `namespaceId -> name` for the project (for finding coordinates). */

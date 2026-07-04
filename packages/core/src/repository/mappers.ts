@@ -104,6 +104,43 @@ export function keyNameItem(branchId: string, k: TranslationKey): Item {
 	};
 }
 
+/**
+ * A **tombstone** shadowing an inherited key definition on a child branch. A
+ * child can't delete a row that physically lives on the parent, so it writes
+ * this `deleted` marker at the same `(PK, SK)` on its own partition; the
+ * copy-on-write fall-through stops on it and the resolved lists drop the keyId.
+ * Carries `id` so the resolved-list overlay can match it against a live ancestor.
+ */
+export function keyDefTombstone(
+	projectId: string,
+	branchId: string,
+	keyId: string,
+): Item {
+	return {
+		PK: keyDefPK(projectId, branchId),
+		SK: keyDefSK(keyId),
+		entityType: "TranslationKey",
+		id: keyId,
+		deleted: true,
+	};
+}
+
+/** A tombstone shadowing an inherited `(namespace, name)` lookup row so the old
+ * label stops resolving via fall-through (used by per-branch delete and rename). */
+export function keyNameTombstone(
+	projectId: string,
+	branchId: string,
+	namespaceId: string | undefined,
+	name: string,
+): Item {
+	return {
+		PK: keyDefPK(projectId, branchId),
+		SK: keyNameSK(namespaceId, name),
+		entityType: "KeyName",
+		deleted: true,
+	};
+}
+
 /** A release's pinned entry row, co-located in the release's own partition. */
 export function releaseEntryItem(
 	projectId: string,
