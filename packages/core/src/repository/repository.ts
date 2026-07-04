@@ -1512,17 +1512,22 @@ export class Repository {
 	 * between this read and write is left untouched (a whole-item `putCells` here
 	 * would regress the head). `updatedAt` is deliberately left alone: staleness is
 	 * a flag, not an edit, and bumping it would spuriously trip merge-conflict
-	 * detection.
+	 * detection. `exceptLocale` skips one locale — a resolve's fan-out passes the
+	 * just-accepted cell's locale so the value it committed isn't re-staled.
 	 */
 	async markCellsStaleByKey(
 		projectId: string,
 		branchId: string,
 		keyId: string,
+		exceptLocale?: string,
 	): Promise<number> {
 		const cells = await this.listCellsByKey(projectId, branchId, keyId);
 		const targets = cells.filter(
 			(c) =>
-				!c.stale && c.lifecycle !== "untranslated" && c.lifecycle !== "retired",
+				!c.stale &&
+				c.locale !== exceptLocale &&
+				c.lifecycle !== "untranslated" &&
+				c.lifecycle !== "retired",
 		);
 		await Promise.all(
 			targets.map((c) =>

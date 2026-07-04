@@ -1,17 +1,16 @@
-import type { Actor, ImportKeysResult, Project } from "@turjuman/schema";
+import type { Actor, ImportKeysResult } from "@turjuman/schema";
 import {
 	conflict,
 	KEY_NAME_RE,
 	MAIN_BRANCH_ID,
 	newId,
-	notFound,
 	requirePattern,
-	type Translation,
 	type TranslationKey,
 	validation,
 } from "@turjuman/schema";
 import type { RepositoryApi } from "../repository/index.js";
 import { BaseService } from "./base.js";
+import { resolveKeyRef } from "./keyref.js";
 import type { NamespaceService } from "./namespaces.js";
 import { revisionOf } from "./revision.js";
 import type {
@@ -48,7 +47,8 @@ export class KeysService extends BaseService {
 	): Promise<TranslationKey[]> {
 		await this.authorizeProject(actor, projectId, "key.read");
 		const branch = filter.branch ?? MAIN_BRANCH_ID;
-		let keys = await this.repo.listKeyDefs(projectId, branch);
+		// Resolved: a child branch sees its own keys overlaid on the parent chain.
+		let keys = await this.repo.listKeyDefsResolved(projectId, branch);
 		if (!filter.includeDeprecated)
 			keys = keys.filter((k) => k.state !== "deprecated");
 		if (filter.namespace) {
@@ -147,13 +147,16 @@ export class KeysService extends BaseService {
 		branch = MAIN_BRANCH_ID,
 	): Promise<KeyWithTranslations> {
 		await this.authorizeProject(actor, projectId, "key.read");
-		const { keyId, key } = await this.resolveKey(
+		const { keyId, key } = await resolveKeyRef(
+			this.repo,
+			this.namespaces,
 			projectId,
 			branch,
 			name,
 			namespace,
 		);
-		const translations = await this.repo.listCellsByKey(
+		// Resolved: include cells inherited from the parent chain on a child branch.
+		const translations = await this.repo.listCellsByKeyResolved(
 			projectId,
 			branch,
 			keyId,
@@ -195,16 +198,15 @@ export class KeysService extends BaseService {
 		};
 		await this.repo.createKeyDef(branch, key);
 		if (input.baseValue !== undefined)
-			await this.repo.putCell(
-				this.baseCell(
-					project,
-					branch,
-					key.id,
-					input.baseValue,
-					actor.userId,
-					now,
-				),
-			);
+			await this.writeSourceValue({
+				projectId,
+				branchId: branch,
+				keyId: key.id,
+				locale: project.baseLocale,
+				value: input.baseValue,
+				origin: "import",
+				userId: actor.userId,
+			});
 		return key;
 	}
 
@@ -244,7 +246,7 @@ export class KeysService extends BaseService {
 				.map((k) => [k.name, k]),
 		);
 		const now = new Date().toISOString();
-		const baseCells: Translation[] = [];
+		let baseValuesSet = 0;
 		const seen = new Set<string>();
 		let created = 0;
 		let updated = 0;
@@ -276,17 +278,20 @@ export class KeysService extends BaseService {
 					if (metadataChanged) updated++;
 					if (wasDeprecated) reactivated++;
 				}
-				if (entry.baseValue !== undefined)
-					baseCells.push(
-						this.baseCell(
-							project,
-							branch,
-							prev.id,
-							entry.baseValue,
-							actor.userId,
-							now,
-						),
-					);
+				// Only re-write the source when its value actually changed (revChanged);
+				// an unchanged re-push must not append a redundant version.
+				if (entry.baseValue !== undefined && revChanged) {
+					await this.writeSourceValue({
+						projectId,
+						branchId: branch,
+						keyId: prev.id,
+						locale: project.baseLocale,
+						value: entry.baseValue,
+						origin: "import",
+						userId: actor.userId,
+					});
+					baseValuesSet++;
+				}
 			} else {
 				const key: TranslationKey = {
 					id: newId("key"),
@@ -305,20 +310,20 @@ export class KeysService extends BaseService {
 				};
 				await this.repo.createKeyDef(branch, key);
 				created++;
-				if (entry.baseValue !== undefined)
-					baseCells.push(
-						this.baseCell(
-							project,
-							branch,
-							key.id,
-							entry.baseValue,
-							actor.userId,
-							now,
-						),
-					);
+				if (entry.baseValue !== undefined) {
+					await this.writeSourceValue({
+						projectId,
+						branchId: branch,
+						keyId: key.id,
+						locale: project.baseLocale,
+						value: entry.baseValue,
+						origin: "import",
+						userId: actor.userId,
+					});
+					baseValuesSet++;
+				}
 			}
 		}
-		await this.repo.putCells(baseCells);
 
 		const absent = [...existing.values()].filter((k) => !seen.has(k.name));
 		let deleted = 0;
@@ -351,7 +356,7 @@ export class KeysService extends BaseService {
 			created,
 			updated,
 			reactivated,
-			baseValuesSet: baseCells.length,
+			baseValuesSet,
 			deleted,
 			deprecated,
 		};
@@ -366,7 +371,14 @@ export class KeysService extends BaseService {
 		branch = MAIN_BRANCH_ID,
 	): Promise<TranslationKey> {
 		await this.authorizeProject(actor, projectId, "key.manage");
-		const { key } = await this.resolveKey(projectId, branch, name, namespace);
+		const { key } = await resolveKeyRef(
+			this.repo,
+			this.namespaces,
+			projectId,
+			branch,
+			name,
+			namespace,
+		);
 		const updated: TranslationKey = {
 			...key,
 			description: patch.description ?? key.description,
@@ -393,7 +405,14 @@ export class KeysService extends BaseService {
 		branch = MAIN_BRANCH_ID,
 	): Promise<TranslationKey> {
 		await this.authorizeProject(actor, projectId, "key.manage");
-		const { key } = await this.resolveKey(projectId, branch, name, namespace);
+		const { key } = await resolveKeyRef(
+			this.repo,
+			this.namespaces,
+			projectId,
+			branch,
+			name,
+			namespace,
+		);
 		const newName =
 			to.name !== undefined
 				? requirePattern(to.name, KEY_NAME_RE, "name")
@@ -402,6 +421,9 @@ export class KeysService extends BaseService {
 			to.namespace !== undefined
 				? (await this.namespaces.ensure(projectId, to.namespace))?.id
 				: key.namespaceId;
+		// No-op rename: the destination equals the source, so there is nothing to
+		// move — return early instead of issuing a self-colliding rename transaction.
+		if (newName === key.name && newNamespaceId === key.namespaceId) return key;
 		const updated: TranslationKey = {
 			...key,
 			name: newName,
@@ -433,58 +455,16 @@ export class KeysService extends BaseService {
 				"Set confirm=true to permanently delete the key and all its translations",
 			);
 		}
-		const { key } = await this.resolveKey(projectId, branch, name, namespace);
+		const { key } = await resolveKeyRef(
+			this.repo,
+			this.namespaces,
+			projectId,
+			branch,
+			name,
+			namespace,
+		);
 		await this.repo.deleteKeyDefsCascade(projectId, branch, [
 			{ id: key.id, namespaceId: key.namespaceId, name: key.name },
 		]);
-	}
-
-	// ---- internals ------------------------------------------------------------
-
-	/** Resolve a `(name, namespace)` label to its key id + definition, or NOT_FOUND. */
-	private async resolveKey(
-		projectId: string,
-		branch: string,
-		name: string,
-		namespace?: string,
-	): Promise<{ keyId: string; key: TranslationKey }> {
-		const nsId = await this.namespaces.idOf(projectId, namespace);
-		if (namespace && !nsId)
-			throw notFound(`Key ${namespace}/${name} not found`);
-		const keyId = await this.repo.resolveKeyIdByName(
-			projectId,
-			branch,
-			nsId,
-			name,
-		);
-		const key = keyId
-			? await this.repo.getKeyDef(projectId, branch, keyId)
-			: undefined;
-		if (!keyId || !key) throw notFound(`Key ${name} not found`);
-		return { keyId, key };
-	}
-
-	/** The base-locale cell for a key: the authoritative source value (accepted,
-	 * no upstream `sourceRef`). */
-	private baseCell(
-		project: Project,
-		branch: string,
-		keyId: string,
-		value: string,
-		userId: string,
-		now: string,
-	): Translation {
-		return {
-			projectId: project.id,
-			branchId: branch,
-			keyId,
-			locale: project.baseLocale,
-			value,
-			lifecycle: "accepted",
-			stale: false,
-			origin: "import",
-			updatedBy: userId,
-			updatedAt: now,
-		};
 	}
 }

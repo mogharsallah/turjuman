@@ -1,4 +1,4 @@
-import type { Actor, BulkSetResult, Project } from "@turjuman/schema";
+import type { Actor, BulkSetResult } from "@turjuman/schema";
 import {
 	forbidden,
 	MAIN_BRANCH_ID,
@@ -9,6 +9,7 @@ import {
 } from "@turjuman/schema";
 import type { RepositoryApi } from "../repository/index.js";
 import { BaseService } from "./base.js";
+import { resolveKeyRef } from "./keyref.js";
 import type { NamespaceService } from "./namespaces.js";
 import { revisionOf } from "./revision.js";
 import type {
@@ -63,8 +64,16 @@ export class TranslationsService extends BaseService {
 		branch = MAIN_BRANCH_ID,
 	): Promise<Translation[]> {
 		await this.authorizeProject(actor, projectId, "translation.read");
-		const { keyId } = await this.resolveKey(projectId, branch, name, namespace);
-		return this.repo.listCellsByKey(projectId, branch, keyId);
+		const { keyId } = await resolveKeyRef(
+			this.repo,
+			this.namespaces,
+			projectId,
+			branch,
+			name,
+			namespace,
+		);
+		// Resolved: include cells inherited from the parent chain on a child branch.
+		return this.repo.listCellsByKeyResolved(projectId, branch, keyId);
 	}
 
 	async listForLocale(
@@ -75,7 +84,8 @@ export class TranslationsService extends BaseService {
 	): Promise<Translation[]> {
 		await this.authorizeProject(actor, projectId, "translation.read");
 		await this.requireLocaleExists(projectId, code);
-		return this.repo.listCellsByLocale(projectId, branch, code);
+		// Resolved: a child branch's locale view overlays inherited cells too.
+		return this.repo.listCellsByLocaleResolved(projectId, branch, code);
 	}
 
 	/** One page of a locale's raw cells, so a large locale doesn't force a
@@ -127,9 +137,11 @@ export class TranslationsService extends BaseService {
 		const slot = opts.slot ?? "accepted";
 		const fallback = opts.fallback ?? "source";
 		const isBase = code === project.baseLocale;
+		// Resolved lists: a child branch's export includes keys/cells inherited from
+		// the parent chain, not just the rows the branch itself wrote.
 		const [keys, cells, nsNames] = await Promise.all([
-			this.repo.listKeyDefs(projectId, branch),
-			this.repo.listCellsByLocale(projectId, branch, code),
+			this.repo.listKeyDefsResolved(projectId, branch),
+			this.repo.listCellsByLocaleResolved(projectId, branch, code),
 			this.namespaces.nameMap(projectId),
 		]);
 		const keyMeta = new Map(
@@ -140,7 +152,7 @@ export class TranslationsService extends BaseService {
 		const baseValues = needBase
 			? new Map(
 					(
-						await this.repo.listCellsByLocale(
+						await this.repo.listCellsByLocaleResolved(
 							projectId,
 							branch,
 							project.baseLocale,
@@ -264,26 +276,6 @@ export class TranslationsService extends BaseService {
 		return out;
 	}
 
-	/** The cell's accepted (head) value: `cell.value` when the cell is itself
-	 * accepted, else the head version's value, else `undefined` (never accepted). */
-	private async acceptedValue(
-		projectId: string,
-		branch: string,
-		cell: Translation,
-	): Promise<string | undefined> {
-		if (cell.head === undefined) return undefined;
-		if (cell.lifecycle === "accepted") return cell.value;
-		return (
-			await this.repo.getVersion(
-				projectId,
-				branch,
-				cell.keyId,
-				cell.locale,
-				cell.head,
-			)
-		)?.value;
-	}
-
 	/** Keys with no cell (or an empty value) for the given locale. */
 	async listUntranslated(
 		actor: Actor,
@@ -294,8 +286,8 @@ export class TranslationsService extends BaseService {
 		await this.authorizeProject(actor, projectId, "translation.read");
 		await this.requireLocaleExists(projectId, code);
 		const [keys, cells] = await Promise.all([
-			this.repo.listKeyDefs(projectId, branch),
-			this.repo.listCellsByLocale(projectId, branch, code),
+			this.repo.listKeyDefsResolved(projectId, branch),
+			this.repo.listCellsByLocaleResolved(projectId, branch, code),
 		]);
 		const filled = new Set(
 			cells.filter((c) => c.value.trim() !== "").map((c) => c.keyId),
@@ -347,8 +339,8 @@ export class TranslationsService extends BaseService {
 		await this.requireLocaleExists(projectId, code);
 		if (code === project.baseLocale) return [];
 		const [keys, cells] = await Promise.all([
-			this.repo.listKeyDefs(projectId, branch),
-			this.repo.listCellsByLocale(projectId, branch, code),
+			this.repo.listKeyDefsResolved(projectId, branch),
+			this.repo.listCellsByLocaleResolved(projectId, branch, code),
 		]);
 		const keyById = new Map(keys.map((k) => [k.id, k]));
 		const staleIds = new Set(
@@ -411,7 +403,9 @@ export class TranslationsService extends BaseService {
 		);
 		await this.requireLocaleExists(projectId, code);
 		const branch = input.branch ?? MAIN_BRANCH_ID;
-		const { keyId, key } = await this.resolveKey(
+		const { keyId, key } = await resolveKeyRef(
+			this.repo,
+			this.namespaces,
 			projectId,
 			branch,
 			input.name,
@@ -419,6 +413,9 @@ export class TranslationsService extends BaseService {
 		);
 		const now = new Date().toISOString();
 		if (code === project.baseLocale) {
+			// Writing the source: bump the key's revision (staling dependents) and
+			// append the value as a version, so the source carries a head→version
+			// chain a release can pin (a plain overwrite would orphan the chain).
 			const rev = revisionOf(input.value);
 			if (rev !== key.sourceRevision)
 				await this.repo.putKeyDef(branch, {
@@ -426,17 +423,14 @@ export class TranslationsService extends BaseService {
 					sourceRevision: rev,
 					updatedAt: now,
 				});
-			return this.repo.putCell({
+			return this.writeSourceValue({
 				projectId,
 				branchId: branch,
 				keyId,
 				locale: code,
 				value: input.value,
-				lifecycle: "accepted",
-				stale: false,
 				origin: input.origin ?? "human",
-				updatedBy: actor.userId,
-				updatedAt: now,
+				userId: actor.userId,
 			});
 		}
 		const existing = await this.repo.getCell(projectId, branch, keyId, code);
@@ -473,7 +467,8 @@ export class TranslationsService extends BaseService {
 		await this.requireLocaleExists(projectId, code);
 		const isBase = code === project.baseLocale;
 
-		const allKeys = await this.repo.listKeyDefs(projectId, branch);
+		// Resolved key index: a child branch bulk-set also addresses inherited keys.
+		const allKeys = await this.repo.listKeyDefsResolved(projectId, branch);
 		const nsIds = new Map<string, string | undefined>();
 		for (const ns of new Set(entries.map((e) => e.namespace ?? ""))) {
 			nsIds.set(ns, await this.namespaces.idOf(projectId, ns));
@@ -481,18 +476,27 @@ export class TranslationsService extends BaseService {
 		const keyByLabel = new Map(
 			allKeys.map((k) => [`${k.namespaceId ?? "_"}#${k.name}`, k]),
 		);
+		// Resolved cells: carry an inherited head so a draft on a child branch keeps
+		// the parent's version chain, matching the singular set()'s fall-through.
 		const prevByKey = new Map(
-			(await this.repo.listCellsByLocale(projectId, branch, code)).map((c) => [
-				c.keyId,
-				c,
-			]),
+			(await this.repo.listCellsByLocaleResolved(projectId, branch, code)).map(
+				(c) => [c.keyId, c],
+			),
 		);
 		const now = new Date().toISOString();
 		const toWrite: Translation[] = [];
 		const baseKeyBumps: TranslationKey[] = [];
 		const skipped: string[] = [];
+		let baseWritten = 0;
 		for (const e of entries) {
-			const nsId = nsIds.get(e.namespace ?? "");
+			const nsName = e.namespace ?? "";
+			const nsId = nsIds.get(nsName);
+			// A named-but-unknown namespace is reported, never silently bucketed into
+			// the no-namespace slot (where it could mis-match a namespace-less key).
+			if (nsName && !nsId) {
+				skipped.push(`${e.namespace}/${e.name}`);
+				continue;
+			}
 			const key = keyByLabel.get(`${nsId ?? "_"}#${e.name}`);
 			if (!key) {
 				skipped.push(e.namespace ? `${e.namespace}/${e.name}` : e.name);
@@ -502,18 +506,17 @@ export class TranslationsService extends BaseService {
 				const rev = revisionOf(e.value);
 				if (rev !== key.sourceRevision)
 					baseKeyBumps.push({ ...key, sourceRevision: rev, updatedAt: now });
-				toWrite.push({
+				// Append the source value (accept-append), like set()'s base path.
+				await this.writeSourceValue({
 					projectId,
 					branchId: branch,
 					keyId: key.id,
 					locale: code,
 					value: e.value,
-					lifecycle: "accepted",
-					stale: false,
 					origin: e.origin ?? "import",
-					updatedBy: actor.userId,
-					updatedAt: now,
+					userId: actor.userId,
 				});
+				baseWritten++;
 			} else {
 				const prev = prevByKey.get(key.id);
 				toWrite.push({
@@ -535,7 +538,7 @@ export class TranslationsService extends BaseService {
 		}
 		for (const k of baseKeyBumps) await this.repo.putKeyDef(branch, k);
 		await this.repo.putCells(toWrite);
-		return { written: toWrite.length, skipped };
+		return { written: baseWritten + toWrite.length, skipped };
 	}
 
 	/**
@@ -562,13 +565,22 @@ export class TranslationsService extends BaseService {
 			);
 		await this.requireLocaleExists(projectId, code);
 		const branch = opts.branch ?? MAIN_BRANCH_ID;
-		const { keyId, key } = await this.resolveKey(
+		const { keyId, key } = await resolveKeyRef(
+			this.repo,
+			this.namespaces,
 			projectId,
 			branch,
 			name,
 			opts.namespace,
 		);
-		const cell = await this.repo.getCell(projectId, branch, keyId, code);
+		// Materialize an inherited cell onto this branch so the accept compare-and-swap
+		// targets a real child row (on main, or an owned cell, this is a plain read).
+		const cell = await this.repo.materializeCell(
+			projectId,
+			branch,
+			keyId,
+			code,
+		);
 		if (!cell) throw notFound(`No ${code} translation for ${name}`);
 		if (cell.value.trim() === "")
 			throw validation("Cannot accept an empty translation");
@@ -585,29 +597,5 @@ export class TranslationsService extends BaseService {
 			expectedHead: cell.head,
 			updatedBy: actor.userId,
 		});
-	}
-
-	// ---- internals ------------------------------------------------------------
-
-	private async resolveKey(
-		projectId: string,
-		branch: string,
-		name: string,
-		namespace?: string,
-	): Promise<{ keyId: string; key: TranslationKey }> {
-		const nsId = await this.namespaces.idOf(projectId, namespace);
-		if (namespace && !nsId)
-			throw notFound(`Key ${namespace}/${name} not found`);
-		const keyId = await this.repo.resolveKeyIdByName(
-			projectId,
-			branch,
-			nsId,
-			name,
-		);
-		const key = keyId
-			? await this.repo.getKeyDef(projectId, branch, keyId)
-			: undefined;
-		if (!keyId || !key) throw notFound(`Key ${name} not found`);
-		return { keyId, key };
 	}
 }

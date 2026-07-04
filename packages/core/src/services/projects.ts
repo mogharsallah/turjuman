@@ -89,9 +89,27 @@ export class ProjectsService extends BaseService {
 			requireHumanAccept?: boolean;
 		},
 	): Promise<Project> {
-		await this.authorizeProject(actor, projectId, "project.update");
-		if (patch.baseLocale !== undefined)
+		const { project } = await this.authorizeProject(
+			actor,
+			projectId,
+			"project.update",
+		);
+		if (patch.baseLocale !== undefined) {
 			patch.baseLocale = requireLocale(patch.baseLocale, "baseLocale");
+			// A new base locale must exist as a Locale row (as create() seeds one),
+			// or later writes/exports on it fail the locale-exists guard.
+			if (
+				patch.baseLocale !== project.baseLocale &&
+				!(await this.repo.getLocale(projectId, patch.baseLocale))
+			)
+				await this.repo.putLocale({
+					projectId,
+					code: patch.baseLocale,
+					name: patch.baseLocale,
+					lifecycle: "active",
+					createdAt: new Date().toISOString(),
+				});
+		}
 		await this.repo.updateProject(projectId, patch);
 		return (await this.repo.getProject(projectId))!;
 	}

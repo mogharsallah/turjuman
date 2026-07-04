@@ -4,6 +4,7 @@ import type {
 	QaConfig,
 	QaIgnoreRule,
 	QaSeverity,
+	Translation,
 } from "@turjuman/schema";
 import { MAIN_BRANCH_ID, validation } from "@turjuman/schema";
 import type {
@@ -194,9 +195,13 @@ export class QaService extends BaseService {
 		const branch = MAIN_BRANCH_ID;
 		const slot = opts.slot ?? "working";
 		const [keys, glossary, baseCells, nsNames] = await Promise.all([
-			this.repo.listKeyDefs(projectId, branch),
+			this.repo.listKeyDefsResolved(projectId, branch),
 			this.repo.listGlossary(projectId),
-			this.repo.listCellsByLocale(projectId, branch, project.baseLocale),
+			this.repo.listCellsByLocaleResolved(
+				projectId,
+				branch,
+				project.baseLocale,
+			),
 			this.namespaces.nameMap(projectId),
 		]);
 		const activeKeys = keys.filter((k) => k.state !== "deprecated");
@@ -204,16 +209,6 @@ export class QaService extends BaseService {
 		const baseValue = new Map(baseCells.map((c) => [c.keyId, c.value]));
 		const nsNameOf = (namespaceId: string | undefined): string =>
 			nsNames.get(namespaceId ?? "") ?? "";
-		// Selected deliverable value: the working draft, or the accepted head (only
-		// a cell that is itself `accepted` carries a current accepted value).
-		const valueOf = (c: { value: string; lifecycle: string } | undefined) =>
-			c
-				? slot === "working"
-					? c.value
-					: c.lifecycle === "accepted"
-						? c.value
-						: undefined
-				: undefined;
 
 		const allTargets = opts.locale
 			? [opts.locale]
@@ -222,8 +217,29 @@ export class QaService extends BaseService {
 
 		const contexts: QaContext[] = [];
 		for (const code of locales) {
-			const cells = await this.repo.listCellsByLocale(projectId, branch, code);
+			const cells = await this.repo.listCellsByLocaleResolved(
+				projectId,
+				branch,
+				code,
+			);
 			const byKey = new Map(cells.map((c) => [c.keyId, c]));
+			// Deliverable value per cell: the working draft, or the accepted head
+			// version (resolved through the branch chain) — a cell re-drafted after an
+			// accept still exposes its accepted value to the accepted slot, which the
+			// old `lifecycle === "accepted"` shortcut dropped.
+			const valueByKey = new Map<string, string | undefined>();
+			await Promise.all(
+				cells.map(async (c) =>
+					valueByKey.set(
+						c.keyId,
+						slot === "working"
+							? c.value
+							: await this.acceptedValue(projectId, branch, c),
+					),
+				),
+			);
+			const valueOf = (c: Translation | undefined): string | undefined =>
+				c ? valueByKey.get(c.keyId) : undefined;
 
 			const localeIndex = new Map<string, string[]>();
 			for (const c of cells) {

@@ -204,23 +204,38 @@ export class ContextService extends BaseService {
 	 * Record a scoped context change: bump the project's `contextRevision` and mark
 	 * the in-scope cells `stale` so they re-enter the router. A key-scoped change
 	 * touches one key; a namespace-scoped change every key in that namespace; a
-	 * project-scoped change every active key. Always fans out on `main` (context is
-	 * branch-free). Called by the context, glossary, and example writes.
+	 * project-scoped change every active key. The fan-out spans **every branch** —
+	 * each branch that materialized an in-scope cell has it staled — because context
+	 * is project-wide, not branch-scoped; `markCellsStaleByKey` no-ops on a branch
+	 * that never materialized the cell. `opts.except{BranchId,Locale}` spares one
+	 * cell (a resolve passes its just-accepted cell so the fan-out can't re-stale the
+	 * value it committed). Called by the context, glossary, and example writes.
 	 */
-	async noteContextChange(projectId: string, scope: Scope): Promise<void> {
+	async noteContextChange(
+		projectId: string,
+		scope: Scope,
+		opts: { exceptBranchId?: string; exceptLocale?: string } = {},
+	): Promise<void> {
 		await this.repo.bumpContextRevision(projectId);
-		const branch = MAIN_BRANCH_ID;
-		if (scope.keyId) {
-			await this.repo.markCellsStaleByKey(projectId, branch, scope.keyId);
-			return;
-		}
-		const keys = (await this.repo.listKeyDefs(projectId, branch)).filter(
-			(k) =>
-				k.state !== "deprecated" &&
-				(scope.namespaceId ? k.namespaceId === scope.namespaceId : true),
-		);
-		for (const k of keys)
-			await this.repo.markCellsStaleByKey(projectId, branch, k.id);
+		// The in-scope keys, resolved so an inherited key still counts for a
+		// namespace/project-scoped change.
+		const keyIds = scope.keyId
+			? [scope.keyId]
+			: (await this.repo.listKeyDefsResolved(projectId, MAIN_BRANCH_ID))
+					.filter(
+						(k) =>
+							k.state !== "deprecated" &&
+							(scope.namespaceId ? k.namespaceId === scope.namespaceId : true),
+					)
+					.map((k) => k.id);
+		for (const br of await this.repo.listBranches(projectId))
+			for (const keyId of keyIds)
+				await this.repo.markCellsStaleByKey(
+					projectId,
+					br.id,
+					keyId,
+					br.id === opts.exceptBranchId ? opts.exceptLocale : undefined,
+				);
 	}
 
 	private async loadTarget(

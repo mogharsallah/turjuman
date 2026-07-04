@@ -41,11 +41,20 @@ export class RunService extends BaseService {
 		input: StartRunInput = {},
 	): Promise<TranslationRun> {
 		await this.authorizeProject(actor, projectId, "translation.write");
+		const branch = input.branch ?? MAIN_BRANCH_ID;
+		// Idempotent start: a repeated key returns the original run instead of
+		// spawning a duplicate, so a retried request never double-counts a run.
+		if (input.idempotencyKey) {
+			const existing = (
+				await this.repo.listRunsByBranch(projectId, branch)
+			).find((r) => r.idempotencyKey === input.idempotencyKey);
+			if (existing) return existing;
+		}
 		const now = new Date().toISOString();
 		return this.repo.putRun({
 			id: newId("run"),
 			projectId,
-			branchId: input.branch ?? MAIN_BRANCH_ID,
+			branchId: branch,
 			trigger: input.trigger ?? "manual",
 			valueSource: input.valueSource ?? "agent",
 			status: "running",

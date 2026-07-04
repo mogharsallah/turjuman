@@ -63,7 +63,14 @@ export class EscalationService extends BaseService {
 			name,
 			input.namespace,
 		);
-		const cell = await this.repo.getCell(projectId, branch, keyId, code);
+		// Materialize an inherited cell onto this branch so the escalation flips the
+		// branch's own cell, not the shared parent's (cross-branch contamination).
+		const cell = await this.repo.materializeCell(
+			projectId,
+			branch,
+			keyId,
+			code,
+		);
 		if (!cell) throw notFound(`No ${code} translation for ${name}`);
 		const now = new Date().toISOString();
 		// The lifecycle is the verdict: flip the cell to `escalated`.
@@ -137,8 +144,10 @@ export class EscalationService extends BaseService {
 		if (esc.status === "resolved")
 			throw conflict("Escalation already resolved");
 		const { branchId, keyId, locale } = esc;
+		// Materialize so the accept CAS targets a branch-owned cell (an escalation on
+		// a child branch may point at a cell still inherited from the parent).
 		const [cell, key] = await Promise.all([
-			this.repo.getCell(projectId, branchId, keyId, locale),
+			this.repo.materializeCell(projectId, branchId, keyId, locale),
 			this.repo.getKeyDef(projectId, branchId, keyId),
 		]);
 		if (!cell || !key) throw notFound("Escalated translation no longer exists");
@@ -205,9 +214,13 @@ export class EscalationService extends BaseService {
 			resolvedAt: now,
 			resolution,
 		});
-		// A spawned Example/GlossaryTerm is a context change → fan out staleness.
+		// A spawned Example/GlossaryTerm is a context change → fan out staleness, but
+		// exclude the cell this resolution just accepted so it isn't re-staled.
 		if (input.spawnExample || input.spawnGlossary)
-			await this.context.noteContextChange(projectId, scope);
+			await this.context.noteContextChange(projectId, scope, {
+				exceptBranchId: branchId,
+				exceptLocale: locale,
+			});
 		return saved;
 	}
 }

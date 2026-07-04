@@ -848,11 +848,15 @@ export class FakeRepo implements RepositoryApi {
 		projectId: string,
 		branchId: string,
 		keyId: string,
+		exceptLocale?: string,
 	): Promise<number> {
 		const cells = await this.listCellsByKey(projectId, branchId, keyId);
 		const touched = cells.filter(
 			(c) =>
-				!c.stale && c.lifecycle !== "untranslated" && c.lifecycle !== "retired",
+				!c.stale &&
+				c.locale !== exceptLocale &&
+				c.lifecycle !== "untranslated" &&
+				c.lifecycle !== "retired",
 		);
 		for (const c of touched) await this.putCell({ ...c, stale: true });
 		return touched.length;

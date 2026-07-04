@@ -65,21 +65,31 @@ export class FieldReportService extends BaseService {
 		);
 		const now = new Date().toISOString();
 		// Reopen an accepted cell (accepted → proposed + stale) so the fix re-enters
-		// the router; a cell that is not accepted is left as-is.
-		const cell = await this.repo.getCell(
+		// the router; a cell that is not accepted is left as-is. Materialize first so a
+		// child branch reopens its own copy, not the shared parent cell — and only when
+		// it is actually accepted, so an inherited draft is not needlessly copied down.
+		const resolved = await this.repo.getCellResolved(
 			projectId,
 			branch,
 			keyId,
 			input.locale,
 		);
-		if (cell && cell.lifecycle === "accepted")
-			await this.repo.putCell({
-				...cell,
-				lifecycle: "proposed",
-				stale: true,
-				updatedBy: actor.userId,
-				updatedAt: now,
-			});
+		if (resolved?.value.lifecycle === "accepted") {
+			const cell = await this.repo.materializeCell(
+				projectId,
+				branch,
+				keyId,
+				input.locale,
+			);
+			if (cell)
+				await this.repo.putCell({
+					...cell,
+					lifecycle: "proposed",
+					stale: true,
+					updatedBy: actor.userId,
+					updatedAt: now,
+				});
+		}
 		return this.repo.putFieldReport({
 			id: newId("fr"),
 			projectId,
@@ -165,8 +175,13 @@ export class FieldReportService extends BaseService {
 			resolvedAt: now,
 			resolution,
 		});
+		// Exclude the reported cell from the fan-out so the fix a run applied isn't
+		// immediately re-staled by the context this resolution spawned.
 		if (input.spawnExample || input.spawnGlossary)
-			await this.context.noteContextChange(projectId, scope);
+			await this.context.noteContextChange(projectId, scope, {
+				exceptBranchId: branchId,
+				exceptLocale: locale,
+			});
 		return saved;
 	}
 }

@@ -123,9 +123,20 @@ export class BranchService extends BaseService {
 			startedAt: now,
 		});
 
-		// 1. Transport branch-introduced keys (defs the child owns, parent lacks).
+		// 1. Transport branch-introduced keys (defs the child owns, parent lacks), and
+		// carry a bumped source revision onto a key the parent already has — so if the
+		// merge moved the source on, the parent's dependents flag stale.
 		for (const k of await this.repo.listKeyDefs(projectId, childBranchId)) {
-			if (await this.repo.getKeyDef(projectId, parentId, k.id)) continue;
+			const parentKey = await this.repo.getKeyDef(projectId, parentId, k.id);
+			if (parentKey) {
+				if (k.sourceRevision !== parentKey.sourceRevision)
+					await this.repo.putKeyDef(parentId, {
+						...parentKey,
+						sourceRevision: k.sourceRevision,
+						updatedAt: now,
+					});
+				continue;
+			}
 			try {
 				await this.repo.createKeyDef(parentId, { ...k });
 			} catch {
