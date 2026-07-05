@@ -71,6 +71,9 @@ export async function authenticate(
 			orgId: user.orgId,
 			globalRole: user.globalRole,
 			readOnly: apiKey.readOnly === true,
+			// The human/agent gate reads this off the authenticated key, never a
+			// caller-supplied field, so an agent can't self-declare as human.
+			principal: apiKey.principal,
 		},
 	};
 }
@@ -118,6 +121,7 @@ export async function bootstrapOwner(
 		hash,
 		prefix,
 		createdAt: now,
+		principal: "human",
 	};
 	if (input.force) {
 		// Operator override (never reachable over HTTP): force intentionally allows a

@@ -47,6 +47,31 @@ describe("runPull", () => {
 		});
 	});
 
+	it("addresses namespace-less keys (empty-string namespace) for a target with no namespace", async () => {
+		const noNs: ProjectConfig = {
+			projectId: "proj_1",
+			targets: [{ format: "json-flat", path: "web/{locale}.json" }],
+		};
+		const api = fakeApi({
+			listLocales: async () => ({ locales: [{ code: "en" }] }) as never,
+			exportBundle: async () =>
+				({
+					entries: [
+						// The server emits `""` for a namespace-less key, `web` otherwise.
+						{ key: "a", value: "A", namespace: "" },
+						{ key: "promo", value: "Sale", namespace: "web" },
+					],
+				}) as never,
+		});
+		const cap = capturingSink();
+		const written: Record<string, string> = {};
+		await runPull(api, noNs, {}, cap.sink, (p, c) => {
+			written[p] = c;
+		});
+		// Only the namespace-less key lands — the old `"default"` sentinel matched none.
+		expect(JSON.parse(written["web/en.json"]!)).toEqual({ a: "A" });
+	});
+
 	it("passes working/excludeStale through and records them in the result", async () => {
 		let captured: { working?: boolean; excludeStale?: boolean } | undefined;
 		const api = fakeApi({

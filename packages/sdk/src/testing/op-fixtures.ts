@@ -1298,6 +1298,7 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 			userId: "U_userId",
 			readOnly: true,
 			expiresAt: "2099-01-01T00:00:00.000Z",
+			principal: "agent",
 		},
 		returns: {
 			apiKey: {
@@ -1319,6 +1320,7 @@ export const OP_FIXTURES: Record<string, OpFixture | OpFixture[]> = {
 						userId: "U_userId",
 						readOnly: true,
 						expiresAt: "2099-01-01T00:00:00.000Z",
+						principal: "agent",
 					},
 				],
 			},

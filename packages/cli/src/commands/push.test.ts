@@ -75,6 +75,51 @@ describe("runPush", () => {
 		});
 	});
 
+	it("pushes a no-namespace target with the empty-string namespace", async () => {
+		const noNs: ProjectConfig = {
+			projectId: "proj_1",
+			targets: [{ format: "json-flat", path: "locales/{locale}.json" }],
+		};
+		const importKeys = vi.fn(async () => ({
+			created: 1,
+			updated: 0,
+			reactivated: 0,
+			baseValuesSet: 1,
+			deleted: 0,
+			deprecated: 0,
+		}));
+		const importTranslations = vi.fn(async () => ({
+			written: 1,
+			skipped: [] as string[],
+		}));
+		const api = fakeApi({
+			getProject: async () => project as never,
+			listLocales: async () => locales as never,
+			importKeys,
+			importTranslations,
+		});
+		const cap = capturingSink();
+		await runPush(
+			api,
+			noNs,
+			{},
+			cap.sink,
+			reader({
+				"locales/en.json": JSON.stringify({ a: "A" }),
+				"locales/fr.json": JSON.stringify({ a: "Ah" }),
+			}),
+		);
+		// Namespace-less keys are addressed with "", matching the server + agents —
+		// not the old literal "default" namespace.
+		expect(importKeys).toHaveBeenCalledWith("proj_1", expect.anything(), "", {
+			prune: undefined,
+			deprecate: true,
+		});
+		expect(importTranslations).toHaveBeenCalledWith("proj_1", "fr", [
+			{ name: "a", namespace: "", value: "Ah" },
+		]);
+	});
+
 	it("hard-deletes with --prune (deprecate=false)", async () => {
 		const importKeys = vi.fn(async () => ({
 			created: 0,

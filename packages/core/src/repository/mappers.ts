@@ -183,6 +183,8 @@ export function toApiKey(i: Item): ApiKey {
 		lastUsedAt: i.lastUsedAt as string | undefined,
 		expiresAt: i.expiresAt as string | undefined,
 		readOnly: i.readOnly as boolean | undefined,
+		// A key written before this field existed is a human key.
+		principal: (i.principal as ApiKey["principal"]) ?? "human",
 	};
 }
 

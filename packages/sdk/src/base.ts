@@ -25,6 +25,7 @@ import {
 	mergeResultSchema,
 	namespaceEntitySchema,
 	namespaceSchema,
+	principalSchema,
 	projectRoleSchema,
 	projectSchema,
 	qaConfigSchema,
@@ -75,7 +76,8 @@ export {
 	mergeResultSchema,
 	namespaceEntitySchema,
 	namespaceSchema,
-	// The role field helpers used by admin operations are core's canonical enums.
+	// The role/principal field helpers used by admin operations are core's canonical enums.
+	principalSchema as principal,
 	projectRoleSchema as projectRole,
 	projectSchema,
 	qaConfigSchema,

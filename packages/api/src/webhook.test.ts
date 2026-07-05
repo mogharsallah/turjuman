@@ -12,9 +12,10 @@ import {
 	bootstrapOwner,
 	Repository,
 	TurjumanService,
+	webhookEventSchema,
 } from "@turjuman/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { handler } from "./webhook.js";
+import { handler, RULE_EVENTS } from "./webhook.js";
 
 /**
  * Exercises the DynamoDB Streams → webhook dispatcher against DynamoDB Local and
@@ -133,4 +134,21 @@ describe.skipIf(!endpoint)("webhook dispatcher", () => {
 			data: { keyId: "key_greeting", branchId: "main", locale: "fr" },
 		});
 	}, 30_000);
+});
+
+/**
+ * Hermetic guard (runs without DynamoDB): every subscribable event must be
+ * produced by the declarative rule table, so adding a value to
+ * `webhookEventSchema` without a rule fails here instead of silently never
+ * firing. `translation.stale` is the one derived (non-1:1) signal, emitted
+ * outside the table.
+ */
+describe("webhook event coverage", () => {
+	it("covers every webhookEventSchema value with a rule (bar the derived stale signal)", () => {
+		const derived = new Set(["translation.stale"]);
+		const uncovered = webhookEventSchema.options.filter(
+			(event) => !RULE_EVENTS.has(event) && !derived.has(event),
+		);
+		expect(uncovered).toEqual([]);
+	});
 });

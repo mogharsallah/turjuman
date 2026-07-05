@@ -559,9 +559,12 @@ export class TranslationsService extends BaseService {
 			projectId,
 			"translation.review",
 		);
-		if (opts.runRef && project.requireHumanAccept)
+		// Enforce off the authenticated principal, never the caller-supplied runRef
+		// (which is only attribution) — an agent key cannot accept under
+		// requireHumanAccept even if it omits runRef.
+		if (project.requireHumanAccept && actor.principal === "agent")
 			throw forbidden(
-				"This project requires a human to accept; a run cannot self-accept.",
+				"This project requires a human to accept; an agent key cannot self-accept.",
 			);
 		await this.requireLocaleExists(projectId, code);
 		const branch = opts.branch ?? MAIN_BRANCH_ID;

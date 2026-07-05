@@ -67,15 +67,16 @@ const REST_FIXTURES: Record<string, RestFixture> = {
 	run_qa_checks: {
 		method: "post",
 		url: `/v1/projects/${PID}/checks`,
-		body: { locale: "zz", checks: ["icu"] },
+		body: { locale: "zz", checks: ["icu"], slot: "accepted" },
 		serviceMethod: "qa.run",
 		check: (a) => {
 			expect(a[1]).toBe(PID);
-			// The wire field `checks` is renamed to the service field `checkIds`.
-			// REST carries no `slot` (MCP-only); the service defaults it.
+			// The wire field `checks` is renamed to the service field `checkIds`, and
+			// `slot` now reaches the service over REST too (was silently MCP-only).
 			expect(a[2]).toMatchObject({
 				locale: "zz",
 				checkIds: ["icu"],
+				slot: "accepted",
 			});
 		},
 	},

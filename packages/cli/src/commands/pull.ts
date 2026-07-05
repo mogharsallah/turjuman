@@ -1,7 +1,7 @@
 import * as formats from "@turjuman/formats";
 import type { Command } from "commander";
 import type { ApiClient } from "../client.js";
-import type { ProjectConfig } from "../config.js";
+import { NO_NAMESPACE, type ProjectConfig } from "../config.js";
 import type { CliDeps } from "../deps.js";
 import type { OutputSink } from "../output.js";
 import { type FileWriter, filePath, writeFileEnsured } from "../paths.js";
@@ -35,7 +35,7 @@ export async function runPull(
 			excludeStale: opts.excludeStale,
 		});
 		for (const target of config.targets) {
-			const ns = target.namespace ?? "default";
+			const ns = target.namespace ?? NO_NAMESPACE;
 			const adapter = formats.getAdapter(target.format);
 			const items = entries
 				.filter((e) => e.namespace === ns)

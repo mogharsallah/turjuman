@@ -727,6 +727,14 @@
             "items": {
               "type": "string"
             }
+          },
+          "slot": {
+            "type": "string",
+            "enum": [
+              "working",
+              "accepted"
+            ],
+            "description": "Which value to check: the working draft (default) or the accepted head."
           }
         }
       },

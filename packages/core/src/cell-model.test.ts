@@ -115,7 +115,7 @@ describe("the accept transition", () => {
 });
 
 describe("requireHumanAccept gate", () => {
-	it("rejects a run-attributed accept but allows a human one", async () => {
+	it("blocks an agent-principal key but allows a human (runRef is only attribution)", async () => {
 		const { svc, actor, projectId } = await project();
 		await svc.projects.update(actor, projectId, { requireHumanAccept: true });
 		await svc.keys.create(actor, projectId, {
@@ -126,18 +126,44 @@ describe("requireHumanAccept gate", () => {
 			name: "greeting",
 			value: "Bonjour",
 		});
+		// The gate reads the authenticated principal, not the caller-supplied runRef:
+		// an agent key is refused even when it omits runRef…
+		const agent = { ...actor, principal: "agent" as const };
 		await expect(
-			svc.translations.accept(actor, projectId, "fr", "greeting", {
-				runRef: "run_123",
-			}),
+			svc.translations.accept(agent, projectId, "fr", "greeting"),
 		).rejects.toMatchObject({ code: "FORBIDDEN" });
+		// …while a human is allowed, even carrying a runRef purely for attribution.
 		const human = await svc.translations.accept(
 			actor,
 			projectId,
 			"fr",
 			"greeting",
+			{ runRef: "run_123" },
 		);
 		expect(human.lifecycle).toBe("accepted");
+	});
+
+	it("also blocks an agent from resolving an escalation", async () => {
+		const { svc, actor, projectId } = await project();
+		await svc.projects.update(actor, projectId, { requireHumanAccept: true });
+		await svc.keys.create(actor, projectId, {
+			name: "greeting",
+			baseValue: "Hello",
+		});
+		await svc.translations.set(actor, projectId, "fr", {
+			name: "greeting",
+			value: "Bonjour",
+		});
+		const esc = await svc.escalations.open(actor, projectId, "fr", "greeting", {
+			reason: "review",
+		});
+		const agent = { ...actor, principal: "agent" as const };
+		await expect(
+			svc.escalations.resolve(agent, projectId, esc.id),
+		).rejects.toMatchObject({ code: "FORBIDDEN" });
+		// A human resolution (accepting the chosen value) is permitted.
+		const resolved = await svc.escalations.resolve(actor, projectId, esc.id);
+		expect(resolved.status).toBe("resolved");
 	});
 });
 

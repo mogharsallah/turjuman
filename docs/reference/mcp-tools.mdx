@@ -72,7 +72,7 @@ A **branch** is a copy-on-write line of work over a project's keys and translati
 | `list_stale` | List cells whose source value has changed since they were written (paged) |
 | `set_translation` | Write a working draft `value` for a key/locale; the cell becomes `proposed` |
 | `bulk_set_translations` | Write up to 500 draft entries in one call; unknown keys are silently skipped |
-| `accept_translation` | Accept a proposed value: append a version and advance the cell's `head` (a compare-and-swap). Honors `requireHumanAccept` |
+| `accept_translation` | Accept a proposed value: append a version and advance the cell's `head` (a compare-and-swap). Under `requireHumanAccept`, an **agent** key is refused (see [Administration](#administration)) — the gate reads the authenticated key's principal, not any `runRef` |
 
 ### Runs
 
@@ -185,7 +185,7 @@ An **escalation** is the review router's human terminal exit — opened only for
 | `add_member` | Add a user to a project |
 | `set_member_role` | Change a project member's role |
 | `remove_member` | Remove a user from a project |
-| `create_api_key` | Create a new API key |
+| `create_api_key` | Create a new API key. `principal` is `human` (default) or `agent`; under a project's `requireHumanAccept`, only a `human` key may accept a translation or resolve an escalation. `readOnly` limits the key to read actions; `expiresAt` sets an expiry |
 | `list_api_keys` | List all API keys in your organisation |
 | `revoke_api_key` | Permanently revoke an API key |
 

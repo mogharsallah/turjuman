@@ -1,4 +1,4 @@
-import type { GlobalRole, ProjectRole } from "./domain.js";
+import type { GlobalRole, Principal, ProjectRole } from "./domain.js";
 import { forbidden } from "./errors.js";
 
 /**
@@ -46,6 +46,13 @@ export interface Actor {
 	 * role — a least-privilege credential for CI pulls and dashboards.
 	 */
 	readOnly?: boolean;
+	/**
+	 * Whether the authenticating key is a person (`human`) or an automated agent
+	 * (`agent`). Stamped by `authenticate()` from the key; a project's
+	 * `requireHumanAccept` refuses an `agent` from accepting/resolving. Absent for
+	 * synthetic/internal actors, which are treated as non-agent (permitted).
+	 */
+	principal?: Principal;
 }
 
 /** A read-only actor may perform only `*.read` actions. */

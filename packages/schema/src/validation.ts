@@ -111,6 +111,12 @@ export const runChecksBodySchema = z
 	.object({
 		locale: localeCodeSchema.optional(),
 		checks: z.array(z.string()).optional(),
+		slot: z
+			.enum(["working", "accepted"])
+			.optional()
+			.describe(
+				"Which value to check: the working draft (default) or the accepted head.",
+			),
 	})
 	.openapi({ ref: "RunChecksBody" });
 

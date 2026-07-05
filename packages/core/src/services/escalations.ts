@@ -1,6 +1,7 @@
 import type { Actor, Escalation, EscalationStatus } from "@turjuman/schema";
 import {
 	conflict,
+	forbidden,
 	MAIN_BRANCH_ID,
 	newId,
 	notFound,
@@ -139,6 +140,12 @@ export class EscalationService extends BaseService {
 			projectId,
 			"translation.review",
 		);
+		// Resolving commits the chosen value as a human accept; under
+		// requireHumanAccept an agent key may not do so (gated on the principal).
+		if (project.requireHumanAccept && actor.principal === "agent")
+			throw forbidden(
+				"This project requires a human to accept; an agent key cannot resolve an escalation.",
+			);
 		const esc = await this.repo.getEscalation(projectId, id);
 		if (!esc) throw notFound(`Escalation ${id} not found`);
 		if (esc.status === "resolved")

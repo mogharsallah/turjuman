@@ -3,7 +3,7 @@ import * as formats from "@turjuman/formats";
 import type { qa } from "@turjuman/schema";
 import type { Command } from "commander";
 import type { ApiClient } from "../client.js";
-import type { ProjectConfig } from "../config.js";
+import { NO_NAMESPACE, type ProjectConfig } from "../config.js";
 import type { CliDeps } from "../deps.js";
 import type { OutputSink } from "../output.js";
 import { filePath } from "../paths.js";
@@ -44,7 +44,7 @@ export async function runPush(
 	const files: Record<string, unknown>[] = [];
 
 	for (const target of config.targets) {
-		const ns = target.namespace ?? "default";
+		const ns = target.namespace ?? NO_NAMESPACE;
 		const adapter = formats.getAdapter(target.format);
 		for (const locale of locales) {
 			const file = filePath(target.path, locale.code);

@@ -178,6 +178,14 @@ export const userSchema = z
 	.openapi({ ref: "User" });
 export type User = z.infer<typeof userSchema>;
 
+/**
+ * Whether a credential acts as a person or an automated agent. Under a project's
+ * `requireHumanAccept`, only a `human` key may accept a translation or resolve an
+ * escalation — an `agent` key is refused, independent of any `runRef` attribution.
+ */
+export const principalSchema = z.enum(["human", "agent"]);
+export type Principal = z.infer<typeof principalSchema>;
+
 export const apiKeySchema = z.object({
 	/** Public identifier, safe to display/list. */
 	id: z.string().describe("Public identifier, safe to display/list."),
@@ -209,6 +217,13 @@ export const apiKeySchema = z.object({
 		.optional()
 		.describe(
 			"When true, the key may only perform read actions, regardless of the user's role.",
+		),
+	/** Whether the key acts as a person or an automated agent (default `human`). An
+	 * `agent` key cannot accept/resolve under a project's `requireHumanAccept`. */
+	principal: principalSchema
+		.default("human")
+		.describe(
+			"Whether the key acts as a person or an automated agent; an agent key cannot accept under requireHumanAccept.",
 		),
 });
 export type ApiKey = z.infer<typeof apiKeySchema>;
