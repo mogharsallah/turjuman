@@ -428,8 +428,6 @@ export const translationSchema = z
 		origin: translationOriginSchema
 			.optional()
 			.describe("How the current `value` was produced. Absent when unknown."),
-		/** Set while a run or escalation owns the cell (in-flight exclusivity). */
-		lockedByRunId: z.string().optional(),
 		/** userId of the last editor. */
 		updatedBy: z.string().describe("userId of the last editor."),
 		updatedAt: z.string(),
@@ -874,9 +872,6 @@ export const qaConfigSchema = z
 	})
 	.openapi({ ref: "QaConfig" });
 export type QaConfig = z.infer<typeof qaConfigSchema>;
-
-/** Default namespace label applied when an import does not specify one. */
-export const DEFAULT_NAMESPACE = "default";
 
 /** The reserved id + name of the always-present root branch. */
 export const MAIN_BRANCH_ID = "main";

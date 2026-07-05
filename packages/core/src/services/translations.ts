@@ -445,7 +445,6 @@ export class TranslationsService extends BaseService {
 			stale: false,
 			sourceRef: key.sourceRevision,
 			origin: input.origin ?? existing?.origin ?? "human",
-			lockedByRunId: existing?.lockedByRunId,
 			updatedBy: actor.userId,
 			updatedAt: now,
 		});
@@ -469,10 +468,9 @@ export class TranslationsService extends BaseService {
 
 		// Resolved key index: a child branch bulk-set also addresses inherited keys.
 		const allKeys = await this.repo.listKeyDefsResolved(projectId, branch);
-		const nsIds = new Map<string, string | undefined>();
-		for (const ns of new Set(entries.map((e) => e.namespace ?? ""))) {
-			nsIds.set(ns, await this.namespaces.idOf(projectId, ns));
-		}
+		// Resolve every referenced namespace name in a single read (repeated idOf
+		// would run one full-partition query per distinct namespace).
+		const idByName = await this.namespaces.idMap(projectId);
 		const keyByLabel = new Map(
 			allKeys.map((k) => [`${k.namespaceId ?? "_"}#${k.name}`, k]),
 		);
@@ -489,8 +487,8 @@ export class TranslationsService extends BaseService {
 		const skipped: string[] = [];
 		let baseWritten = 0;
 		for (const e of entries) {
-			const nsName = e.namespace ?? "";
-			const nsId = nsIds.get(nsName);
+			const nsName = (e.namespace ?? "").trim();
+			const nsId = nsName ? idByName.get(nsName) : undefined;
 			// A named-but-unknown namespace is reported, never silently bucketed into
 			// the no-namespace slot (where it could mis-match a namespace-less key).
 			if (nsName && !nsId) {
@@ -530,7 +528,6 @@ export class TranslationsService extends BaseService {
 					stale: false,
 					sourceRef: key.sourceRevision,
 					origin: e.origin ?? prev?.origin ?? "agent",
-					lockedByRunId: prev?.lockedByRunId,
 					updatedBy: actor.userId,
 					updatedAt: now,
 				});

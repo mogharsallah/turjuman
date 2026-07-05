@@ -2,6 +2,7 @@ import type {
 	GlobalRole,
 	Project,
 	ProjectRole,
+	Scope,
 	Translation,
 	User,
 } from "@turjuman/schema";
@@ -191,5 +192,58 @@ export abstract class BaseService {
 				cell.head,
 			)
 		)?.value;
+	}
+
+	/**
+	 * Spawn the optional reusable context from a human review decision — a gold
+	 * Example (`sourceText → targetText`) and/or a key-scoped glossary term — and
+	 * return the refs to record on the resolution. Shared by escalation and
+	 * field-report resolution (the two differ only in how they derive the example's
+	 * source/target text). `now` is threaded in so the spawns share the caller's
+	 * resolution timestamp.
+	 */
+	protected async spawnDecisionContext(params: {
+		scope: Scope;
+		locale: string;
+		sourceText: string;
+		targetText: string;
+		now: string;
+		spawnExample?: boolean;
+		spawnGlossary?: { term: string; translations?: Record<string, string> };
+	}): Promise<{ spawnedExampleRef?: string; spawnedGlossaryRef?: string }> {
+		const { scope, locale, now } = params;
+		const out: { spawnedExampleRef?: string; spawnedGlossaryRef?: string } = {};
+		if (params.spawnExample) {
+			const ex = await this.repo.putExample({
+				id: newId("ex"),
+				projectId: scope.projectId,
+				scope,
+				locale,
+				sourceText: params.sourceText,
+				targetText: params.targetText,
+				quality: "gold",
+				origin: "human",
+				lifecycle: "active",
+				createdAt: now,
+				updatedAt: now,
+			});
+			out.spawnedExampleRef = ex.id;
+		}
+		if (params.spawnGlossary) {
+			const term = await this.repo.putGlossaryTerm({
+				projectId: scope.projectId,
+				id: newId("term"),
+				scope,
+				term: requireText(params.spawnGlossary.term, "term"),
+				translations: params.spawnGlossary.translations ?? {},
+				caseSensitive: false,
+				doNotTranslate: false,
+				lifecycle: "active",
+				createdAt: now,
+				updatedAt: now,
+			});
+			out.spawnedGlossaryRef = term.id;
+		}
+		return out;
 	}
 }

@@ -1170,7 +1170,6 @@ export class Repository {
 			"#stale": "stale",
 			"#updatedBy": "updatedBy",
 			"#updatedAt": "updatedAt",
-			"#lock": "lockedByRunId",
 		};
 		const values: Record<string, unknown> = {
 			":seq": seq,
@@ -1216,7 +1215,7 @@ export class Repository {
 									PK: cellPK(params.projectId, params.branchId, params.locale),
 									SK: cellSK(params.keyId),
 								},
-								UpdateExpression: `SET ${sets.join(", ")} REMOVE #lock`,
+								UpdateExpression: `SET ${sets.join(", ")}`,
 								ExpressionAttributeNames: names,
 								ExpressionAttributeValues: values,
 								ConditionExpression: condition,
@@ -1845,17 +1844,32 @@ export class Repository {
 	}
 
 	/** The branch ids from `branchId` up to the root, self first. */
+	/** Per-instance memo of resolved branch chains. `parentBranchId` is immutable
+	 * after creation and branch ids are never reused, so a chain that terminates at
+	 * `main` is valid for the life of the process. */
+	private readonly branchChainCache = new Map<string, string[]>();
+
 	private async branchChain(
 		projectId: string,
 		branchId: string,
 	): Promise<string[]> {
+		const cacheKey = `${projectId}#${branchId}`;
+		const cached = this.branchChainCache.get(cacheKey);
+		if (cached) return cached;
 		const chain: string[] = [];
 		let current: string | null | undefined = branchId;
+		let complete = false;
 		while (current) {
 			chain.push(current);
-			if (current === MAIN_BRANCH_ID) break;
+			if (current === MAIN_BRANCH_ID) {
+				complete = true;
+				break;
+			}
 			current = (await this.getBranch(projectId, current))?.parentBranchId;
 		}
+		// Only memoize a chain that reaches `main`; an incomplete one (a branch row
+		// not yet visible) could still be completed by a later write.
+		if (complete) this.branchChainCache.set(cacheKey, chain);
 		return chain;
 	}
 
@@ -1873,20 +1887,26 @@ export class Repository {
 				":p": cellGSI3PK(projectId, branchId, keyId),
 			},
 		});
-		const out: { PK: string; SK: string }[] = [];
-		for (const cell of cells) {
-			out.push({ PK: cell.PK, SK: cell.SK });
-			const versions = await this.queryAll({
-				TableName: this.table,
-				KeyConditionExpression: "PK = :p AND begins_with(SK, :s)",
-				ExpressionAttributeValues: {
-					":p": cell.PK,
-					":s": versionPrefix(keyId),
-				},
-			});
-			for (const v of versions) out.push({ PK: v.PK, SK: v.SK });
-		}
-		return out;
+		// Each cell's version rows live in its own (locale) partition, so fan the
+		// per-cell version queries out in parallel rather than N sequential round-trips.
+		return (
+			await Promise.all(
+				cells.map(async (cell) => {
+					const versions = await this.queryAll({
+						TableName: this.table,
+						KeyConditionExpression: "PK = :p AND begins_with(SK, :s)",
+						ExpressionAttributeValues: {
+							":p": cell.PK,
+							":s": versionPrefix(keyId),
+						},
+					});
+					return [
+						{ PK: cell.PK, SK: cell.SK },
+						...versions.map((v) => ({ PK: v.PK, SK: v.SK })),
+					];
+				}),
+			)
+		).flat();
 	}
 
 	/** Raw `KEY#` key-definition rows on one branch — **including tombstones**

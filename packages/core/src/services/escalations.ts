@@ -178,42 +178,29 @@ export class EscalationService extends BaseService {
 		const now = new Date().toISOString();
 		const scope = { projectId, keyId };
 		const resolution: Escalation["resolution"] = { valueChosen: value };
-		if (input.spawnExample) {
-			const base = await this.repo.getCell(
-				projectId,
-				branchId,
-				keyId,
-				project.baseLocale,
+		if (input.spawnExample || input.spawnGlossary) {
+			// The example ships base → chosen value; the base is only read when an
+			// example is spawned.
+			const base = input.spawnExample
+				? await this.repo.getCell(
+						projectId,
+						branchId,
+						keyId,
+						project.baseLocale,
+					)
+				: undefined;
+			Object.assign(
+				resolution,
+				await this.spawnDecisionContext({
+					scope,
+					locale,
+					now,
+					sourceText: base?.value ?? "",
+					targetText: value,
+					spawnExample: input.spawnExample,
+					spawnGlossary: input.spawnGlossary,
+				}),
 			);
-			const ex = await this.repo.putExample({
-				id: newId("ex"),
-				projectId,
-				scope,
-				locale,
-				sourceText: base?.value ?? "",
-				targetText: value,
-				quality: "gold",
-				origin: "human",
-				lifecycle: "active",
-				createdAt: now,
-				updatedAt: now,
-			});
-			resolution.spawnedExampleRef = ex.id;
-		}
-		if (input.spawnGlossary) {
-			const term = await this.repo.putGlossaryTerm({
-				projectId,
-				id: newId("term"),
-				scope,
-				term: requireText(input.spawnGlossary.term, "term"),
-				translations: input.spawnGlossary.translations ?? {},
-				caseSensitive: false,
-				doNotTranslate: false,
-				lifecycle: "active",
-				createdAt: now,
-				updatedAt: now,
-			});
-			resolution.spawnedGlossaryRef = term.id;
 		}
 		const saved = await this.repo.putEscalation({
 			...esc,

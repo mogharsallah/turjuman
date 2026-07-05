@@ -499,9 +499,6 @@
             ],
             "description": "How the current `value` was produced. Absent when unknown."
           },
-          "lockedByRunId": {
-            "type": "string"
-          },
           "updatedBy": {
             "type": "string",
             "description": "userId of the last editor."

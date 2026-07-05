@@ -134,40 +134,27 @@ export class FieldReportService extends BaseService {
 		const now = new Date().toISOString();
 		const scope = { projectId, keyId };
 		const resolution: FieldReport["resolution"] = {};
-		if (input.spawnExample) {
-			const [cell, base] = await Promise.all([
-				this.repo.getCell(projectId, branchId, keyId, locale),
-				this.repo.getCell(projectId, branchId, keyId, project.baseLocale),
-			]);
-			const ex = await this.repo.putExample({
-				id: newId("ex"),
-				projectId,
-				scope,
-				locale,
-				sourceText: base?.value ?? "",
-				targetText: cell?.value ?? "",
-				quality: "gold",
-				origin: "human",
-				lifecycle: "active",
-				createdAt: now,
-				updatedAt: now,
-			});
-			resolution.spawnedExampleRef = ex.id;
-		}
-		if (input.spawnGlossary) {
-			const term = await this.repo.putGlossaryTerm({
-				projectId,
-				id: newId("term"),
-				scope,
-				term: requireText(input.spawnGlossary.term, "term"),
-				translations: input.spawnGlossary.translations ?? {},
-				caseSensitive: false,
-				doNotTranslate: false,
-				lifecycle: "active",
-				createdAt: now,
-				updatedAt: now,
-			});
-			resolution.spawnedGlossaryRef = term.id;
+		if (input.spawnExample || input.spawnGlossary) {
+			// The example ships base → the current (fixed) cell value; the cells are
+			// read only when an example is spawned.
+			const [cell, base] = input.spawnExample
+				? await Promise.all([
+						this.repo.getCell(projectId, branchId, keyId, locale),
+						this.repo.getCell(projectId, branchId, keyId, project.baseLocale),
+					])
+				: [undefined, undefined];
+			Object.assign(
+				resolution,
+				await this.spawnDecisionContext({
+					scope,
+					locale,
+					now,
+					sourceText: base?.value ?? "",
+					targetText: cell?.value ?? "",
+					spawnExample: input.spawnExample,
+					spawnGlossary: input.spawnGlossary,
+				}),
+			);
 		}
 		const saved = await this.repo.putFieldReport({
 			...report,

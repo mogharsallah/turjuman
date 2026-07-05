@@ -660,7 +660,6 @@ export class FakeRepo implements RepositoryApi {
 			// leaving the prior value intact otherwise — preserve it here too.
 			sourceRef: params.sourceRevision ?? existing.sourceRef,
 			origin: params.origin ?? existing.origin,
-			lockedByRunId: undefined,
 			updatedBy: params.updatedBy,
 			updatedAt: now,
 		};
@@ -1015,4 +1014,22 @@ export async function ownerActor(
 	});
 	const actor = (await authenticate(repo, boot.secret))!.actor;
 	return { actor, secret: boot.secret };
+}
+
+/**
+ * The shared behavioral-suite fixture: a fresh repo + service, a bootstrapped
+ * OWNER, and a project ("App", base locale `en`) with an added `fr` locale.
+ * Returns everything a service test threads through its calls.
+ */
+export async function project(email = "owner@acme.com"): Promise<{
+	repo: FakeRepo;
+	svc: TurjumanService;
+	actor: Actor;
+	projectId: string;
+}> {
+	const { repo, svc } = setup();
+	const { actor } = await ownerActor(repo, { email });
+	const p = await svc.projects.create(actor, { name: "App", baseLocale: "en" });
+	await svc.locales.add(actor, p.id, "fr");
+	return { repo, svc, actor, projectId: p.id };
 }

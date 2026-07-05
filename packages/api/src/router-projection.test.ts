@@ -96,44 +96,6 @@ const REST_FIXTURES: Record<string, RestFixture> = {
 			expect(a[2]).toMatchObject({ checks: { icu: { enabled: false } } });
 		},
 	},
-	score_translation: {
-		method: "post",
-		url: `/v1/projects/${PID}/translations/score`,
-		body: { locale: "zz", name: "N_keyName", score: 42 },
-		serviceMethod: "scoring.score",
-		check: (a) => {
-			expect(a[1]).toBe(PID);
-			expect(a[2]).toBe("zz"); // locale → 3rd positional
-			expect(a[3]).toMatchObject({ name: "N_keyName", score: 42 });
-		},
-	},
-	review_translations: {
-		method: "post",
-		url: `/v1/projects/${PID}/translations/review`,
-		body: { locale: "zz", entries: [{ name: "N_keyName", score: 42 }] },
-		serviceMethod: "scoring.reviewBatch",
-		check: (a) => {
-			expect(a[1]).toBe(PID);
-			expect(a[2]).toBe("zz");
-			expect(a[3]).toMatchObject([{ name: "N_keyName", score: 42 }]);
-		},
-	},
-	get_score_config: {
-		method: "get",
-		url: `/v1/projects/${PID}/score-config`,
-		serviceMethod: "scoring.getConfig",
-		check: (a) => expect(a[1]).toBe(PID),
-	},
-	set_score_config: {
-		method: "put",
-		url: `/v1/projects/${PID}/score-config`,
-		body: { threshold: 77 },
-		serviceMethod: "scoring.setConfig",
-		check: (a) => {
-			expect(a[1]).toBe(PID);
-			expect(a[2]).toMatchObject({ threshold: 77 });
-		},
-	},
 };
 
 describe("REST projection — path/body params land on the correct input field", () => {
@@ -145,6 +107,15 @@ describe("REST projection — path/body params land on the correct input field",
 	it("has a wiring fixture for every http-bound operation", () => {
 		const missing = httpOps.filter((n) => !REST_FIXTURES[n]);
 		expect(missing).toEqual([]);
+	});
+
+	// The inverse ratchet: a fixture whose operation was removed or unbound (e.g.
+	// the deleted scoring surface) can't linger silently.
+	it("has no fixture for a removed or unbound operation", () => {
+		const stale = Object.keys(REST_FIXTURES).filter(
+			(n) => !httpOps.includes(n),
+		);
+		expect(stale).toEqual([]);
 	});
 
 	describe.each(httpOps.filter((n) => REST_FIXTURES[n]))("%s", (name) => {

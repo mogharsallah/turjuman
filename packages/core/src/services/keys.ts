@@ -246,7 +246,7 @@ export class KeysService extends BaseService {
 				.map((k) => [k.name, k]),
 		);
 		const now = new Date().toISOString();
-		let baseValuesSet = 0;
+		const baseWrites: { keyId: string; value: string }[] = [];
 		const seen = new Set<string>();
 		let created = 0;
 		let updated = 0;
@@ -280,18 +280,8 @@ export class KeysService extends BaseService {
 				}
 				// Only re-write the source when its value actually changed (revChanged);
 				// an unchanged re-push must not append a redundant version.
-				if (entry.baseValue !== undefined && revChanged) {
-					await this.writeSourceValue({
-						projectId,
-						branchId: branch,
-						keyId: prev.id,
-						locale: project.baseLocale,
-						value: entry.baseValue,
-						origin: "import",
-						userId: actor.userId,
-					});
-					baseValuesSet++;
-				}
+				if (entry.baseValue !== undefined && revChanged)
+					baseWrites.push({ keyId: prev.id, value: entry.baseValue });
 			} else {
 				const key: TranslationKey = {
 					id: newId("key"),
@@ -310,20 +300,27 @@ export class KeysService extends BaseService {
 				};
 				await this.repo.createKeyDef(branch, key);
 				created++;
-				if (entry.baseValue !== undefined) {
-					await this.writeSourceValue({
-						projectId,
-						branchId: branch,
-						keyId: key.id,
-						locale: project.baseLocale,
-						value: entry.baseValue,
-						origin: "import",
-						userId: actor.userId,
-					});
-					baseValuesSet++;
-				}
+				if (entry.baseValue !== undefined)
+					baseWrites.push({ keyId: key.id, value: entry.baseValue });
 			}
 		}
+
+		// Fan the source-value writes out in parallel — each is an accept-append for a
+		// distinct key, so they don't contend, and a full-file initial import isn't a
+		// serial chain of appends.
+		await Promise.all(
+			baseWrites.map((w) =>
+				this.writeSourceValue({
+					projectId,
+					branchId: branch,
+					keyId: w.keyId,
+					locale: project.baseLocale,
+					value: w.value,
+					origin: "import",
+					userId: actor.userId,
+				}),
+			),
+		);
 
 		const absent = [...existing.values()].filter((k) => !seen.has(k.name));
 		let deleted = 0;
@@ -356,7 +353,7 @@ export class KeysService extends BaseService {
 			created,
 			updated,
 			reactivated,
-			baseValuesSet,
+			baseValuesSet: baseWrites.length,
 			deleted,
 			deprecated,
 		};

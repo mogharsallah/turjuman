@@ -1,6 +1,6 @@
 import { MAIN_BRANCH_ID } from "@turjuman/schema";
 import { describe, expect, it, vi } from "vitest";
-import { ownerActor, setup } from "./testing/fake-repo.js";
+import { project } from "./testing/fake-repo.js";
 
 /**
  * Hermetic coverage of the Batch 3 spine — branching, releases, and field
@@ -10,14 +10,6 @@ import { ownerActor, setup } from "./testing/fake-repo.js";
  * escalation, no budget); a release pins a branch immutably; a field report
  * reopens a cell and compounds the fix into reusable context.
  */
-
-async function project(email = "owner@acme.com") {
-	const { repo, svc } = setup();
-	const { actor } = await ownerActor(repo, { email });
-	const p = await svc.projects.create(actor, { name: "App", baseLocale: "en" });
-	await svc.locales.add(actor, p.id, "fr");
-	return { repo, svc, actor, projectId: p.id };
-}
 
 describe("branches are copy-on-write over their parent", () => {
 	it("a branch write is isolated from main; unwritten cells fall through", async () => {

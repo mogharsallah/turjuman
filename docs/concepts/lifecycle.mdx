@@ -31,7 +31,6 @@ A **translation cell** is the living record for a single string in a single loca
 | `stale` | `true` when the source value has moved on since this cell was written. Derived from `sourceRef`. |
 | `sourceRef` | The base revision this draft was translated *from*, captured when the draft was written. |
 | `origin` | How the current `value` was produced: `human`, `agent`, or `import`. |
-| `lockedByRunId` | Set while a [run](/reference/mcp-tools#runs) owns the cell, for in-flight exclusivity. |
 
 Because a cell is addressed by the key's opaque `keyId` rather than its name, renaming or moving a key never touches its translation cells — the data stays put while the label changes. See [Keys carry a stable identity](/concepts/architecture#keys-carry-a-stable-identity).
 

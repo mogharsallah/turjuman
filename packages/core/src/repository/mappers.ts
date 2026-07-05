@@ -418,7 +418,6 @@ export function toCell(i: Item): Translation {
 		stale: Boolean(i.stale),
 		sourceRef: i.sourceRef as string | undefined,
 		origin: i.origin as TranslationOrigin | undefined,
-		lockedByRunId: i.lockedByRunId as string | undefined,
 		updatedBy: i.updatedBy as string,
 		updatedAt: i.updatedAt as string,
 	};

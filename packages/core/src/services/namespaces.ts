@@ -120,6 +120,14 @@ export class NamespaceService extends BaseService {
 		return new Map(list.map((n) => [n.id, n.name]));
 	}
 
+	/** Map of `name -> namespaceId` for the project — resolve many referenced
+	 * namespaces in one read (the inverse of {@link nameMap}; avoids a query per
+	 * name the way repeated {@link idOf} would). */
+	async idMap(projectId: string): Promise<Map<string, string>> {
+		const list = await this.repo.listNamespaces(projectId);
+		return new Map(list.map((n) => [n.name, n.id]));
+	}
+
 	/** Resolve a namespace name to its id without creating it (`undefined` for an
 	 * empty/absent name or a name that does not exist). */
 	async idOf(

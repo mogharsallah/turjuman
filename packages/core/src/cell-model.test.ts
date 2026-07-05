@@ -1,6 +1,6 @@
 import { MAIN_BRANCH_ID } from "@turjuman/schema";
 import { describe, expect, it } from "vitest";
-import { ownerActor, setup } from "./testing/fake-repo.js";
+import { project } from "./testing/fake-repo.js";
 
 /**
  * Hermetic coverage of the rebuilt data model's hard parts — the invariants the
@@ -10,17 +10,6 @@ import { ownerActor, setup } from "./testing/fake-repo.js";
  * directly (accept compare-and-swap, the human-accept gate, source-revision
  * staleness, rename-by-id, namespace identity, accepted-vs-working export).
  */
-
-async function project(email = "owner@acme.com") {
-	const { repo, svc } = setup();
-	const { actor } = await ownerActor(repo, { email });
-	const p = await svc.projects.create(actor, {
-		name: "App",
-		baseLocale: "en",
-	});
-	await svc.locales.add(actor, p.id, "fr");
-	return { repo, svc, actor, projectId: p.id };
-}
 
 describe("project bootstrap", () => {
 	it("creates the root main branch and seeds the base locale", async () => {

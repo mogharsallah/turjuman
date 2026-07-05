@@ -1,6 +1,6 @@
 import { MAIN_BRANCH_ID } from "@turjuman/schema";
 import { describe, expect, it } from "vitest";
-import { ownerActor, setup } from "./testing/fake-repo.js";
+import { project } from "./testing/fake-repo.js";
 
 /**
  * Hermetic coverage of the Batch 2 context + agent loop, proven against the
@@ -10,14 +10,6 @@ import { ownerActor, setup } from "./testing/fake-repo.js";
  * retrieval, the escalation router (open → claim CAS → resolve + spawn), and
  * scoped glossary/comments.
  */
-
-async function project(email = "owner@acme.com") {
-	const { repo, svc } = setup();
-	const { actor } = await ownerActor(repo, { email });
-	const p = await svc.projects.create(actor, { name: "App", baseLocale: "en" });
-	await svc.locales.add(actor, p.id, "fr");
-	return { repo, svc, actor, projectId: p.id };
-}
 
 describe("the brief resolves the cascade for a key × locale", () => {
 	it("carries the key, base value, voice, and the locale shape", async () => {

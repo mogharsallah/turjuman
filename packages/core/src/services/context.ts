@@ -228,14 +228,19 @@ export class ContextService extends BaseService {
 							(scope.namespaceId ? k.namespaceId === scope.namespaceId : true),
 					)
 					.map((k) => k.id);
-		for (const br of await this.repo.listBranches(projectId))
-			for (const keyId of keyIds)
-				await this.repo.markCellsStaleByKey(
-					projectId,
-					br.id,
-					keyId,
-					br.id === opts.exceptBranchId ? opts.exceptLocale : undefined,
-				);
+		const branches = await this.repo.listBranches(projectId);
+		await Promise.all(
+			branches.flatMap((br) =>
+				keyIds.map((keyId) =>
+					this.repo.markCellsStaleByKey(
+						projectId,
+						br.id,
+						keyId,
+						br.id === opts.exceptBranchId ? opts.exceptLocale : undefined,
+					),
+				),
+			),
+		);
 	}
 
 	private async loadTarget(

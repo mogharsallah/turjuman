@@ -145,7 +145,14 @@ export class BranchService extends BaseService {
 		}
 
 		// 2. Transport the child's accepted cells; a parent that moved past the
-		// forkPoint and differs is a conflict → escalation.
+		// forkPoint and differs is a conflict → escalation. Load the parent's
+		// (post-transport) key defs once instead of a getKeyDef per cell.
+		const parentKeys = new Map(
+			(await this.repo.listKeyDefsResolved(projectId, parentId)).map((k) => [
+				k.id,
+				k,
+			]),
+		);
 		const conflicts: Escalation[] = [];
 		let merged = 0;
 		for (const locale of await this.repo.listLocales(projectId)) {
@@ -178,11 +185,7 @@ export class BranchService extends BaseService {
 					);
 					continue;
 				}
-				const parentKey = await this.repo.getKeyDef(
-					projectId,
-					parentId,
-					c.keyId,
-				);
+				const parentKey = parentKeys.get(c.keyId);
 				// acceptCell advances an existing cell; when the parent never had this
 				// cell, create it first so the transported value still gets a version.
 				const base =

@@ -1,6 +1,6 @@
 import { MAIN_BRANCH_ID } from "@turjuman/schema";
 import { describe, expect, it } from "vitest";
-import { ownerActor, setup } from "./testing/fake-repo.js";
+import { project } from "./testing/fake-repo.js";
 
 /**
  * L4 service coverage of the copy-on-write cluster and the standalone correctness
@@ -11,14 +11,6 @@ import { ownerActor, setup } from "./testing/fake-repo.js";
  * an independent oracle from the single-table repository the same invariants are
  * pinned against in `repository-cow.test.ts` / `integration.test.ts`.
  */
-
-async function project(email = "owner@acme.com") {
-	const { repo, svc } = setup();
-	const { actor } = await ownerActor(repo, { email });
-	const p = await svc.projects.create(actor, { name: "App", baseLocale: "en" });
-	await svc.locales.add(actor, p.id, "fr");
-	return { repo, svc, actor, projectId: p.id };
-}
 
 describe("copy-on-write cluster (child branches)", () => {
 	it("accepts a child-branch draft without touching main's cell", async () => {

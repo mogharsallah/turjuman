@@ -1,4 +1,5 @@
 import {
+	keyStateSchema,
 	namespaceEntitySchema,
 	namespaceSchema,
 	type Operation,
@@ -49,7 +50,7 @@ export const namespaceOps: Operation[] = [
 			name: namespaceSchema.optional(),
 			title: z.string().optional(),
 			description: z.string().optional(),
-			lifecycle: z.enum(["active", "deprecated"]).optional(),
+			lifecycle: keyStateSchema.optional(),
 		}),
 		output: namespaceEntitySchema,
 		handler: ({ projectId: id, namespaceId, ...patch }, { service, actor }) =>

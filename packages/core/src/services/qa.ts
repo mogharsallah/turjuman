@@ -215,65 +215,69 @@ export class QaService extends BaseService {
 			: (await this.repo.listLocales(projectId)).map((l) => l.code);
 		const locales = allTargets.filter((c) => c !== project.baseLocale);
 
-		const contexts: QaContext[] = [];
-		for (const code of locales) {
-			const cells = await this.repo.listCellsByLocaleResolved(
-				projectId,
-				branch,
-				code,
-			);
-			const byKey = new Map(cells.map((c) => [c.keyId, c]));
-			// Deliverable value per cell: the working draft, or the accepted head
-			// version (resolved through the branch chain) — a cell re-drafted after an
-			// accept still exposes its accepted value to the accepted slot, which the
-			// old `lifecycle === "accepted"` shortcut dropped.
-			const valueByKey = new Map<string, string | undefined>();
-			await Promise.all(
-				cells.map(async (c) =>
-					valueByKey.set(
-						c.keyId,
-						slot === "working"
-							? c.value
-							: await this.acceptedValue(projectId, branch, c),
+		// Build each locale's contexts independently, so the per-locale cell reads
+		// (and head-version resolutions) fan out in parallel rather than serially.
+		const perLocale = await Promise.all(
+			locales.map(async (code) => {
+				const cells = await this.repo.listCellsByLocaleResolved(
+					projectId,
+					branch,
+					code,
+				);
+				const byKey = new Map(cells.map((c) => [c.keyId, c]));
+				// Deliverable value per cell: the working draft, or the accepted head
+				// version (resolved through the branch chain) — a cell re-drafted after
+				// an accept still exposes its accepted value to the accepted slot, which
+				// the old `lifecycle === "accepted"` shortcut dropped.
+				const valueByKey = new Map<string, string | undefined>();
+				await Promise.all(
+					cells.map(async (c) =>
+						valueByKey.set(
+							c.keyId,
+							slot === "working"
+								? c.value
+								: await this.acceptedValue(projectId, branch, c),
+						),
 					),
-				),
-			);
-			const valueOf = (c: Translation | undefined): string | undefined =>
-				c ? valueByKey.get(c.keyId) : undefined;
+				);
+				const valueOf = (c: Translation | undefined): string | undefined =>
+					c ? valueByKey.get(c.keyId) : undefined;
 
-			const localeIndex = new Map<string, string[]>();
-			for (const c of cells) {
-				const v = valueOf(c);
-				const k = keyById.get(c.keyId);
-				if (v && v.trim() !== "" && k) {
-					const id = `${nsNameOf(k.namespaceId)}#${k.name}`;
-					(localeIndex.get(v) ?? localeIndex.set(v, []).get(v)!).push(id);
+				const localeIndex = new Map<string, string[]>();
+				for (const c of cells) {
+					const v = valueOf(c);
+					const k = keyById.get(c.keyId);
+					if (v && v.trim() !== "" && k) {
+						const id = `${nsNameOf(k.namespaceId)}#${k.name}`;
+						(localeIndex.get(v) ?? localeIndex.set(v, []).get(v)!).push(id);
+					}
 				}
-			}
 
-			for (const key of activeKeys) {
-				const c = byKey.get(key.id);
-				contexts.push({
-					baseLocale: project.baseLocale,
-					localeCode: code,
-					namespace: nsNameOf(key.namespaceId),
-					key,
-					baseValue: baseValue.get(key.id),
-					targetValue: valueOf(c),
-					targetStatus: c?.lifecycle,
-					expectsValue:
-						c?.lifecycle === "proposed" ||
-						c?.lifecycle === "accepted" ||
-						c?.lifecycle === "escalated",
-					stale:
-						(c?.stale ?? false) ||
-						(c?.sourceRef !== undefined && c.sourceRef !== key.sourceRevision),
-					origin: c?.origin,
-					glossary,
-					localeIndex,
+				return activeKeys.map((key): QaContext => {
+					const c = byKey.get(key.id);
+					return {
+						baseLocale: project.baseLocale,
+						localeCode: code,
+						namespace: nsNameOf(key.namespaceId),
+						key,
+						baseValue: baseValue.get(key.id),
+						targetValue: valueOf(c),
+						targetStatus: c?.lifecycle,
+						expectsValue:
+							c?.lifecycle === "proposed" ||
+							c?.lifecycle === "accepted" ||
+							c?.lifecycle === "escalated",
+						stale:
+							(c?.stale ?? false) ||
+							(c?.sourceRef !== undefined &&
+								c.sourceRef !== key.sourceRevision),
+						origin: c?.origin,
+						glossary,
+						localeIndex,
+					};
 				});
-			}
-		}
-		return { contexts, locales };
+			}),
+		);
+		return { contexts: perLocale.flat(), locales };
 	}
 }
