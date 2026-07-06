@@ -11,7 +11,7 @@ export function finding(
 	return {
 		checkId,
 		severity,
-		namespace: ctx.key.namespace,
+		namespace: ctx.namespace,
 		keyName: ctx.key.name,
 		localeCode: ctx.localeCode,
 		message,

@@ -37,12 +37,12 @@ Three flags modify this behavior:
 
 `pull` downloads the current state of each locale from Turjuman and writes locale files to the paths defined in `turjuman.config.json`.
 
-By default, `pull` writes only **approved values** — translations that have passed review. In-progress and draft work stays in Turjuman and doesn't ship to your repository.
+By default, `pull` writes only **accepted values** — the value at each cell's `head`. In-progress and draft work stays in Turjuman and doesn't ship to your repository.
 
-Pass `--working` to include draft translations that haven't been approved yet:
+Pass `--working` to include draft translations that haven't been accepted yet:
 
 ```bash
-turjuman pull --working   # includes unapproved in-progress translations
+turjuman pull --working   # includes unaccepted in-progress translations
 ```
 
 <Warning>

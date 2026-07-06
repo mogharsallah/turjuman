@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { loadEnv, modeOf } from "./helpers/env.js";
 import { uniq } from "./helpers/fixtures.js";
-import { makeMcpClient } from "./helpers/mcp.js";
+import { makeOpClient } from "./helpers/mcp.js";
 import { makeRestClient } from "./helpers/rest.js";
 
 /**
@@ -17,7 +17,7 @@ const e = env ?? { mcpUrl: "", apiUrl: "", tableName: "", apiKey: "" };
 describe.skipIf(mode !== "inprocess")(
 	"P1 API-key lifecycle (MCP + REST)",
 	() => {
-		const ownerMcp = makeMcpClient(e.mcpUrl, e.apiKey);
+		const ownerMcp = makeOpClient(e.mcpUrl, e.apiKey);
 
 		it("mints a working key, then revokes it and rejects it everywhere", async () => {
 			const user = await ownerMcp<{ id: string }>("create_user", {
@@ -35,7 +35,7 @@ describe.skipIf(mode !== "inprocess")(
 			expect(key.secret).toBeTruthy();
 
 			// The freshly minted key authenticates at the MCP Function URL...
-			const teammateMcp = makeMcpClient(e.mcpUrl, key.secret);
+			const teammateMcp = makeOpClient(e.mcpUrl, key.secret);
 			await expect(teammateMcp("list_projects")).resolves.toBeDefined();
 
 			// ...and at the REST Function URL.

@@ -1,16 +1,18 @@
 import type { Actor, ImportKeysResult } from "@turjuman/schema";
 import {
 	conflict,
-	DEFAULT_NAMESPACE,
 	KEY_NAME_RE,
-	NAMESPACE_RE,
-	notFound,
+	MAIN_BRANCH_ID,
+	newId,
 	requirePattern,
-	type Translation,
 	type TranslationKey,
 	validation,
 } from "@turjuman/schema";
+import type { RepositoryApi } from "../repository/index.js";
 import { BaseService } from "./base.js";
+import { resolveKeyRef } from "./keyref.js";
+import type { NamespaceService } from "./namespaces.js";
+import { revisionOf } from "./revision.js";
 import type {
 	CreateKeyInput,
 	KeyPage,
@@ -18,34 +20,57 @@ import type {
 	UpdateKeyInput,
 } from "./types.js";
 
+/** A `(name, namespace, branch)` address resolving to one key. */
+export interface KeyRef {
+	name: string;
+	namespace?: string;
+	branch?: string;
+}
+
 export class KeysService extends BaseService {
+	constructor(
+		repo: RepositoryApi,
+		private readonly namespaces: NamespaceService,
+	) {
+		super(repo);
+	}
+
 	async list(
 		actor: Actor,
 		projectId: string,
 		filter: {
+			branch?: string;
 			namespace?: string;
 			tag?: string;
 			includeDeprecated?: boolean;
 		} = {},
 	): Promise<TranslationKey[]> {
 		await this.authorizeProject(actor, projectId, "key.read");
-		let keys = await this.repo.listKeys(projectId, filter.namespace);
+		const branch = filter.branch ?? MAIN_BRANCH_ID;
+		// Resolved: a child branch sees its own keys overlaid on the parent chain.
+		let keys = await this.repo.listKeyDefsResolved(projectId, branch);
 		if (!filter.includeDeprecated)
 			keys = keys.filter((k) => k.state !== "deprecated");
+		if (filter.namespace) {
+			const nsId = await this.namespaces.idOf(projectId, filter.namespace);
+			if (!nsId) return [];
+			keys = keys.filter((k) => k.namespaceId === nsId);
+		}
 		if (filter.tag) keys = keys.filter((k) => k.tags.includes(filter.tag!));
 		return keys;
 	}
 
 	/**
-	 * List keys one page at a time, so large projects don't force a full-table
+	 * List keys one page at a time, so large projects don't force a full-branch
 	 * read on every call. `cursor` is the opaque `nextCursor` from a prior page.
-	 * A `tag` filter is applied within the page (a page may therefore return
-	 * fewer than `limit` keys while still yielding a cursor).
+	 * The namespace/tag filters are applied within the page (a page may therefore
+	 * return fewer than `limit` keys while still yielding a cursor).
 	 */
 	async listPage(
 		actor: Actor,
 		projectId: string,
 		opts: {
+			branch?: string;
 			namespace?: string;
 			tag?: string;
 			limit?: number;
@@ -54,14 +79,18 @@ export class KeysService extends BaseService {
 		} = {},
 	): Promise<KeyPage> {
 		await this.authorizeProject(actor, projectId, "key.read");
-		const page = await this.repo.listKeysPage(projectId, {
-			namespace: opts.namespace,
+		const branch = opts.branch ?? MAIN_BRANCH_ID;
+		const page = await this.repo.listKeyDefsPage(projectId, branch, {
 			limit: opts.limit,
 			cursor: opts.cursor,
 		});
 		let keys = page.keys;
 		if (!opts.includeDeprecated)
 			keys = keys.filter((k) => k.state !== "deprecated");
+		if (opts.namespace) {
+			const nsId = await this.namespaces.idOf(projectId, opts.namespace);
+			keys = nsId ? keys.filter((k) => k.namespaceId === nsId) : [];
+		}
 		if (opts.tag) keys = keys.filter((k) => k.tags.includes(opts.tag!));
 		return { keys, nextCursor: page.nextCursor };
 	}
@@ -70,30 +99,30 @@ export class KeysService extends BaseService {
 		actor: Actor,
 		projectId: string,
 		query: string,
+		branch = MAIN_BRANCH_ID,
 	): Promise<TranslationKey[]> {
-		const keys = await this.list(actor, projectId);
+		const keys = await this.list(actor, projectId, { branch });
 		const q = query.toLowerCase();
 		return keys.filter((k) => this.matchesQuery(k, q));
 	}
 
 	/**
-	 * Search keys one page at a time, so a large project isn't fully scanned on
-	 * every call. Pages the underlying key partition via the cursor and applies
-	 * the substring match within each page; like {@link listPage}, a page may
-	 * therefore return fewer than `limit` keys (non-matches and deprecated keys
-	 * are filtered out) while still yielding a `nextCursor` to continue.
+	 * Search keys one page at a time. Pages the underlying key partition via the
+	 * cursor and applies the substring match within each page; like {@link listPage}
+	 * a page may return fewer than `limit` keys while still yielding a `nextCursor`.
 	 */
 	async searchPage(
 		actor: Actor,
 		projectId: string,
 		query: string,
-		opts: { limit?: number; cursor?: string } = {},
+		opts: { branch?: string; limit?: number; cursor?: string } = {},
 	): Promise<KeyPage> {
 		await this.authorizeProject(actor, projectId, "key.read");
-		const page = await this.repo.listKeysPage(projectId, {
-			limit: opts.limit,
-			cursor: opts.cursor,
-		});
+		const page = await this.repo.listKeyDefsPage(
+			projectId,
+			opts.branch ?? MAIN_BRANCH_ID,
+			{ limit: opts.limit, cursor: opts.cursor },
+		);
 		const q = query.toLowerCase();
 		const keys = page.keys.filter(
 			(k) => k.state !== "deprecated" && this.matchesQuery(k, q),
@@ -114,15 +143,23 @@ export class KeysService extends BaseService {
 		actor: Actor,
 		projectId: string,
 		name: string,
-		namespace = DEFAULT_NAMESPACE,
+		namespace?: string,
+		branch = MAIN_BRANCH_ID,
 	): Promise<KeyWithTranslations> {
 		await this.authorizeProject(actor, projectId, "key.read");
-		const key = await this.repo.getKey(projectId, namespace, name);
-		if (!key) throw notFound(`Key ${namespace}/${name} not found`);
-		const translations = await this.repo.listTranslationsByKey(
+		const { keyId, key } = await resolveKeyRef(
+			this.repo,
+			this.namespaces,
 			projectId,
-			namespace,
+			branch,
 			name,
+			namespace,
+		);
+		// Resolved: include cells inherited from the parent chain on a child branch.
+		const translations = await this.repo.listCellsByKeyResolved(
+			projectId,
+			branch,
+			keyId,
 		);
 		return { key, translations };
 	}
@@ -137,58 +174,52 @@ export class KeysService extends BaseService {
 			projectId,
 			"key.manage",
 		);
-		const namespace = requirePattern(
-			input.namespace ?? DEFAULT_NAMESPACE,
-			NAMESPACE_RE,
-			"namespace",
-		);
+		const branch = input.branch ?? MAIN_BRANCH_ID;
+		const ns = await this.namespaces.ensure(projectId, input.namespace);
 		const name = requirePattern(input.name, KEY_NAME_RE, "name");
-		if (await this.repo.getKey(projectId, namespace, name)) {
-			throw conflict(`Key ${namespace}/${name} already exists`);
-		}
+		if (await this.repo.resolveKeyIdByName(projectId, branch, ns?.id, name))
+			throw conflict(`Key "${name}" already exists`);
 		const now = new Date().toISOString();
 		const key: TranslationKey = {
+			id: newId("key"),
 			projectId,
-			namespace,
+			namespaceId: ns?.id,
 			name,
 			description: input.description,
 			plural: input.plural ?? false,
 			maxLength: input.maxLength,
 			tags: input.tags ?? [],
 			state: "active",
+			sourceRevision: revisionOf(input.baseValue),
+			introducedOnBranchId: branch,
 			lastSeenAt: now,
 			createdAt: now,
 			updatedAt: now,
 		};
-		await this.repo.putKey(key);
-		if (input.baseValue !== undefined) {
-			await this.repo.putTranslation({
+		await this.repo.createKeyDef(branch, key);
+		if (input.baseValue !== undefined)
+			await this.writeSourceValue({
 				projectId,
-				localeCode: project.baseLocale,
-				namespace,
-				keyName: name,
+				branchId: branch,
+				keyId: key.id,
+				locale: project.baseLocale,
 				value: input.baseValue,
-				status: "translated",
 				origin: "import",
-				updatedBy: actor.userId,
-				updatedAt: now,
+				userId: actor.userId,
 			});
-		}
 		return key;
 	}
 
 	/**
 	 * Create-or-update many keys in one namespace and optionally set their base
-	 * locale values. Used by the CLI `push` (deterministic source upload). The
-	 * permission check runs once for the whole batch.
+	 * locale values (the CLI `push`). The permission check runs once for the batch.
 	 *
-	 * Keys present in `entries` are (re)activated and their `lastSeenAt` bumped.
-	 * Handling of keys that exist in the namespace but are absent from `entries`
-	 * depends on the mode (default: leave them untouched — a plain additive
-	 * import): with `deprecateAbsent` they are soft-**deprecated** (retained,
-	 * hidden from listing/export, restored if they return); with `prune` they are
-	 * hard-deleted along with their translations. A full-file `push` opts into one
-	 * of these so the file becomes the source of truth for its namespace.
+	 * Keys present in `entries` are (re)activated and their `lastSeenAt` bumped; a
+	 * changed base value bumps the key's `sourceRevision` (staling its dependents).
+	 * Keys absent from `entries` are left untouched by default; `deprecateAbsent`
+	 * soft-deprecates them (retained, hidden, restored if they return) and `prune`
+	 * hard-deletes them with their cells — so a full-file push makes the file the
+	 * source of truth for its namespace.
 	 */
 	async import(
 		actor: Actor,
@@ -199,20 +230,23 @@ export class KeysService extends BaseService {
 			baseValue?: string;
 			plural?: boolean;
 		}[],
-		namespace = DEFAULT_NAMESPACE,
-		opts: { prune?: boolean; deprecateAbsent?: boolean } = {},
+		namespace?: string,
+		opts: { branch?: string; prune?: boolean; deprecateAbsent?: boolean } = {},
 	): Promise<ImportKeysResult> {
 		const { project } = await this.authorizeProject(
 			actor,
 			projectId,
 			"key.manage",
 		);
-		const ns = requirePattern(namespace, NAMESPACE_RE, "namespace");
+		const branch = opts.branch ?? MAIN_BRANCH_ID;
+		const ns = await this.namespaces.ensure(projectId, namespace);
 		const existing = new Map(
-			(await this.repo.listKeys(projectId, ns)).map((k) => [k.name, k]),
+			(await this.repo.listKeyDefs(projectId, branch))
+				.filter((k) => k.namespaceId === ns?.id)
+				.map((k) => [k.name, k]),
 		);
 		const now = new Date().toISOString();
-		const baseTranslations: Translation[] = [];
+		const baseWrites: { keyId: string; value: string }[] = [];
 		const seen = new Set<string>();
 		let created = 0;
 		let updated = 0;
@@ -220,6 +254,8 @@ export class KeysService extends BaseService {
 		for (const entry of entries) {
 			const name = requirePattern(entry.name, KEY_NAME_RE, "name");
 			seen.add(name);
+			const newRev =
+				entry.baseValue !== undefined ? revisionOf(entry.baseValue) : undefined;
 			const prev = existing.get(name);
 			if (prev) {
 				const nextDescription = entry.description ?? prev.description;
@@ -227,11 +263,14 @@ export class KeysService extends BaseService {
 				const metadataChanged =
 					nextDescription !== prev.description || nextPlural !== prev.plural;
 				const wasDeprecated = prev.state === "deprecated";
-				if (metadataChanged || wasDeprecated) {
-					await this.repo.putKey({
+				const revChanged =
+					newRev !== undefined && newRev !== prev.sourceRevision;
+				if (metadataChanged || wasDeprecated || revChanged) {
+					await this.repo.putKeyDef(branch, {
 						...prev,
 						description: nextDescription,
 						plural: nextPlural,
+						sourceRevision: revChanged ? newRev! : prev.sourceRevision,
 						state: "active",
 						lastSeenAt: now,
 						updatedAt: now,
@@ -239,51 +278,73 @@ export class KeysService extends BaseService {
 					if (metadataChanged) updated++;
 					if (wasDeprecated) reactivated++;
 				}
+				// Only re-write the source when its value actually changed (revChanged);
+				// an unchanged re-push must not append a redundant version.
+				if (entry.baseValue !== undefined && revChanged)
+					baseWrites.push({ keyId: prev.id, value: entry.baseValue });
 			} else {
-				await this.repo.putKey({
+				const key: TranslationKey = {
+					id: newId("key"),
 					projectId,
-					namespace: ns,
+					namespaceId: ns?.id,
 					name,
 					description: entry.description,
 					plural: entry.plural ?? false,
 					tags: [],
 					state: "active",
+					sourceRevision: newRev ?? "",
+					introducedOnBranchId: branch,
 					lastSeenAt: now,
 					createdAt: now,
 					updatedAt: now,
-				});
+				};
+				await this.repo.createKeyDef(branch, key);
 				created++;
-			}
-			if (entry.baseValue !== undefined) {
-				baseTranslations.push({
-					projectId,
-					localeCode: project.baseLocale,
-					namespace: ns,
-					keyName: name,
-					value: entry.baseValue,
-					status: "translated",
-					origin: "import",
-					updatedBy: actor.userId,
-					updatedAt: now,
-				});
+				if (entry.baseValue !== undefined)
+					baseWrites.push({ keyId: key.id, value: entry.baseValue });
 			}
 		}
-		await this.repo.putTranslations(baseTranslations);
 
-		// Keys absent from this import: hard-delete with `prune`, soft-deprecate with
-		// `deprecateAbsent`, otherwise leave untouched (a plain additive import).
+		// Fan the source-value writes out in parallel — each is an accept-append for a
+		// distinct key, so they don't contend, and a full-file initial import isn't a
+		// serial chain of appends.
+		await Promise.all(
+			baseWrites.map((w) =>
+				this.writeSourceValue({
+					projectId,
+					branchId: branch,
+					keyId: w.keyId,
+					locale: project.baseLocale,
+					value: w.value,
+					origin: "import",
+					userId: actor.userId,
+				}),
+			),
+		);
+
 		const absent = [...existing.values()].filter((k) => !seen.has(k.name));
 		let deleted = 0;
 		let deprecated = 0;
 		if (opts.prune) {
-			const names = absent.map((k) => k.name);
-			if (names.length > 0)
-				await this.repo.deleteKeysCascade(projectId, ns, names);
-			deleted = names.length;
+			if (absent.length > 0)
+				await this.repo.deleteKeyDefsCascade(
+					projectId,
+					branch,
+					absent.map((k) => ({
+						id: k.id,
+						namespaceId: k.namespaceId,
+						name: k.name,
+					})),
+				);
+			deleted = absent.length;
 		} else if (opts.deprecateAbsent) {
 			for (const k of absent) {
 				if (k.state !== "deprecated") {
-					await this.repo.putKey({ ...k, state: "deprecated", updatedAt: now });
+					await this.repo.putKeyDef(branch, {
+						...k,
+						state: "deprecated",
+						updatedAt: now,
+					});
 					deprecated++;
 				}
 			}
@@ -292,7 +353,7 @@ export class KeysService extends BaseService {
 			created,
 			updated,
 			reactivated,
-			baseValuesSet: baseTranslations.length,
+			baseValuesSet: baseWrites.length,
 			deleted,
 			deprecated,
 		};
@@ -303,20 +364,73 @@ export class KeysService extends BaseService {
 		projectId: string,
 		name: string,
 		patch: UpdateKeyInput,
-		namespace = DEFAULT_NAMESPACE,
+		namespace?: string,
+		branch = MAIN_BRANCH_ID,
 	): Promise<TranslationKey> {
 		await this.authorizeProject(actor, projectId, "key.manage");
-		const key = await this.repo.getKey(projectId, namespace, name);
-		if (!key) throw notFound(`Key ${namespace}/${name} not found`);
+		const { key } = await resolveKeyRef(
+			this.repo,
+			this.namespaces,
+			projectId,
+			branch,
+			name,
+			namespace,
+		);
 		const updated: TranslationKey = {
 			...key,
 			description: patch.description ?? key.description,
 			plural: patch.plural ?? key.plural,
 			maxLength: patch.maxLength ?? key.maxLength,
 			tags: patch.tags ?? key.tags,
+			noTranslate: patch.noTranslate ?? key.noTranslate,
 			updatedAt: new Date().toISOString(),
 		};
-		return this.repo.putKey(updated);
+		return this.repo.putKeyDef(branch, updated);
+	}
+
+	/**
+	 * Move a key to a new name and/or namespace. Identity (`keyId`) and all of the
+	 * key's translations are unaffected — only the labels and the name-lookup row
+	 * change. Conflicts if the destination name is already taken.
+	 */
+	async rename(
+		actor: Actor,
+		projectId: string,
+		name: string,
+		to: { name?: string; namespace?: string },
+		namespace?: string,
+		branch = MAIN_BRANCH_ID,
+	): Promise<TranslationKey> {
+		await this.authorizeProject(actor, projectId, "key.manage");
+		const { key } = await resolveKeyRef(
+			this.repo,
+			this.namespaces,
+			projectId,
+			branch,
+			name,
+			namespace,
+		);
+		const newName =
+			to.name !== undefined
+				? requirePattern(to.name, KEY_NAME_RE, "name")
+				: key.name;
+		const newNamespaceId =
+			to.namespace !== undefined
+				? (await this.namespaces.ensure(projectId, to.namespace))?.id
+				: key.namespaceId;
+		// No-op rename: the destination equals the source, so there is nothing to
+		// move — return early instead of issuing a self-colliding rename transaction.
+		if (newName === key.name && newNamespaceId === key.namespaceId) return key;
+		const updated: TranslationKey = {
+			...key,
+			name: newName,
+			namespaceId: newNamespaceId,
+			updatedAt: new Date().toISOString(),
+		};
+		return this.repo.renameKeyDef(branch, updated, {
+			namespaceId: key.namespaceId,
+			name: key.name,
+		});
 	}
 
 	/**
@@ -329,7 +443,8 @@ export class KeysService extends BaseService {
 		projectId: string,
 		name: string,
 		confirm: boolean,
-		namespace = DEFAULT_NAMESPACE,
+		namespace?: string,
+		branch = MAIN_BRANCH_ID,
 	): Promise<void> {
 		await this.authorizeProject(actor, projectId, "key.manage");
 		if (!confirm) {
@@ -337,6 +452,16 @@ export class KeysService extends BaseService {
 				"Set confirm=true to permanently delete the key and all its translations",
 			);
 		}
-		await this.repo.deleteKeysCascade(projectId, namespace, [name]);
+		const { key } = await resolveKeyRef(
+			this.repo,
+			this.namespaces,
+			projectId,
+			branch,
+			name,
+			namespace,
+		);
+		await this.repo.deleteKeyDefsCascade(projectId, branch, [
+			{ id: key.id, namespaceId: key.namespaceId, name: key.name },
+		]);
 	}
 }

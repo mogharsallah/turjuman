@@ -26,6 +26,7 @@ export class ApiKeysService extends BaseService {
 			userId?: string;
 			expiresAt?: string;
 			readOnly?: boolean;
+			principal?: ApiKey["principal"];
 		},
 	): Promise<{ apiKey: ApiKey; secret: string }> {
 		const targetUserId = input.userId ?? actor.userId;
@@ -44,6 +45,7 @@ export class ApiKeysService extends BaseService {
 			createdAt: new Date().toISOString(),
 			expiresAt: parseExpiry(input.expiresAt),
 			readOnly: input.readOnly === true ? true : undefined,
+			principal: input.principal ?? "human",
 		};
 		await this.repo.createApiKey(apiKey);
 		return { apiKey, secret };

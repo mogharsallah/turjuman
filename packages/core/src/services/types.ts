@@ -1,8 +1,9 @@
 import type {
+	ContextLifecycle,
 	TranslationOrigin,
-	TranslationStatus,
 	WebhookEvent,
 } from "@turjuman/schema";
+import type { ScopeInput } from "./context.js";
 
 // Aggregate/page/result shapes the services return are defined once in `wire.ts`
 // (the transport-facing schemas) and re-exported here as their inferred types,
@@ -13,8 +14,6 @@ export type {
 	BundlePage,
 	KeyPage,
 	KeyWithTranslations,
-	ReviewResult,
-	ScorePrompt,
 	TranslationPage,
 } from "@turjuman/schema";
 
@@ -26,6 +25,7 @@ export interface CreateProjectInput {
 
 export interface CreateKeyInput {
 	namespace?: string;
+	branch?: string;
 	name: string;
 	description?: string;
 	plural?: boolean;
@@ -40,54 +40,32 @@ export interface UpdateKeyInput {
 	plural?: boolean;
 	maxLength?: number;
 	tags?: string[];
+	/** Keep the whole key verbatim across locales (brand names, codes). */
+	noTranslate?: boolean;
 }
 
 export interface SetTranslationInput {
 	namespace?: string;
+	branch?: string;
 	name: string;
 	value: string;
-	status?: Exclude<TranslationStatus, "untranslated">;
-	/** Provenance of the value; stamped onto the translation when known. */
+	/** Provenance of the value; stamped onto the cell when known. */
 	origin?: TranslationOrigin;
-}
-
-/** A single AI score submission (one translation), shared by the score and review surfaces. */
-export interface ScoreInput {
-	namespace?: string;
-	name: string;
-	/** MQM quality score, integer 0–100. */
-	score: number;
-	/** The model's rationale for the score. */
-	comment?: string;
-	/** Identifier of the model that produced the score (provenance). */
-	model?: string;
-}
-
-/** Patch for a project's AI-scoring config (all fields optional). */
-export interface SetScoreConfigInput {
-	threshold?: number;
-	autoApprove?: boolean;
-	guidance?: string;
 }
 
 export interface AddGlossaryTermInput {
 	term: string;
+	/** Cascade coordinate; absent = project-wide. */
+	scope?: ScopeInput;
 	translations?: Record<string, string>;
 	caseSensitive?: boolean;
 	doNotTranslate?: boolean;
 	notes?: string;
 }
 
-export type UpdateGlossaryTermInput = Partial<AddGlossaryTermInput>;
-
-/** A translation-memory suggestion: a prior source/target pair and its match score. */
-export interface TmMatch {
-	source: string;
-	target: string;
-	score: number;
-	key: string;
-	namespace: string;
-}
+export type UpdateGlossaryTermInput = Partial<AddGlossaryTermInput> & {
+	lifecycle?: ContextLifecycle;
+};
 
 export interface AddWebhookInput {
 	url: string;

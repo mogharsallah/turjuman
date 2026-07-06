@@ -1,22 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { loadEnv, modeOf } from "./helpers/env.js";
 import { uniq } from "./helpers/fixtures.js";
-import { makeMcpClient } from "./helpers/mcp.js";
+import { makeOpClient } from "./helpers/mcp.js";
 
 /**
  * P1 — the core LLM/agent workflow, driven through the MCP transport. Proves the
- * tools an agent uses to fill and review translations work through the real
- * transport projection + core + DynamoDB, not just the unit-tested service logic.
+ * operations an agent uses to fill and accept translations work through the real
+ * code-mode surface (run_code → sandbox → bridge) + core + DynamoDB, not just the
+ * unit-tested service logic.
  */
 const env = loadEnv();
 const mode = modeOf(env);
 const e = env ?? { mcpUrl: "", apiUrl: "", tableName: "", apiKey: "" };
 
-interface Translation {
-	localeCode: string;
-	keyName: string;
+interface Cell {
+	locale: string;
 	value: string;
-	status: string;
+	lifecycle: string;
+	head?: number;
 }
 interface KeyMeta {
 	name: string;
@@ -28,7 +29,7 @@ interface UntranslatedList {
 }
 
 describe.skipIf(mode !== "inprocess")("P1 agent translation loop (MCP)", () => {
-	const mcp = makeMcpClient(e.mcpUrl, e.apiKey);
+	const mcp = makeOpClient(e.mcpUrl, e.apiKey);
 
 	it("creates a project, finds untranslated keys, bulk-fills, and confirms values", async () => {
 		const project = await mcp<{ id: string }>("create_project", {
@@ -64,7 +65,7 @@ describe.skipIf(mode !== "inprocess")("P1 agent translation loop (MCP)", () => {
 			"checkout.title",
 		]);
 
-		// It translates the batch and writes it back in one call.
+		// It translates the batch and proposes it in one call.
 		const result = await mcp<{ written: number; skipped: string[] }>(
 			"bulk_set_translations",
 			{
@@ -79,7 +80,7 @@ describe.skipIf(mode !== "inprocess")("P1 agent translation loop (MCP)", () => {
 		expect(result.written).toBe(2);
 		expect(result.skipped).toEqual([]);
 
-		// fr is now fully translated; es is untouched.
+		// fr now has values (so it drops out of untranslated); es is untouched.
 		const stillFr = await mcp<UntranslatedList>("list_untranslated", {
 			projectId: project.id,
 			locale: "fr",
@@ -91,16 +92,16 @@ describe.skipIf(mode !== "inprocess")("P1 agent translation loop (MCP)", () => {
 		});
 		expect(stillEs.keys).toHaveLength(2);
 
-		// Reading the key back confirms the stored value + translated status.
-		const translations = await mcp<Translation[]>("get_translations", {
+		// Reading the key back confirms the stored value; a bulk write lands proposed.
+		const cells = await mcp<Cell[]>("get_translations", {
 			projectId: project.id,
 			name: "checkout.title",
 		});
-		const fr = translations.find((t) => t.localeCode === "fr");
-		expect(fr).toMatchObject({ value: "Paiement", status: "translated" });
+		const fr = cells.find((c) => c.locale === "fr");
+		expect(fr).toMatchObject({ value: "Paiement", lifecycle: "proposed" });
 	});
 
-	it("supports the review workflow: translate then mark approved", async () => {
+	it("supports the review workflow: propose then accept into the version chain", async () => {
 		const project = await mcp<{ id: string }>("create_project", {
 			name: uniq("Review Flow"),
 			baseLocale: "en",
@@ -110,39 +111,40 @@ describe.skipIf(mode !== "inprocess")("P1 agent translation loop (MCP)", () => {
 			projectId: project.id,
 			name: "greeting",
 			description: "Home screen greeting",
+			baseValue: "Hello",
 		});
 
+		// Propose a value — it lands as `proposed`.
 		await mcp("set_translation", {
 			projectId: project.id,
 			locale: "de",
 			name: "greeting",
 			value: "Hallo",
 		});
-
-		let translations = await mcp<Translation[]>("get_translations", {
+		let cells = await mcp<Cell[]>("get_translations", {
 			projectId: project.id,
 			name: "greeting",
 		});
-		expect(translations.find((t) => t.localeCode === "de")).toMatchObject({
+		expect(cells.find((c) => c.locale === "de")).toMatchObject({
 			value: "Hallo",
-			status: "translated",
+			lifecycle: "proposed",
 		});
 
-		await mcp("set_translation_status", {
+		// Accept it — the controlled transition that advances the cell's head.
+		const accepted = await mcp<Cell>("accept_translation", {
 			projectId: project.id,
 			locale: "de",
 			name: "greeting",
-			status: "approved",
 		});
+		expect(accepted).toMatchObject({ lifecycle: "accepted", head: 1 });
 
-		translations = await mcp<Translation[]>("get_translations", {
+		cells = await mcp<Cell[]>("get_translations", {
 			projectId: project.id,
 			name: "greeting",
 		});
-		expect(translations.find((t) => t.localeCode === "de")).toMatchObject({
+		expect(cells.find((c) => c.locale === "de")).toMatchObject({
 			value: "Hallo",
-			status: "approved",
-			approvedValue: "Hallo",
+			lifecycle: "accepted",
 		});
 	});
 });

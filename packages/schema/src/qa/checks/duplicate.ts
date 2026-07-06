@@ -16,7 +16,7 @@ export const duplicateCheck: QaCheck = {
 		if (value === undefined || value.trim() === "") return [];
 		const sharing = ctx.localeIndex.get(value);
 		if (!sharing || sharing.length < 2) return [];
-		const self = `${ctx.key.namespace}#${ctx.key.name}`;
+		const self = `${ctx.namespace}#${ctx.key.name}`;
 		const others = sharing.filter((id) => id !== self);
 		if (others.length === 0) return []; // only this key
 		return [

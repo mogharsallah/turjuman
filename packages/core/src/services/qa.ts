@@ -4,8 +4,9 @@ import type {
 	QaConfig,
 	QaIgnoreRule,
 	QaSeverity,
+	Translation,
 } from "@turjuman/schema";
-import { validation } from "@turjuman/schema";
+import { MAIN_BRANCH_ID, validation } from "@turjuman/schema";
 import type {
 	QaContext,
 	QaFinding,
@@ -18,15 +19,17 @@ import {
 	DEFAULT_DISABLED_CHECKS,
 	runChecks,
 } from "@turjuman/schema/qa";
+import type { RepositoryApi } from "../repository/index.js";
 import { BaseService } from "./base.js";
+import type { NamespaceService } from "./namespaces.js";
 
 export interface RunChecksOptions {
 	/** Limit to one locale; omit to check every non-base locale. */
 	locale?: string;
 	/** Limit to specific check ids; omit to run every enabled check. */
 	checkIds?: string[];
-	/** Which value slot to validate: the working draft (default) or the approved snapshot. */
-	slot?: "working" | "approved";
+	/** Which value to validate: the working draft (default) or the accepted head. */
+	slot?: "working" | "accepted";
 }
 
 export interface SetQaConfigInput {
@@ -40,9 +43,16 @@ export interface SetQaConfigInput {
  * `qa/` engine and the data model: it loads translations/keys/glossary, derives
  * the lifecycle-dependent context fields (`expectsValue`, `stale`), runs the
  * engine, then applies config (severity overrides + ignore rules). QA is
- * advisory — it never mutates translations or the approval state.
+ * advisory — it never mutates translations or the acceptance state.
  */
 export class QaService extends BaseService {
+	constructor(
+		repo: RepositoryApi,
+		private readonly namespaces: NamespaceService,
+	) {
+		super(repo);
+	}
+
 	async getConfig(actor: Actor, projectId: string): Promise<QaConfig> {
 		await this.authorizeProject(actor, projectId, "project.read");
 		return (
@@ -182,67 +192,92 @@ export class QaService extends BaseService {
 		opts: RunChecksOptions,
 	): Promise<{ contexts: QaContext[]; locales: string[] }> {
 		const projectId = project.id;
+		const branch = MAIN_BRANCH_ID;
 		const slot = opts.slot ?? "working";
-		const [keys, glossary, baseTranslations] = await Promise.all([
-			this.repo.listKeys(projectId),
+		const [keys, glossary, baseCells, nsNames] = await Promise.all([
+			this.repo.listKeyDefsResolved(projectId, branch),
 			this.repo.listGlossary(projectId),
-			this.repo.listTranslationsByLocale(projectId, project.baseLocale),
+			this.repo.listCellsByLocaleResolved(
+				projectId,
+				branch,
+				project.baseLocale,
+			),
+			this.namespaces.nameMap(projectId),
 		]);
 		const activeKeys = keys.filter((k) => k.state !== "deprecated");
-		const baseValue = new Map(
-			baseTranslations.map((t) => [`${t.namespace}#${t.keyName}`, t.value]),
-		);
+		const keyById = new Map(activeKeys.map((k) => [k.id, k]));
+		const baseValue = new Map(baseCells.map((c) => [c.keyId, c.value]));
+		const nsNameOf = (namespaceId: string | undefined): string =>
+			nsNames.get(namespaceId ?? "") ?? "";
 
 		const allTargets = opts.locale
 			? [opts.locale]
 			: (await this.repo.listLocales(projectId)).map((l) => l.code);
 		const locales = allTargets.filter((c) => c !== project.baseLocale);
 
-		const contexts: QaContext[] = [];
-		for (const code of locales) {
-			const translations = await this.repo.listTranslationsByLocale(
-				projectId,
-				code,
-			);
-			const byKey = new Map(
-				translations.map((t) => [`${t.namespace}#${t.keyName}`, t]),
-			);
-			const valueOf = (
-				t: (typeof translations)[number] | undefined,
-			): string | undefined =>
-				t ? (slot === "approved" ? t.approvedValue : t.value) : undefined;
+		// Build each locale's contexts independently, so the per-locale cell reads
+		// (and head-version resolutions) fan out in parallel rather than serially.
+		const perLocale = await Promise.all(
+			locales.map(async (code) => {
+				const cells = await this.repo.listCellsByLocaleResolved(
+					projectId,
+					branch,
+					code,
+				);
+				const byKey = new Map(cells.map((c) => [c.keyId, c]));
+				// Deliverable value per cell: the working draft, or the accepted head
+				// version (resolved through the branch chain) — a cell re-drafted after
+				// an accept still exposes its accepted value to the accepted slot, which
+				// the old `lifecycle === "accepted"` shortcut dropped.
+				const valueByKey = new Map<string, string | undefined>();
+				await Promise.all(
+					cells.map(async (c) =>
+						valueByKey.set(
+							c.keyId,
+							slot === "working"
+								? c.value
+								: await this.acceptedValue(projectId, branch, c),
+						),
+					),
+				);
+				const valueOf = (c: Translation | undefined): string | undefined =>
+					c ? valueByKey.get(c.keyId) : undefined;
 
-			const localeIndex = new Map<string, string[]>();
-			for (const t of translations) {
-				const v = valueOf(t);
-				if (v && v.trim() !== "") {
-					const id = `${t.namespace}#${t.keyName}`;
-					(localeIndex.get(v) ?? localeIndex.set(v, []).get(v)!).push(id);
+				const localeIndex = new Map<string, string[]>();
+				for (const c of cells) {
+					const v = valueOf(c);
+					const k = keyById.get(c.keyId);
+					if (v && v.trim() !== "" && k) {
+						const id = `${nsNameOf(k.namespaceId)}#${k.name}`;
+						(localeIndex.get(v) ?? localeIndex.set(v, []).get(v)!).push(id);
+					}
 				}
-			}
 
-			for (const key of activeKeys) {
-				const id = `${key.namespace}#${key.name}`;
-				const t = byKey.get(id);
-				const base = baseValue.get(id);
-				contexts.push({
-					baseLocale: project.baseLocale,
-					localeCode: code,
-					key,
-					baseValue: base,
-					targetValue: valueOf(t),
-					targetStatus: t?.status,
-					expectsValue:
-						t?.status === "translated" ||
-						t?.status === "needs_review" ||
-						t?.status === "approved",
-					stale: t?.sourceRef !== undefined && t.sourceRef !== base,
-					origin: t?.origin,
-					glossary,
-					localeIndex,
+				return activeKeys.map((key): QaContext => {
+					const c = byKey.get(key.id);
+					return {
+						baseLocale: project.baseLocale,
+						localeCode: code,
+						namespace: nsNameOf(key.namespaceId),
+						key,
+						baseValue: baseValue.get(key.id),
+						targetValue: valueOf(c),
+						targetStatus: c?.lifecycle,
+						expectsValue:
+							c?.lifecycle === "proposed" ||
+							c?.lifecycle === "accepted" ||
+							c?.lifecycle === "escalated",
+						stale:
+							(c?.stale ?? false) ||
+							(c?.sourceRef !== undefined &&
+								c.sourceRef !== key.sourceRevision),
+						origin: c?.origin,
+						glossary,
+						localeIndex,
+					};
 				});
-			}
-		}
-		return { contexts, locales };
+			}),
+		);
+		return { contexts: perLocale.flat(), locales };
 	}
 }

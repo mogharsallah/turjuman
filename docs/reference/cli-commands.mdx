@@ -40,7 +40,7 @@ This file lives in your repository root, is created by `turjuman init`, and **sh
 {
   "projectId": "proj_xxx",
   "targets": [
-    { "format": "json-nested",     "path": "locales/{locale}.json",                          "namespace": "default" },
+    { "format": "json-nested",     "path": "locales/{locale}.json",                          "namespace": "web" },
     { "format": "android",         "path": "android/values-{locale}/strings.xml" },
     { "format": "ios-strings",     "path": "ios/{locale}.lproj/Localizable.strings" },
     { "format": "ios-stringsdict", "path": "ios/{locale}.lproj/Localizable.stringsdict" }
@@ -48,7 +48,7 @@ This file lives in your repository root, is created by `turjuman init`, and **sh
 }
 ```
 
-Each entry in `targets` maps a file format to a path pattern. The `{locale}` placeholder in `path` is substituted with each locale code when reading or writing files (e.g. `locales/fr.json`). The `namespace` field is optional and defaults to `"default"`.
+Each entry in `targets` maps a file format to a path pattern. The `{locale}` placeholder in `path` is substituted with each locale code when reading or writing files (e.g. `locales/fr.json`). The `namespace` field is optional: **omit it to address namespace-less keys** — the same keys an agent writes without a namespace — rather than a namespace literally named `"default"`. Set it only when the target maps to a specific named namespace.
 
 ### `~/.turjuman/auth.json` — machine credentials
 
@@ -87,13 +87,13 @@ Environment variables take precedence over `~/.turjuman/auth.json` when both are
 | `pull [--working] [--exclude-stale]` | Download translations from Turjuman and write locale files to disk |
 | `build` | Alias for `pull` — useful in build scripts |
 | `push [--prune] [--dry-run] [--check]` | Read locale files and upload translations to Turjuman |
-| `check [--locale <code>] [--check <id...>] [--approved]` | Run advisory QA checks and print the findings report |
+| `check [--locale <code>] [--check <id...>]` | Run advisory QA checks and print the findings report |
 
 ### `pull` options
 
 | Flag | Effect |
 |---|---|
-| `--working` | Pull the current working (draft) values instead of the last-approved values |
+| `--working` | Pull the current working (draft) values instead of the accepted values |
 | `--exclude-stale` | Skip translations whose source value has changed since they were last written |
 
 ### `push` options
@@ -110,7 +110,6 @@ Environment variables take precedence over `~/.turjuman/auth.json` when both are
 |---|---|
 | `--locale <code>` | Restrict checks to a single locale (may be repeated) |
 | `--check <id>` | Run only the specified check(s) (may be repeated) |
-| `--approved` | Only check translations that have been approved (skips draft values) |
 
 ---
 

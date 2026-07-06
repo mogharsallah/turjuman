@@ -1,9 +1,9 @@
 import type {
+	CellLifecycle,
 	GlossaryTerm,
 	QaSeverity,
 	TranslationKey,
 	TranslationOrigin,
-	TranslationStatus,
 } from "../domain.js";
 import type {
 	QaFindingShape,
@@ -41,19 +41,22 @@ export interface QaContext {
 	baseLocale: string;
 	/** The target locale being checked. */
 	localeCode: string;
+	/** Resolved namespace label for this key (the service maps namespaceId → name;
+	 * "" when the key has no namespace). Used for finding coordinates. */
+	namespace: string;
 	key: Pick<
 		TranslationKey,
-		"namespace" | "name" | "plural" | "maxLength" | "tags" | "description"
+		"name" | "plural" | "maxLength" | "tags" | "description"
 	>;
 	/** Current base-locale value for this key — the source of truth. */
 	baseValue: string | undefined;
-	/** The value under test: the working `value`, or `approvedValue` when slot="approved". */
+	/** The value under test (the cell's working value). */
 	targetValue: string | undefined;
-	/** Raw status, for messages. Logic should prefer {@link expectsValue}. */
-	targetStatus: TranslationStatus | undefined;
+	/** The cell's lifecycle, for messages. Logic should prefer {@link expectsValue}. */
+	targetStatus: CellLifecycle | undefined;
 	/**
-	 * Derived by the service from status: true when the translation is expected to
-	 * carry a value (translated/needs_review/approved). Insulates checks from the status enum.
+	 * Derived by the service from the lifecycle: true when the cell is expected to
+	 * carry a value (proposed/accepted/escalated). Insulates checks from the enum.
 	 */
 	expectsValue: boolean;
 	/** Derived by the service: the source moved on since this value was written. */

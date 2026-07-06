@@ -1,13 +1,14 @@
 import {
+	contextLifecycleSchema,
 	glossaryTermSchema,
-	localeCode,
 	type Operation,
 	op,
 	projectId,
+	scopeInputSchema,
 	z,
 } from "../base.js";
 
-/** Glossary terms and translation-memory lookups. */
+/** Glossary terms (preferred renderings + do-not-translate). */
 export const glossaryOps: Operation[] = [
 	op({
 		name: "list_glossary",
@@ -20,10 +21,11 @@ export const glossaryOps: Operation[] = [
 	op({
 		name: "add_glossary_term",
 		description:
-			"Add a glossary term. Use doNotTranslate for brand/product names that must stay verbatim, and translations for preferred per-locale renderings.",
+			"Add a glossary term. Use doNotTranslate for brand/product names that must stay verbatim, and translations for preferred per-locale renderings. `scope` narrows it to a namespace/key (absent = project-wide); glossary merges by union across the cascade.",
 		input: z.object({
 			projectId,
 			term: z.string(),
+			scope: scopeInputSchema.optional(),
 			translations: z
 				.record(z.string())
 				.optional()
@@ -38,15 +40,18 @@ export const glossaryOps: Operation[] = [
 	}),
 	op({
 		name: "update_glossary_term",
-		description: "Update a glossary term's translations, flags, or notes.",
+		description:
+			"Update a glossary term's translations, flags, notes, scope, or lifecycle (retire it with lifecycle `retired`/`archived`).",
 		input: z.object({
 			projectId,
 			termId: z.string(),
 			term: z.string().optional(),
+			scope: scopeInputSchema.optional(),
 			translations: z.record(z.string()).optional(),
 			caseSensitive: z.boolean().optional(),
 			doNotTranslate: z.boolean().optional(),
 			notes: z.string().optional(),
+			lifecycle: contextLifecycleSchema.optional(),
 		}),
 		output: glossaryTermSchema,
 		handler: ({ projectId: id, termId, ...patch }, { service, actor }) =>
@@ -60,18 +65,5 @@ export const glossaryOps: Operation[] = [
 			await service.glossary.remove(actor, a.projectId, a.termId);
 			return { removed: a.termId };
 		},
-	}),
-	op({
-		name: "lookup_translation_memory",
-		description:
-			"Find prior translations for a source string in a locale (exact, normalized and fuzzy matches), so you can reuse existing phrasing for consistency before translating.",
-		input: z.object({
-			projectId,
-			locale: localeCode,
-			text: z.string().describe("Source (base-locale) text to look up"),
-			limit: z.number().int().positive().max(20).optional(),
-		}),
-		handler: (a, { service, actor }) =>
-			service.tm.lookup(actor, a.projectId, a.locale, a.text, a.limit),
 	}),
 ];

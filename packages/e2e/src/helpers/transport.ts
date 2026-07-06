@@ -70,7 +70,6 @@ export async function request(
 			const r = await processRequest({
 				method: init.method ?? "POST",
 				path: u.pathname,
-				query: Object.fromEntries(u.searchParams),
 				headers: lowerHeaders(init.headers),
 				body: init.body ?? "",
 				service: deps,

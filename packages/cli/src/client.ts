@@ -226,13 +226,11 @@ export class ApiClient {
 		opts: {
 			locale?: string;
 			checks?: string[];
-			slot?: "working" | "approved";
 		} = {},
 	): Promise<qa.QaReport> {
 		const body: RunChecksBody = validateBody(runChecksBodySchema, {
 			locale: opts.locale,
 			checks: opts.checks,
-			slot: opts.slot,
 		});
 		return this.request("POST", `v1/projects/${projectId}/checks`, { body });
 	}

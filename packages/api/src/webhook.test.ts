@@ -12,9 +12,10 @@ import {
 	bootstrapOwner,
 	Repository,
 	TurjumanService,
+	webhookEventSchema,
 } from "@turjuman/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { handler } from "./webhook.js";
+import { handler, RULE_EVENTS } from "./webhook.js";
 
 /**
  * Exercises the DynamoDB Streams → webhook dispatcher against DynamoDB Local and
@@ -106,14 +107,15 @@ describe.skipIf(!endpoint)("webhook dispatcher", () => {
 			events: ["translation.updated"],
 		});
 
-		// Synthetic stream record for a translation change.
+		// Synthetic stream record for a translation cell change — the new-model
+		// attribute names, exactly as the dispatcher reads them off the raw image.
 		const NewImage = marshall({
 			entityType: "Translation",
 			projectId: project.id,
-			namespace: "default",
-			keyName: "greeting",
-			localeCode: "fr",
-			status: "translated",
+			keyId: "key_greeting",
+			branchId: "main",
+			locale: "fr",
+			lifecycle: "accepted",
 			value: "Bonjour",
 		});
 		await handler({
@@ -129,7 +131,24 @@ describe.skipIf(!endpoint)("webhook dispatcher", () => {
 		expect(JSON.parse(body)).toMatchObject({
 			event: "translation.updated",
 			projectId: project.id,
-			data: { key: "greeting", locale: "fr" },
+			data: { keyId: "key_greeting", branchId: "main", locale: "fr" },
 		});
 	}, 30_000);
+});
+
+/**
+ * Hermetic guard (runs without DynamoDB): every subscribable event must be
+ * produced by the declarative rule table, so adding a value to
+ * `webhookEventSchema` without a rule fails here instead of silently never
+ * firing. `translation.stale` is the one derived (non-1:1) signal, emitted
+ * outside the table.
+ */
+describe("webhook event coverage", () => {
+	it("covers every webhookEventSchema value with a rule (bar the derived stale signal)", () => {
+		const derived = new Set(["translation.stale"]);
+		const uncovered = webhookEventSchema.options.filter(
+			(event) => !RULE_EVENTS.has(event) && !derived.has(event),
+		);
+		expect(uncovered).toEqual([]);
+	});
 });

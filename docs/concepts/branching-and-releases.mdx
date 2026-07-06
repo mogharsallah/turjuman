@@ -1,0 +1,96 @@
+---
+title: "Branching, releases, and field reports"
+sidebarTitle: "Branching & releases"
+description: "How Turjuman ships translations: copy-on-write branches, immutable releases that pin what is live, and field reports that reopen a bad string and compound the fix."
+---
+
+Once a string is translated and accepted, three mechanisms carry it the rest of the way: **branches** isolate parallel lines of work, **releases** freeze what is live, and **field reports** feed production corrections back into the loop. Together they are the **Ship** and **Stay-correct** ends of the [agent loop](/concepts/how-agents-use-turjuman) — the store manages the lines of work, and the deploy pipeline decides which one ships. Branching is optional: most self-hosted projects only ever use `main` and never touch a branch.
+
+## Branches are copy-on-write lines of work
+
+A **branch** is a named line of work over a project's keys and translations. Every project has a `main` branch that always exists (`parentBranchId = null`) and is the safe root — nothing experimental touches it until a deliberate merge, so `main` stays shippable while you work elsewhere.
+
+A branch is **copy-on-write, not a copy**. It stores only the keys and cells it actually writes; every unwritten read **falls through** to its parent, and ultimately to `main`. A feature branch that changes three strings is three rows, not a clone of the project. `create_branch` records a **fork point** — the parent's state at the instant of the fork — which later serves as the merge baseline.
+
+One mechanism covers three needs:
+
+| Use | How it works |
+|---|---|
+| **Safe experimentation** | Fork off `main`, translate freely, then merge or abandon. `main` stays shippable the whole time. |
+| **Feature work** | A feature branch holds its new keys, renames, and translations, invisible to `main` until you merge. |
+| **A/B testing** | Two long-lived branches (say `exp-a` and `exp-b`) each carry a variant value; ship both and let your pipeline route traffic. |
+
+Creating a branch needs a role that can write translations — DEVELOPER, EDITOR, or MANAGER.
+
+## Merge is a run that transports accepted values
+
+`merge_branch` folds a branch's work back into its parent. It is not a special code path — it is a [translation run](/reference/mcp-tools#runs) with `trigger: merge`. Instead of *generating* values, it **transports** the branch's already-**accepted** values onto the parent, so a merge **spends no budget**.
+
+For each accepted cell on the branch:
+
+- If the parent has **not** changed that cell past the fork point, the value is applied and accepted onto the parent.
+- If the parent **advanced that same cell past the fork point to a different value** — a change on both sides — the merge does **not** overwrite. It surfaces the cell as an **escalation** for a human to settle, exactly like any other [escalation](/concepts/lifecycle#escalations-resolve-the-escalated-state).
+
+Keys the branch introduced (definitions the branch owns that the parent lacks) come along in the merge too. When the merge finishes, the branch is closed (`status: merged`). The result reports the merge `run`, how many cells transported cleanly (`merged`), and the `conflicts` raised as escalations. Merging is a review-level action — a role that can accept translations (EDITOR or MANAGER, or an owner/admin acting as one).
+
+## Releases pin what is live
+
+A **release** is an **immutable, shipped snapshot** — the record of what is live. `create_release` **pins one branch** and materializes its resolved **accepted** view — the branch's own cells plus everything it inherits by fall-through — into a fixed list of entries. Each entry is `{ keyId, locale, versionRef }`, where `versionRef` is the accepted version's sequence number at the moment the release was cut.
+
+<Note>
+  **"Live" is the latest release, never a per-cell flag.** There is no "is-live" field on a cell. Because a release freezes exact version numbers, a later reopened cell or a re-export never silently changes what shipped — you decide what is live only by cutting a new release.
+</Note>
+
+Cutting a newer release **supersedes** the prior open release **on the same branch**. A different branch's release stays `open` — which is exactly how an A/B pair ships two lines at once: two branches, two open releases. A release status is one of `open`, `frozen`, or `superseded`.
+
+`locales` defaults to every project locale. The base locale ships straight from source, so a release pins accepted **target** versions. This gives you three things at the delivery edge:
+
+- **Rollback** — redeploy an older release to restore its exact strings.
+- **Reproducible CI export** — a build pulls a fixed release and gets byte-identical translations every time.
+- **A stable anchor for field reports** — a report can name the release that was live when a bad string shipped.
+
+`list_releases` returns release metadata only; `get_release` reassembles the full pinned entries for one release. Cutting a release needs a write-level role, but listing and getting are read-only — so a **read-only CI key can pull a release to build, but cannot cut one**.
+
+## Field reports close the production loop
+
+A **field report** is production telling Turjuman that a shipped string is wrong. It is the one fact the in-loop agent provably cannot know from its own context: an agent can re-judge faithfulness and tone against the current value for free, but it cannot see a real user hitting a bad string in production.
+
+`file_field_report` does two things:
+
+1. It **reopens the targeted cell** — the cell moves `accepted → proposed` and is marked `stale`, so it re-enters the review router and a normal run fixes it.
+2. It records `releaseRef` — the release that was live when the bad string shipped. Because a release pins a branch, the report is **branch-aware by reference**: you can hotfix `main` or fix on a branch, and copy-on-write carries a `main` fix through to any open branch that never overrode the cell.
+
+`resolve_field_report` closes the report, and may **spawn a gold [example](/concepts/context-cascade#examples-are-retrieved-deterministically)** (base → the fixed value) **or a glossary term** from the correction — so the fix compounds into reusable context the next brief draws on. This is the same **judgment → context → fan-out** pattern an [escalation resolution](/concepts/lifecycle#escalations-resolve-the-escalated-state) runs: a real-world correction becomes a rule the loop honours going forward, without anyone training a model.
+
+A field report is **slim by design** — no corroboration math, no trust score, no dedup token. A self-hosted, API-key-gated tool has no anonymous mob to guard against, so the model stays minimal. Filing a report needs a write-level role; resolving it is review-level.
+
+## How this fits the agent loop
+
+The [agent loop](/concepts/how-agents-use-turjuman) is **Define → Brief → Translate → Judge → Record → Ship → Stay-correct**. These three features are its last two steps:
+
+- **Branching** is that same loop running on parallel lines instead of one.
+- **Releases** are snapshots of it — the **Ship** step, freezing an accepted view for delivery.
+- **Field reports** are the production feedback touch-point of **Stay-correct**, alongside the base-string and context-change [staleness](/concepts/lifecycle#staleness-when-the-source-or-the-context-moves) triggers.
+
+## Relationship to other concepts
+
+- [The agent loop](/concepts/how-agents-use-turjuman) — Ship a release and file a field report are its final two touch-points.
+- [Lifecycle](/concepts/lifecycle) — a field report reopens a cell (`accepted → proposed`); a merge conflict surfaces as an `escalated` cell.
+- [The context cascade](/concepts/context-cascade) — a resolved field report can spawn an example or a glossary term that feeds the next brief.
+- [Architecture](/concepts/architecture) — a branch is one `#BR#` partition segment; a release is an immutable partition of pinned entries; a merge is a run.
+- [MCP reference](/reference/mcp-tools) — the `create_branch`, `merge_branch`, release, and field-report operations.
+- [Webhooks](/guides/webhooks) — `field-report.opened` and `field-report.resolved` events (a merge fires `run.*`; releases emit nothing).
+
+## Common misconceptions
+
+<Note>
+  **"'Live' is a per-key flag I can toggle."** It is not. What is live is the **latest release** — an immutable snapshot of pinned version numbers. Reopening a cell or re-exporting does not change what shipped; only cutting a new release does.
+</Note>
+
+<Note>
+  **"A merge re-translates the branch."** It does not, and it spends no budget. A merge *transports* the branch's already-accepted values onto the parent; only a cell the parent changed on the other side of the fork point is held back as an escalation.
+</Note>
+
+<Note>
+  **"Branching is something every project has to manage."** No. `main` always exists and is the default for every operation; branching is opt-in. Most self-hosted projects work entirely on `main` and never create a branch.
+</Note>

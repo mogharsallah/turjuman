@@ -25,14 +25,13 @@ describe("runCheck", () => {
 		const report = await runCheck(
 			api,
 			config,
-			{ locale: "fr", checks: ["length"], approved: true },
+			{ locale: "fr", checks: ["length"] },
 			cap.sink,
 		);
 
 		expect(runChecks).toHaveBeenCalledWith("proj_1", {
 			locale: "fr",
 			checks: ["length"],
-			slot: "approved",
 		});
 		expect(report.counts.warning).toBe(1);
 		expect(cap.result()).toEqual({
@@ -42,7 +41,7 @@ describe("runCheck", () => {
 		});
 	});
 
-	it("defaults slot to undefined (working) when --approved is absent", async () => {
+	it("passes through undefined locale/checks when no options are given", async () => {
 		const runChecks = vi.fn(async () => ({
 			counts: { error: 0, warning: 0, info: 0 },
 			findings: [],
@@ -52,7 +51,6 @@ describe("runCheck", () => {
 		expect(runChecks).toHaveBeenCalledWith("proj_1", {
 			locale: undefined,
 			checks: undefined,
-			slot: undefined,
 		});
 	});
 });

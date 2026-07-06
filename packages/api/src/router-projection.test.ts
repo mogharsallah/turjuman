@@ -67,15 +67,16 @@ const REST_FIXTURES: Record<string, RestFixture> = {
 	run_qa_checks: {
 		method: "post",
 		url: `/v1/projects/${PID}/checks`,
-		body: { locale: "zz", checks: ["icu"], slot: "working" },
+		body: { locale: "zz", checks: ["icu"], slot: "accepted" },
 		serviceMethod: "qa.run",
 		check: (a) => {
 			expect(a[1]).toBe(PID);
-			// The wire field `checks` is renamed to the service field `checkIds`.
+			// The wire field `checks` is renamed to the service field `checkIds`, and
+			// `slot` now reaches the service over REST too (was silently MCP-only).
 			expect(a[2]).toMatchObject({
 				locale: "zz",
 				checkIds: ["icu"],
-				slot: "working",
+				slot: "accepted",
 			});
 		},
 	},
@@ -95,44 +96,6 @@ const REST_FIXTURES: Record<string, RestFixture> = {
 			expect(a[2]).toMatchObject({ checks: { icu: { enabled: false } } });
 		},
 	},
-	score_translation: {
-		method: "post",
-		url: `/v1/projects/${PID}/translations/score`,
-		body: { locale: "zz", name: "N_keyName", score: 42 },
-		serviceMethod: "scoring.score",
-		check: (a) => {
-			expect(a[1]).toBe(PID);
-			expect(a[2]).toBe("zz"); // locale → 3rd positional
-			expect(a[3]).toMatchObject({ name: "N_keyName", score: 42 });
-		},
-	},
-	review_translations: {
-		method: "post",
-		url: `/v1/projects/${PID}/translations/review`,
-		body: { locale: "zz", entries: [{ name: "N_keyName", score: 42 }] },
-		serviceMethod: "scoring.reviewBatch",
-		check: (a) => {
-			expect(a[1]).toBe(PID);
-			expect(a[2]).toBe("zz");
-			expect(a[3]).toMatchObject([{ name: "N_keyName", score: 42 }]);
-		},
-	},
-	get_score_config: {
-		method: "get",
-		url: `/v1/projects/${PID}/score-config`,
-		serviceMethod: "scoring.getConfig",
-		check: (a) => expect(a[1]).toBe(PID),
-	},
-	set_score_config: {
-		method: "put",
-		url: `/v1/projects/${PID}/score-config`,
-		body: { threshold: 77 },
-		serviceMethod: "scoring.setConfig",
-		check: (a) => {
-			expect(a[1]).toBe(PID);
-			expect(a[2]).toMatchObject({ threshold: 77 });
-		},
-	},
 };
 
 describe("REST projection — path/body params land on the correct input field", () => {
@@ -144,6 +107,15 @@ describe("REST projection — path/body params land on the correct input field",
 	it("has a wiring fixture for every http-bound operation", () => {
 		const missing = httpOps.filter((n) => !REST_FIXTURES[n]);
 		expect(missing).toEqual([]);
+	});
+
+	// The inverse ratchet: a fixture whose operation was removed or unbound (e.g.
+	// the deleted scoring surface) can't linger silently.
+	it("has no fixture for a removed or unbound operation", () => {
+		const stale = Object.keys(REST_FIXTURES).filter(
+			(n) => !httpOps.includes(n),
+		);
+		expect(stale).toEqual([]);
 	});
 
 	describe.each(httpOps.filter((n) => REST_FIXTURES[n]))("%s", (name) => {
@@ -180,7 +152,7 @@ describe("Bespoke CLI routes — golden envelopes & the origin divergence", () =
 					locale: "fr",
 					entries: [
 						{ name: "a", value: "A" },
-						{ name: "b", value: "B", status: "approved" },
+						{ name: "b", value: "B" },
 					],
 				}),
 			},
@@ -195,13 +167,13 @@ describe("Bespoke CLI routes — golden envelopes & the origin divergence", () =
 		expect(calls[0]!.args[2]).toBe("fr");
 		expect(calls[0]!.args[3]).toEqual([
 			{ name: "a", value: "A", origin: "import" },
-			{ name: "b", value: "B", status: "approved", origin: "import" },
+			{ name: "b", value: "B", origin: "import" },
 		]);
 	});
 
-	it('the MCP set_translation handler stamps origin:"llm" — the other side of the divergence', () => {
+	it('the MCP set_translation handler stamps origin:"agent" — the other side of the divergence', () => {
 		// set_translation has no REST route; exercise its operation handler directly so
-		// the import-vs-llm origin split is pinned in one place, against both oracles.
+		// the import-vs-agent origin split is pinned in one place, against both oracles.
 		const op = OPERATIONS_BY_NAME.get("set_translation")!;
 		const { service, calls } = spyService(undefined);
 		const ctx: OpContext = {
@@ -229,7 +201,7 @@ describe("Bespoke CLI routes — golden envelopes & the origin divergence", () =
 			expect(calls[0]!.args[3]).toMatchObject({
 				name: "a",
 				value: "A",
-				origin: "llm",
+				origin: "agent",
 			});
 		});
 	});

@@ -10,6 +10,14 @@ import { usageError } from "./errors.js";
 
 export const CONFIG_FILE = "turjuman.config.json";
 
+/**
+ * The namespace a target with no `namespace` addresses. It matches the server's
+ * export shape (which emits `namespace: ""` for namespace-less keys), so a CLI
+ * round-trip and an agent's namespace-less writes address the *same* keys —
+ * rather than the CLI inventing a literal `"default"` namespace no agent uses.
+ */
+export const NO_NAMESPACE = "";
+
 // Credentials live in a dedicated module (also published as @turjuman/cli/auth).
 export {
 	AUTH_FILE,
@@ -26,7 +34,7 @@ export interface Target {
 	format: string;
 	/** Path pattern with a {locale} placeholder, e.g. "locales/{locale}.json". */
 	path: string;
-	/** Namespace to read/write. Defaults to "default". */
+	/** Namespace to read/write; omit for namespace-less keys (the server's `""`). */
 	namespace?: string;
 }
 

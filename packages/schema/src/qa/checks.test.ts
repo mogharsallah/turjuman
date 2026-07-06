@@ -25,8 +25,8 @@ function ctx(over: Partial<QaContext> = {}): QaContext {
 	return {
 		baseLocale: "en",
 		localeCode: SENTINEL_LOCALE,
+		namespace: SENTINEL_NS,
 		key: {
-			namespace: SENTINEL_NS,
 			name: SENTINEL_KEY,
 			plural: false,
 			maxLength: undefined,
@@ -35,10 +35,10 @@ function ctx(over: Partial<QaContext> = {}): QaContext {
 		},
 		baseValue: "Hello",
 		targetValue: "Bonjour",
-		targetStatus: "translated",
+		targetStatus: "proposed",
 		expectsValue: true,
 		stale: false,
-		origin: "llm",
+		origin: "agent",
 		glossary: [],
 		localeIndex: new Map(),
 		...over,
@@ -465,7 +465,7 @@ describe("check registry invariants", () => {
 					expect(f.checkId).toBe(check.id);
 					expect(SEVERITIES.has(f.severity)).toBe(true);
 					expect(typeof f.message).toBe("string");
-					expect(f.namespace).toBe(c.key.namespace);
+					expect(f.namespace).toBe(c.namespace);
 					expect(f.keyName).toBe(c.key.name);
 					expect(f.localeCode).toBe(c.localeCode);
 				}

@@ -18,12 +18,8 @@ const SECRET = "test-secret";
 const user = { id: "user_1", orgId: "default", globalRole: "OWNER" as const };
 
 /** A repo that authenticates exactly one bearer secret. `touchApiKey` resolves
- * on a later tick and flips `touched` so a test can prove it was flushed. The
- * key can be marked `readOnly` to exercise per-key tool filtering. */
-function fakeRepo(
-	state: { touched: boolean },
-	opts: { readOnly?: boolean } = {},
-): Repository {
+ * on a later tick and flips `touched` so a test can prove it was flushed. */
+function fakeRepo(state: { touched: boolean }): Repository {
 	return {
 		getApiKeyByHash: async (hash: string) =>
 			hash === hashApiKey(SECRET)
@@ -35,7 +31,6 @@ function fakeRepo(
 						hash,
 						prefix: "op_live_t",
 						createdAt: "now",
-						readOnly: opts.readOnly,
 					}
 				: undefined,
 		getUser: async (id: string) =>
@@ -112,23 +107,17 @@ describe("MCP handler — processRequest", () => {
 		await processRequest({
 			method: "POST",
 			headers: { authorization: `Bearer ${SECRET}` },
-			// An unknown tool comes back as an isError result (not a protocol error).
 			body: JSON.stringify({
 				jsonrpc: "2.0",
 				id: 2,
 				method: "tools/call",
-				params: { name: "list_projects", arguments: {} },
+				params: { name: "search", arguments: { query: "keys" } },
 			}),
-			service: {
-				repo: fakeRepo(state),
-				service: {
-					projects: { list: async () => [] },
-				} as unknown as TurjumanService,
-			},
+			service: deps(state),
 		});
 		expect(lastLog(logSpy)).toMatchObject({
 			method: "tools/call",
-			tool: "list_projects",
+			tool: "search",
 			outcome: "ok",
 		});
 	});
@@ -221,45 +210,10 @@ describe("MCP handler — processRequest", () => {
 		expect(res.statusCode).toBe(200);
 	});
 
-	it("scopes tools/list via the ?groups= query param", async () => {
+	it("advertises exactly the three code tools (no modes, no scoping)", async () => {
 		vi.spyOn(console, "log").mockImplementation(() => {});
 		const res = await processRequest({
 			method: "POST",
-			query: { groups: "read" },
-			headers: { authorization: `Bearer ${SECRET}` },
-			body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
-			service: deps({ touched: false }),
-		});
-		const tools = (
-			JSON.parse(res.body ?? "{}").result.tools as { name: string }[]
-		).map((t) => t.name);
-		expect(tools).toContain("list_keys");
-		// A write tool is filtered out of the advertised surface.
-		expect(tools).not.toContain("delete_key");
-	});
-
-	it("rejects an unknown tool/group in the query with 400", async () => {
-		const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-		const res = await processRequest({
-			method: "POST",
-			query: { groups: "bogus" },
-			headers: { authorization: `Bearer ${SECRET}` },
-			body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
-			service: deps({ touched: false }),
-		});
-		expect(res.statusCode).toBe(400);
-		expect(JSON.parse(res.body ?? "{}").error).toContain("bogus");
-		expect(lastLog(logSpy)).toMatchObject({
-			outcome: "invalid_tool_scope",
-			status: 400,
-		});
-	});
-
-	it("advertises only the code-mode tools under ?mode=code", async () => {
-		vi.spyOn(console, "log").mockImplementation(() => {});
-		const res = await processRequest({
-			method: "POST",
-			query: { mode: "code" },
 			headers: { authorization: `Bearer ${SECRET}` },
 			body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
 			service: deps({ touched: false }),
@@ -268,67 +222,6 @@ describe("MCP handler — processRequest", () => {
 			JSON.parse(res.body ?? "{}").result.tools as { name: string }[]
 		).map((t) => t.name);
 		expect(names.sort()).toEqual(["describe", "run_code", "search"]);
-	});
-
-	it("rejects an unknown ?mode= with 400", async () => {
-		const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-		const res = await processRequest({
-			method: "POST",
-			query: { mode: "bogus" },
-			headers: { authorization: `Bearer ${SECRET}` },
-			body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
-			service: deps({ touched: false }),
-		});
-		expect(res.statusCode).toBe(400);
-		expect(JSON.parse(res.body ?? "{}").error).toContain("bogus");
-		expect(lastLog(logSpy)).toMatchObject({
-			outcome: "invalid_mode",
-			status: 400,
-		});
-	});
-
-	it("rejects combining ?mode=code with ?tools=/?groups= (mutually exclusive)", async () => {
-		vi.spyOn(console, "log").mockImplementation(() => {});
-		const res = await processRequest({
-			method: "POST",
-			query: { mode: "code", groups: "keys" },
-			headers: { authorization: `Bearer ${SECRET}` },
-			body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
-			service: deps({ touched: false }),
-		});
-		expect(res.statusCode).toBe(400);
-		expect(JSON.parse(res.body ?? "{}").error).toContain("code mode");
-	});
-
-	it("advertises every tool to a full-privilege (OWNER) key with no scope query", async () => {
-		vi.spyOn(console, "log").mockImplementation(() => {});
-		const res = await processRequest({
-			method: "POST",
-			headers: { authorization: `Bearer ${SECRET}` },
-			body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
-			service: deps({ touched: false }),
-		});
-		const tools = JSON.parse(res.body ?? "{}").result.tools as unknown[];
-		expect(tools.length).toBe(45);
-	});
-
-	it("advertises only read tools to a read-only key (per-key filtering)", async () => {
-		vi.spyOn(console, "log").mockImplementation(() => {});
-		const res = await processRequest({
-			method: "POST",
-			headers: { authorization: `Bearer ${SECRET}` },
-			body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
-			service: {
-				repo: fakeRepo({ touched: false }, { readOnly: true }),
-				service: {} as TurjumanService,
-			},
-		});
-		const names = (
-			JSON.parse(res.body ?? "{}").result.tools as { name: string }[]
-		).map((t) => t.name);
-		expect(names).toContain("list_keys");
-		expect(names).not.toContain("delete_key");
-		expect(names).not.toContain("set_translation");
 	});
 
 	it("honours TURJUMAN_ALLOWED_ORIGIN for the CORS origin", async () => {

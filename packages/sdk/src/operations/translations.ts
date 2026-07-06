@@ -1,4 +1,5 @@
 import {
+	branchInput,
 	bulkSetResultSchema,
 	localeCode,
 	localeKeyList,
@@ -8,13 +9,11 @@ import {
 	pageCursor,
 	pageLimit,
 	projectId,
-	settableStatusSchema,
 	translationSchema,
-	translationStatusSchema,
 	z,
 } from "../base.js";
 
-/** Reading and writing translation values. */
+/** Reading and writing translation values (the cell + its lifecycle). */
 export const translationOps: Operation[] = [
 	op({
 		name: "get_translations",
@@ -27,6 +26,7 @@ export const translationOps: Operation[] = [
 			locale: localeCode.optional(),
 			name: z.string().optional(),
 			namespace,
+			branch: branchInput,
 			limit: pageLimit,
 			cursor: pageCursor,
 		}),
@@ -37,16 +37,14 @@ export const translationOps: Operation[] = [
 					a.projectId,
 					a.name,
 					a.namespace,
+					a.branch,
 				);
 			if (a.locale)
 				return service.translations.listForLocalePage(
 					actor,
 					a.projectId,
 					a.locale,
-					{
-						limit: a.limit ?? 100,
-						cursor: a.cursor,
-					},
+					{ branch: a.branch, limit: a.limit ?? 100, cursor: a.cursor },
 				);
 			throw new Error("Provide either 'name' (for a key) or 'locale'.");
 		},
@@ -54,11 +52,12 @@ export const translationOps: Operation[] = [
 	op({
 		name: "list_untranslated",
 		description:
-			"List keys that have no value yet for a locale. Use this to find what the LLM should translate. " +
+			"List keys that have no value yet for a locale. Use this to find what to translate next. " +
 			"Paged: returns up to `limit` keys (default 100, max 200) plus a `nextCursor` to fetch the next page.",
 		input: z.object({
 			projectId,
 			locale: localeCode,
+			branch: branchInput,
 			limit: pageLimit,
 			cursor: pageCursor,
 		}),
@@ -68,10 +67,7 @@ export const translationOps: Operation[] = [
 				actor,
 				a.projectId,
 				a.locale,
-				{
-					limit: a.limit ?? 100,
-					cursor: a.cursor,
-				},
+				{ branch: a.branch, limit: a.limit ?? 100, cursor: a.cursor },
 			);
 			return {
 				locale: a.locale,
@@ -90,6 +86,7 @@ export const translationOps: Operation[] = [
 		input: z.object({
 			projectId,
 			locale: localeCode,
+			branch: branchInput,
 			limit: pageLimit,
 			cursor: pageCursor,
 		}),
@@ -99,10 +96,7 @@ export const translationOps: Operation[] = [
 				actor,
 				a.projectId,
 				a.locale,
-				{
-					limit: a.limit ?? 100,
-					cursor: a.cursor,
-				},
+				{ branch: a.branch, limit: a.limit ?? 100, cursor: a.cursor },
 			);
 			return {
 				locale: a.locale,
@@ -115,33 +109,45 @@ export const translationOps: Operation[] = [
 	op({
 		name: "set_translation",
 		description:
-			"Write (create or replace) a single translation value for an existing key in a locale. Edits the value, not the key's metadata (use update_key for that).",
+			"Propose a translation value for an existing key in a locale. The cell lands as `proposed` " +
+			"(awaiting acceptance); writing the base locale instead sets the source value. Edits the value, " +
+			"not the key's metadata (use update_key for that). Accept it with accept_translation.",
 		input: z.object({
 			projectId,
 			locale: localeCode,
 			name: z.string(),
 			namespace,
+			branch: branchInput,
 			value: z.string(),
-			status: settableStatusSchema.optional(),
 		}),
 		output: translationSchema,
-		handler: ({ projectId: id, locale, ...input }, { service, actor }) =>
-			service.translations.set(actor, id, locale, { ...input, origin: "llm" }),
+		handler: (
+			{ projectId: id, locale, branch, name, namespace: ns, value },
+			{ service, actor },
+		) =>
+			service.translations.set(actor, id, locale, {
+				name,
+				namespace: ns,
+				branch,
+				value,
+				origin: "agent",
+			}),
 	}),
 	op({
 		name: "bulk_set_translations",
 		description:
-			"Set many translations for one locale in a single call. Ideal after the LLM translates a batch. Unknown keys are skipped and reported.",
+			"Propose many translations for one locale in a single call. Ideal after translating a batch. " +
+			"Each cell lands as `proposed`. Unknown keys are skipped and reported.",
 		input: z.object({
 			projectId,
 			locale: localeCode,
+			branch: branchInput,
 			entries: z
 				.array(
 					z.object({
 						name: z.string(),
 						namespace,
 						value: z.string(),
-						status: settableStatusSchema.optional(),
 					}),
 				)
 				.min(1)
@@ -155,28 +161,35 @@ export const translationOps: Operation[] = [
 				actor,
 				a.projectId,
 				a.locale,
-				a.entries.map((e) => ({ ...e, origin: "llm" as const })),
+				a.entries.map((e) => ({ ...e, origin: "agent" as const })),
+				a.branch,
 			),
 	}),
 	op({
-		name: "set_translation_status",
-		description: 'Change a translation\'s status (e.g. mark it "approved").',
+		name: "accept_translation",
+		description:
+			"Accept a key's current proposed value for a locale as its new head version — the controlled " +
+			"accept transition. Appends an immutable version and advances the cell's head. When the project " +
+			"requires human acceptance, a run-attributed accept is rejected.",
 		input: z.object({
 			projectId,
 			locale: localeCode,
 			name: z.string(),
 			namespace,
-			status: translationStatusSchema,
+			branch: branchInput,
+			runRef: z
+				.string()
+				.optional()
+				.describe(
+					"Run id when a run is self-accepting; omit for a human accept.",
+				),
 		}),
 		output: translationSchema,
 		handler: (a, { service, actor }) =>
-			service.translations.setStatus(
-				actor,
-				a.projectId,
-				a.locale,
-				a.name,
-				a.status,
-				a.namespace,
-			),
+			service.translations.accept(actor, a.projectId, a.locale, a.name, {
+				namespace: a.namespace,
+				branch: a.branch,
+				runRef: a.runRef,
+			}),
 	}),
 ];

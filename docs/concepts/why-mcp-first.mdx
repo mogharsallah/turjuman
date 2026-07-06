@@ -14,9 +14,9 @@ Increasingly, the operator is an agent. Developers already work through Claude C
 
 ## What "MCP-first" means in practice
 
-- **The MCP server is the full surface.** Projects, locales, keys, translations, glossary, QA, members, and API-key administration are all exposed as MCP tools. Anything you'd do in a dashboard, your agent does through a tool call.
+- **The MCP is the full surface.** Projects, locales, keys, translations, glossary, QA, members, and API-key administration are all exposed as operations. Anything you'd do in a dashboard, your agent does through an operation call.
 - **The CLI is intentionally thin.** It exists for the deterministic, scriptable half of the job — pulling and pushing locale files in your repo and CI — where you want predictable, non-interactive behaviour, not a conversation. See [Sync with the CLI](/guides/sync-with-cli).
-- **The model does the translating.** Turjuman ships no machine-translation engine. The LLM already connected to your agent produces the translations, informed by your glossary and translation memory. You bring your own model; there is no separate MT vendor to configure or pay for.
+- **The model does the translating.** Turjuman ships no machine-translation engine. The LLM already connected to your agent produces the translations, informed by your glossary and the context you curate. You bring your own model; there is no separate MT vendor to configure or pay for.
 
 ## Why no web UI
 
@@ -27,7 +27,7 @@ A web UI would be a second, parallel surface to build, secure, and keep in sync 
 The MCP-first choice is reinforced by the rest of Turjuman's architecture:
 
 - **One brain, many surfaces.** Every capability is a single operation in the shared service layer, projected to both the MCP and REST surfaces. A new tool can't introduce a divergent code path or a different permission rule. See [Architecture](/concepts/architecture).
-- **Agent-native authorization.** API keys carry roles, and the MCP server filters the tools it advertises to match the key — so an agent is only ever offered actions it is allowed to take. See [Roles & permissions](/concepts/roles-and-permissions).
+- **Agent-native authorization.** API keys carry roles, and the MCP authorizes every operation against the key in the core — so an agent can only ever take actions it is allowed to. See [Roles & permissions](/concepts/roles-and-permissions).
 - **Self-hostable and serverless.** Because there's no always-on dashboard, the whole system is a few Lambda functions and one DynamoDB table — cheap to run and simple to own. See [Self-hosting](/self-hosting/overview).
 
 ## When this matters to you

@@ -5,6 +5,7 @@ import {
 	membershipSchema,
 	type Operation,
 	op,
+	principal,
 	projectId,
 	projectRole,
 	userSchema,
@@ -92,7 +93,7 @@ export const adminOps: Operation[] = [
 	op({
 		name: "create_api_key",
 		description:
-			"Create an API key. Omit userId to create one for yourself. The secret is returned ONCE — store it securely. Pass readOnly to mint a key limited to read actions (e.g. CI pulls), and expiresAt to set an expiry.",
+			"Create an API key. Omit userId to create one for yourself. The secret is returned ONCE — store it securely. Pass readOnly to mint a key limited to read actions (e.g. CI pulls), expiresAt to set an expiry, and principal='agent' to mint an agent key (which cannot accept translations under a project's requireHumanAccept).",
 		input: z.object({
 			name: z.string(),
 			userId: z.string().optional(),
@@ -107,6 +108,11 @@ export const adminOps: Operation[] = [
 				.optional()
 				.describe(
 					"ISO-8601 expiry (must be in the future); after this the key stops working",
+				),
+			principal: principal
+				.optional()
+				.describe(
+					"Whether the key acts as a person ('human', default) or an automated agent ('agent'). An agent key cannot accept/resolve under requireHumanAccept.",
 				),
 		}),
 		output: apiKeyCreatedSchema,

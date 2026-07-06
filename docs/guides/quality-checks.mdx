@@ -4,7 +4,7 @@ sidebarTitle: "Quality Checks"
 description: "Turjuman's advisory QA layer validates translations for ICU syntax, placeholder parity, glossary consistency, and more — from the CLI, MCP server, or REST API."
 ---
 
-QA in Turjuman is advisory. It surfaces problems and reports them — it never auto-approves translations or silently discards findings. Use QA output as structured input for human reviewers and as a hard gate in your CI pipeline.
+QA in Turjuman is advisory. It surfaces problems and reports them — it never auto-accepts translations or silently discards findings. Use QA output as structured input for human reviewers and as a hard gate in your CI pipeline.
 
 ## Running checks
 
@@ -17,7 +17,7 @@ QA in Turjuman is advisory. It surfaces problems and reports them — it never a
       projectId: "proj_123",
       locale: "fr",          // optional — omit to check all locales
       checks: ["icu", "placeholders"],  // optional — omit to run all enabled checks
-      slot: "approved"       // optional — "approved" (default) or "working"
+      slot: "working"        // optional — "working" (default) or "accepted"
     }
     ```
 
@@ -30,10 +30,10 @@ QA in Turjuman is advisory. It surfaces problems and reports them — it never a
     turjuman check --locale fr
     ```
 
-    Run checks against approved translations only:
+    Run only specific checks:
 
     ```bash
-    turjuman check --approved
+    turjuman check --check icu --check placeholders
     ```
 
     Run checks as part of a push:
@@ -52,8 +52,7 @@ QA in Turjuman is advisory. It surfaces problems and reports them — it never a
 
     {
       "locale": "fr",
-      "checks": ["icu", "placeholders", "glossary"],
-      "slot": "approved"
+      "checks": ["icu", "placeholders", "glossary"]
     }
     ```
 
@@ -154,5 +153,5 @@ Suppress specific findings without disabling the entire check by adding ignore r
 ```
 
 <Note>
-  QA is advisory by design. Findings are surfaced to reviewers and block CI when configured as errors, but they never gate approval automatically. Promoting a translation to approved is always a role-gated human action.
+  QA is advisory by design. Findings are surfaced to reviewers and block CI when configured as errors, but they never gate acceptance automatically. Accepting a translation is always a role-gated action.
 </Note>

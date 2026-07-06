@@ -42,6 +42,119 @@ export interface DispatchEvent {
 	data: Record<string, unknown>;
 }
 
+/**
+ * One entity-change → webhook-event rule. A rule fires its `event` when `when`
+ * matches the stream record (change kind + new image). Listing every mapping in
+ * one table — rather than a switch that silently returns nothing for an unlisted
+ * entity — is what stops a new event from being forgotten: the coverage test
+ * asserts every {@link WebhookEvent} except the derived `translation.stale` signal
+ * is produced by some rule here.
+ */
+interface EventRule {
+	entityType: string;
+	event: WebhookEvent;
+	when: (
+		eventName: string | undefined,
+		item: Record<string, unknown>,
+	) => boolean;
+	summarize: (item: Record<string, unknown>) => Record<string, unknown>;
+}
+
+const isInsert = (e: string | undefined): boolean => e === "INSERT";
+const isModify = (e: string | undefined): boolean => e === "MODIFY";
+
+const EVENT_RULES: EventRule[] = [
+	// The live cell. Its append-only version rows and KEYNAME# lookups are internal
+	// and emit nothing; a REMOVE (cascade delete) is covered by key.deleted.
+	{
+		entityType: "Translation",
+		event: "translation.updated",
+		when: (e) => e !== "REMOVE",
+		summarize,
+	},
+	{
+		entityType: "TranslationKey",
+		event: "key.created",
+		when: isInsert,
+		summarize,
+	},
+	{
+		entityType: "TranslationKey",
+		event: "key.deleted",
+		when: (e) => e === "REMOVE",
+		summarize,
+	},
+	{
+		entityType: "TranslationKey",
+		event: "key.updated",
+		when: isModify,
+		summarize,
+	},
+	{ entityType: "Locale", event: "locale.added", when: isInsert, summarize },
+	// A run is written once (running) then updated when it finishes.
+	{
+		entityType: "TranslationRun",
+		event: "run.started",
+		when: isInsert,
+		summarize: summarizeRun,
+	},
+	{
+		entityType: "TranslationRun",
+		event: "run.finished",
+		when: (e, i) => isModify(e) && Boolean(i.finishedAt),
+		summarize: summarizeRun,
+	},
+	// Opened once (INSERT), then claimed and/or resolved (MODIFY); resolved wins
+	// over claimed on the transition that sets status=resolved.
+	{
+		entityType: "Escalation",
+		event: "escalation.opened",
+		when: isInsert,
+		summarize: summarizeEscalation,
+	},
+	{
+		entityType: "Escalation",
+		event: "escalation.resolved",
+		when: (e, i) => isModify(e) && i.status === "resolved",
+		summarize: summarizeEscalation,
+	},
+	{
+		entityType: "Escalation",
+		event: "escalation.claimed",
+		when: (e, i) =>
+			isModify(e) && i.status !== "resolved" && Boolean(i.claimedBy),
+		summarize: summarizeEscalation,
+	},
+	{
+		entityType: "FieldReport",
+		event: "field-report.opened",
+		when: isInsert,
+		summarize: summarizeFieldReport,
+	},
+	{
+		entityType: "FieldReport",
+		event: "field-report.resolved",
+		when: (e, i) => isModify(e) && i.status === "resolved",
+		summarize: summarizeFieldReport,
+	},
+];
+
+/** Events produced by the rule table (all but the derived `translation.stale`). */
+export const RULE_EVENTS: ReadonlySet<WebhookEvent> = new Set(
+	EVENT_RULES.map((r) => r.event),
+);
+
+/** Map one stream record to its webhook events via the rule table. */
+function mapRecord(
+	entityType: string,
+	eventName: string | undefined,
+	item: Record<string, unknown>,
+): DispatchEvent[] {
+	return EVENT_RULES.filter(
+		(r) => r.entityType === entityType && r.when(eventName, item),
+	).map((r) => ({ event: r.event, data: r.summarize(item) }));
+}
+
 export async function handler(event: {
 	Records?: StreamRecord[];
 }): Promise<void> {
@@ -52,15 +165,17 @@ export async function handler(event: {
 		const image = record.dynamodb?.NewImage ?? record.dynamodb?.OldImage;
 		if (!image) continue;
 		const item = unmarshall(image) as Record<string, unknown>;
-		const mapped = mapEvent(String(item.entityType), record.eventName);
-		if (!mapped) continue;
 		const projectId = item.projectId as string | undefined;
 		if (!projectId) continue;
-		const list = byProject.get(projectId) ?? [];
-		list.push({ event: mapped, data: summarize(item) });
+		const events: DispatchEvent[] = mapRecord(
+			String(item.entityType),
+			record.eventName,
+			item,
+		);
 
 		// A base-locale value change moves the source on, so dependent translations
-		// for that key are now stale. Emit a one-off signal keyed on the key.
+		// for that key are now stale. This is a derived signal, not a 1:1 entity
+		// change, so it lives outside the rule table.
 		if (item.entityType === "Translation" && record.eventName === "MODIFY") {
 			const oldImage = record.dynamodb?.OldImage;
 			const old = oldImage
@@ -68,14 +183,17 @@ export async function handler(event: {
 				: undefined;
 			if (old && old.value !== item.value) {
 				const baseLocale = await baseLocaleFor(projectId, baseLocaleCache);
-				if (baseLocale && item.localeCode === baseLocale) {
-					list.push({
+				if (baseLocale && item.locale === baseLocale)
+					events.push({
 						event: "translation.stale",
-						data: { namespace: item.namespace, key: item.keyName },
+						data: { keyId: item.keyId },
 					});
-				}
 			}
 		}
+
+		if (events.length === 0) continue;
+		const list = byProject.get(projectId) ?? [];
+		list.push(...events);
 		byProject.set(projectId, list);
 	}
 
@@ -109,39 +227,55 @@ async function baseLocaleFor(
 	return cache.get(projectId);
 }
 
-function mapEvent(entityType: string, eventName?: string): WebhookEvent | null {
-	switch (entityType) {
-		case "Translation":
-			return eventName === "REMOVE" ? null : "translation.updated";
-		case "TranslationKey":
-			return eventName === "INSERT"
-				? "key.created"
-				: eventName === "REMOVE"
-					? "key.deleted"
-					: "key.updated";
-		case "Locale":
-			return eventName === "INSERT" ? "locale.added" : null;
-		default:
-			return null;
-	}
-}
-
 function summarize(item: Record<string, unknown>): Record<string, unknown> {
 	switch (item.entityType) {
 		case "Translation":
 			return {
-				namespace: item.namespace,
-				key: item.keyName,
-				locale: item.localeCode,
-				status: item.status,
+				keyId: item.keyId,
+				branchId: item.branchId,
+				locale: item.locale,
+				lifecycle: item.lifecycle,
 			};
 		case "TranslationKey":
-			return { namespace: item.namespace, key: item.name };
+			return { keyId: item.id, namespaceId: item.namespaceId, key: item.name };
 		case "Locale":
 			return { code: item.code };
 		default:
 			return {};
 	}
+}
+
+function summarizeRun(item: Record<string, unknown>): Record<string, unknown> {
+	return {
+		runId: item.id,
+		branchId: item.branchId,
+		status: item.status,
+		trigger: item.trigger,
+	};
+}
+
+function summarizeEscalation(
+	item: Record<string, unknown>,
+): Record<string, unknown> {
+	return {
+		escalationId: item.id,
+		branchId: item.branchId,
+		keyId: item.keyId,
+		locale: item.locale,
+		status: item.status,
+	};
+}
+
+function summarizeFieldReport(
+	item: Record<string, unknown>,
+): Record<string, unknown> {
+	return {
+		fieldReportId: item.id,
+		branchId: item.branchId,
+		keyId: item.keyId,
+		locale: item.locale,
+		status: item.status,
+	};
 }
 
 async function dispatch(

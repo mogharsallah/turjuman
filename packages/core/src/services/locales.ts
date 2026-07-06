@@ -23,6 +23,7 @@ export class LocalesService extends BaseService {
 			projectId,
 			code: validCode,
 			name: name ?? validCode,
+			lifecycle: "active",
 			createdAt: new Date().toISOString(),
 		};
 		return this.repo.putLocale(locale);

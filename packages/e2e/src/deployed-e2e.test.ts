@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { type E2EEnv, loadEnv, modeOf } from "./helpers/env.js";
-import { makeMcpClient } from "./helpers/mcp.js";
+import { makeOpClient } from "./helpers/mcp.js";
 import { type CapturedRequest, startReceiver } from "./helpers/receiver.js";
 
 /**
@@ -23,7 +23,7 @@ const mode = modeOf(env);
 const e: E2EEnv = env ?? { mcpUrl: "", apiUrl: "", tableName: "", apiKey: "" };
 
 describe.skipIf(mode !== "deployed")("deployed e2e against LocalStack", () => {
-	const mcp = makeMcpClient(e.mcpUrl, e.apiKey);
+	const mcp = makeOpClient(e.mcpUrl, e.apiKey);
 
 	it("serves the REST API meta endpoint over its Function URL", async () => {
 		const res = await fetch(e.apiUrl);
@@ -89,7 +89,7 @@ describe.skipIf(mode !== "deployed")("deployed e2e against LocalStack", () => {
 			expect(JSON.parse(delivery.body)).toMatchObject({
 				event: "translation.updated",
 				projectId: project.id,
-				data: { key: "greeting", locale: "fr" },
+				data: { locale: "fr" },
 			});
 		} finally {
 			receiver.close();

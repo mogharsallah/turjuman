@@ -116,3 +116,27 @@ export function makeCodeClient(mcpUrl: string, apiKey: string) {
 		describe: <T = unknown>(id: string) => call<T>("describe", { id }),
 	};
 }
+
+/**
+ * A drop-in replacement for {@link makeMcpClient} that reaches operations through
+ * the **code-mode** surface. The MCP advertises only `search`/`describe`/
+ * `run_code` — there is no classic per-operation `tools/call` — so this runs a
+ * one-line `return await turjuman.<op>(args)` in the sandbox, keeping the same
+ * `(name, args) => result` shape the specs already use. An operation that throws
+ * an AppError surfaces its `CODE: message` (e.g. `FORBIDDEN: …`) as the thrown
+ * error, so RBAC/rejection assertions keep working; a rejected auth (a revoked
+ * key) fails the underlying `run_code` POST with its HTTP status instead.
+ */
+export function makeOpClient(mcpUrl: string, apiKey: string) {
+	const code = makeCodeClient(mcpUrl, apiKey);
+	return async function call<T = unknown>(
+		name: string,
+		args: Record<string, unknown> = {},
+	): Promise<T> {
+		const res = await code.runCode<T>(
+			`return await turjuman.${name}(${JSON.stringify(args)});`,
+		);
+		if (!res.ok) throw new McpError(res.error ?? `run_code failed: ${name}`);
+		return res.result as T;
+	};
+}

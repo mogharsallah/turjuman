@@ -1,0 +1,127 @@
+---
+title: "The context cascade: how an agent is briefed"
+sidebarTitle: "Context cascade"
+description: "How Turjuman folds scoped voice, glossary, examples, and constraints into one brief — the curated context an external agent translates a string against."
+---
+
+An LLM translates fluently with zero context, and is *fluently wrong*. The quality ceiling is how much of your tacit knowledge — brand voice, term consistency, what a string means in situ — you have made machine-readable. The **context cascade** is where that knowledge lives. Turjuman stores it as scoped, mergeable rules and resolves them, for any one string, into a single compact briefing the agent translates against. The app supplies context and structure; the external agent supplies the model.
+
+## Context is a grid
+
+Context is not a flat list. It is a **grid** with two axes: three nested scope tiers running down, and locale running across.
+
+```
+                 (all locales)   ar   de   fr ...
+  PROJECT            ▓            ░    ░    ░
+    NAMESPACE        ▓            ░    ░    ░
+      KEY            ▓            ░    ░    ░
+```
+
+- **Scope tiers** are `project ⊃ namespace ⊃ key` — containment, where the narrowest populated tier is the most specific. A namespace clusters keys by feature-area, and is the natural "voice" tier: checkout strings are terse and transactional, error strings calm, marketing emails warm. Namespace is **optional** — a key may have no namespace (the cascade is just `project → key`), or a namespace label with no context of its own.
+- **Locale is orthogonal** — a column that multiplies every row. A rule can apply to all locales or to one. The real context space is `scope-tier × locale`.
+
+A **scope** is the grid coordinate every context entity carries: `{ projectId, namespaceId?, keyId?, locale? }`. Its tier is the narrowest populated of key, namespace, or project; an absent `locale` means the all-locales cell. Omitting a field broadens the rule — no `keyId` makes it namespace- or project-wide, no `locale` makes it apply across every language.
+
+## The three merge operators
+
+How a rule combines across tiers is a property of the rule's **kind**, not its tier. Every scoped rule folds down the cascade by one of three operators.
+
+| Operator | Behaviour | Used by |
+|---|---|---|
+| **override** | The narrowest populated tier wins, merged field-by-field. | voice, length, format, `placeholdersRequired` |
+| **union** | Every tier contributes; nothing is replaced. | glossary terms, examples |
+| **restrict** | Every tier's rule applies (AND); a contradiction is surfaced as a conflict. | compliance — and any rule marked `hard` |
+
+- **override** is "the most specific instruction wins." A project-wide formal tone, refined to a casual tone on the `marketing` namespace, resolves to casual for a marketing key — and the broader and narrower payloads are merged field-by-field, so a tier that only sets `formality` doesn't erase an inherited `tone`.
+- **union** is "collect everything." A project glossary plus a namespace glossary plus a key-level example all reach the agent together. Nothing higher up is shadowed.
+- **restrict** is "a parent rule a child cannot loosen." A compliance rule (must-include / must-avoid tokens, legal or safety wording) added at the project level holds on every key beneath it; a narrower compliance rule adds to it rather than replacing it. Marking any rule `hard` forces it to fold as restrict regardless of its kind — a verifiable length or format constraint becomes one a child scope cannot relax.
+
+## The override precedence ladder
+
+For override-kind rules, the winner is decided by a single total order — **scope-major, locale-minor**. Within a scope tier, the locale-specific cell outranks the all-locales cell.
+
+| Rank | Cell | Beats |
+|---|---|---|
+| 1 | `key × locale` | everything below |
+| 2 | `key × all` | |
+| 3 | `namespace × locale` | |
+| 4 | `namespace × all` | |
+| 5 | `project × locale` | |
+| 6 | `project × all` | nothing |
+
+Union collects all six cells; restrict ANDs all six. Only override consults the ladder to pick a winner.
+
+<Note>
+  A locale axis works here only because a locale is a point-selector, not a containment chain — `fr` does not "contain" `de`. A second nested tree (say, a UI-presentation hierarchy) would have no defined "narrowest wins," so where a string sits in the UI is briefing data, never a scope axis.
+</Note>
+
+## Resolution: a bundle plus provenance
+
+Resolving a `key × locale` cell folds every in-scope, `active` context entity down the ladder, per operator, and emits a **resolved bundle** with **provenance** — the record of where each value came from.
+
+The bundle (`resolve_context`) carries:
+
+| Field | What it holds |
+|---|---|
+| `voice` | The resolved tone/formality/register (override). |
+| `constraints` | The effective length, format, `placeholdersRequired`, and compliance rules (override + restrict). |
+| `glossary` | Every in-scope glossary term (union). |
+| `examples` | Retrieved examples, ranked (union). |
+| `shape` | The locale shaping — plural categories and writing direction. |
+| `provenance` | Which field resolved from which tier, and whether an override crossed tiers. |
+| `orphanedContext` | Scopes a context cell pointed at that no longer resolve. |
+| `conflicts` | Unresolved restrict contradictions. |
+| `reviewDepth` | `normal`, or `raised` when an exception was seen (below). |
+
+### Cross-tier overrides raise the review depth
+
+When a narrower tier overrides a broader one — a deliberate exception to the inherited rule — the resolver records it in provenance with `crossTierOverride: true` and sets `reviewDepth: "raised"`. A deliberate deviation from the project norm earns more scrutiny. A restrict **conflict** — for example a token that one rule requires and another forbids — is surfaced in `conflicts`, also raises the review depth, and is the signal for a structural escalation a human must resolve.
+
+## Locale shaping is not a cascade operator
+
+Plural categories and writing direction (RTL) are **not** authored as context and do not fold through the cascade. They are a deterministic post-step derived from the locale code alone, via the runtime's CLDR data — `ar` yields its six plural categories and right-to-left direction with no rule authored anywhere. This keeps language mechanics out of the curated layer and honours the no-in-app-model constraint: there is nothing to train and nothing to store, only the locale code to read.
+
+## The brief: one read before translating
+
+`get_brief` resolves everything an agent needs for one `key × locale` into a single object: the **key**, its **base value**, and the **resolved context cascade** (voice, constraints, glossary, examples, locale shape, provenance, review depth). It is the single read an agent makes before translating a string — call it, and you have everything required to translate that string well, with no further lookups.
+
+```ts
+// Inside run_code, before writing a translation:
+const brief = await turjuman.get_brief({
+  projectId, locale: "fr", name: "checkout.pay_button",
+});
+// brief.key, brief.baseValue, brief.context.voice,
+// brief.context.glossary, brief.context.constraints,
+// brief.context.examples, brief.context.shape
+```
+
+This is why the brief sits at the centre of the [agent loop](/concepts/how-agents-use-turjuman): Define → **Brief** → Translate → Judge → Record.
+
+## Examples are retrieved deterministically
+
+An **example** is a `source → target` pair — the few-shot and translation-memory corpus. Examples merge by union, and `find_examples` retrieves the most relevant ones for a `key × locale` by a fixed ranking: **scope-proximity → quality → recency**. A key-level example outranks a namespace one; a `gold` (human-vetted) example outranks an `accepted` one; ties break by recency. There are **no embeddings** and no in-app model — retrieval is fully deterministic, so the same brief always surfaces the same examples. `find_examples` replaces a conventional translation-memory lookup.
+
+## Context has its own lifecycle
+
+Every context entity — rule, glossary term, example — carries a `lifecycle`: `proposed | active | retired | archived`. The resolver collects only `active` cells, so you can draft a rule as `proposed` or retire one without deleting it. When a scope points at a coordinate that no longer resolves (an archived rule, a deleted key), the resolver reports it under `orphanedContext` rather than failing.
+
+## Context changes are a staleness trigger
+
+The cascade is the product, so a change to it matters as much as a change to a source string. Alongside the primary base-string trigger, **any scoped context write bumps the project's `contextRevision`** and marks the in-scope cells `stale`, so they re-enter the review router and get re-translated inside a budgeted run. Staleness is therefore the **union** of two causes — a base-string change *or* a context change. See [staleness](/concepts/lifecycle#staleness-when-the-source-or-the-context-moves) for the base-string side and how a stale cell flows back through the loop.
+
+## Relationship to other concepts
+
+- [The agent loop](/concepts/how-agents-use-turjuman) — the brief is the Define → **Brief** → Translate → Judge → Record cycle's second step; an escalation is its human exit.
+- [Lifecycle](/concepts/lifecycle) — context-change staleness is a second trigger beside the base-string one, and a restrict conflict becomes an `escalated` cell.
+- [Architecture](/concepts/architecture) — context entities are scoped records in the single table; `contextRevision` lives on the project.
+- [MCP reference](/reference/mcp-tools) — the `resolve_context`, `get_brief`, `find_examples`, and context-rule operations.
+
+## Common misconceptions
+
+<Note>
+  **"Turjuman embeds the strings to find similar examples."** It does not. Example retrieval is deterministic — scope-proximity, then quality, then recency — with no embeddings and no in-app model. The same `key × locale` always yields the same ranked set.
+</Note>
+
+<Note>
+  **"Locale is just another scope tier."** It is an orthogonal axis, not a containment tier. Within each scope tier the locale-specific cell outranks the all-locales cell, which is why the ladder has six rungs, not three. Plurals and RTL are derived from the locale code, not authored as context.
+</Note>

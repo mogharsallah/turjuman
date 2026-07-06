@@ -2,20 +2,17 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type {
 	CallToolResult,
-	GetPromptResult,
 	JSONRPCMessage,
 	ToolAnnotations,
 } from "@modelcontextprotocol/sdk/types.js";
 import { maskError } from "@turjuman/core";
 import {
 	effectiveAnnotations,
-	OPERATIONS,
 	type OpContext,
 	type Operation,
 } from "@turjuman/sdk";
 import pkg from "../package.json" with { type: "json" };
 import { codemodeTools } from "./codemode.js";
-import { PROMPTS, type PromptDef } from "./prompts/index.js";
 
 /**
  * Stateless MCP over Streamable HTTP, backed by the official SDK.
@@ -34,9 +31,9 @@ import { PROMPTS, type PromptDef } from "./prompts/index.js";
 const SERVER_INFO = { name: "turjuman", version: pkg.version };
 
 const INSTRUCTIONS =
-	"Turjuman translation management. Use list_projects to start. To translate: " +
-	"list_untranslated(locale) -> translate the values yourself -> bulk_set_translations. " +
-	"Always write a clear description on create_key so future translations have context.";
+	"Turjuman translation management over a code-first MCP. Discover capabilities with " +
+	"search(query), get full schemas with describe(id), then call operations from run_code " +
+	"as `await turjuman.<operation>(args)`. Start with search to find what you need.";
 
 interface JsonRpcMessage {
 	jsonrpc?: string;
@@ -108,39 +105,6 @@ function toolCallback(def: Operation, ctx: OpContext) {
 	};
 }
 
-/** Adapt one of our {@link PromptDef}s to an SDK prompt callback. The service
- * renders the messages; here we map them to MCP prompt-message blocks. Errors
- * surface as thrown (JSON-RPC) errors — an AppError keeps its code/message; an
- * unexpected fault is logged server-side and masked behind the request id, so
- * nothing internal leaks into the model context. */
-function promptCallback(def: PromptDef, ctx: OpContext) {
-	return async (
-		args: Record<string, string | undefined>,
-	): Promise<GetPromptResult> => {
-		try {
-			const prompt = await def.handler(args, ctx);
-			return {
-				description: `Turjuman scoring prompt (${prompt.promptVersion})`,
-				messages: prompt.messages.map((m) => ({
-					role: m.role,
-					content: { type: "text" as const, text: m.text },
-				})),
-			};
-		} catch (e) {
-			const masked = maskError(e, {
-				msg: "prompt_handler_error",
-				requestId: ctx.requestId,
-				prompt: def.name,
-			});
-			throw new Error(
-				masked.isAppError
-					? `${masked.code}: ${masked.message}`
-					: masked.message,
-			);
-		}
-	};
-}
-
 /** Behaviour hints for a tool, as MCP `ToolAnnotations`. The classification
  * (read-only / destructive / idempotent) is a property of the operation, so it
  * lives in `@turjuman/sdk` (`effectiveAnnotations`); here we only adapt the
@@ -162,49 +126,21 @@ function registrationFor(def: Operation) {
 	};
 }
 
-/** The static registrations for each mode, assembled once at module scope. Only
- * the authenticated {@link OpContext} is injected per request (via the tool
- * callback), so this work is not repeated on every invocation.
- *  - classic: every business operation as its own tool;
- *  - code:    just `search` + `describe` + `run_code` (the model writes code instead).
- * The two are mutually exclusive — a connection is in one mode or the other. */
-const CLASSIC_REGISTRATIONS = OPERATIONS.map(registrationFor);
+/** The static tool registrations, assembled once at module scope: `search` +
+ * `describe` + `run_code` (the model writes code instead of calling a tool per
+ * operation). Only the authenticated {@link OpContext} is injected per request
+ * (via the tool callback), so this work is not repeated on every invocation. */
 const CODEMODE_REGISTRATIONS = codemodeTools.map(registrationFor);
-
-/** Which toolset to advertise for a request. Classic mode may be narrowed by a
- * client-requested allowlist (URL tool-scoping); code mode is the fixed pair. */
-export type ToolSelection =
-	| { mode: "classic"; allowed?: ReadonlySet<string> }
-	| { mode: "code" };
-
-const DEFAULT_SELECTION: ToolSelection = { mode: "classic" };
 
 /** A fresh server per request so each tool callback closes over this request's
  * authenticated {@link OpContext}, keeping the server a pure, stateless
  * function. Registration reuses the module-scope registration configs, so only
- * the per-request callbacks are built here. The {@link ToolSelection} picks the
- * mode (classic toolset vs the code-mode pair); in classic mode an `allowed`
- * allowlist (client-requested URL tool-scoping) further narrows the toolset,
- * scoping both `tools/list` and `tools/call` from the one seam. This is a
- * presentation filter only; RBAC in core still authorizes every call. */
-function buildServer(ctx: OpContext, selection: ToolSelection): McpServer {
+ * the per-request callbacks are built here. The surface is the fixed code-mode
+ * triple; RBAC in core still authorizes every call the sandbox dispatches. */
+function buildServer(ctx: OpContext): McpServer {
 	const server = new McpServer(SERVER_INFO, { instructions: INSTRUCTIONS });
-	const registrations =
-		selection.mode === "code" ? CODEMODE_REGISTRATIONS : CLASSIC_REGISTRATIONS;
-	const allowed = selection.mode === "classic" ? selection.allowed : undefined;
-	for (const { def, config } of registrations) {
-		if (allowed && !allowed.has(def.name)) continue;
+	for (const { def, config } of CODEMODE_REGISTRATIONS) {
 		server.registerTool(def.name, config, toolCallback(def, ctx));
-	}
-	// Prompts are a separate capability from tools (the `?tools=`/`?groups=` filter
-	// scopes tools only), so they register unconditionally — registering any one
-	// makes the server advertise `prompts`.
-	for (const def of PROMPTS) {
-		server.registerPrompt(
-			def.name,
-			{ description: def.description, argsSchema: def.argsSchema },
-			promptCallback(def, ctx),
-		);
 	}
 	return server;
 }
@@ -246,14 +182,13 @@ class PumpTransport implements Transport {
 export async function handleMessage(
 	message: JsonRpcMessage,
 	ctx: OpContext,
-	selection: ToolSelection = DEFAULT_SELECTION,
 ): Promise<JsonRpcResponse | null> {
 	const method = message.method;
 	const id = message.id ?? null;
 	if (!method) return err(id, -32600, "Invalid request: missing method");
 	if (method.startsWith("notifications/") || id === null) return null;
 
-	const server = buildServer(ctx, selection);
+	const server = buildServer(ctx);
 	const transport = new PumpTransport();
 	await server.connect(transport);
 	try {

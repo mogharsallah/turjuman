@@ -14,12 +14,7 @@ import {
 	unauthorized,
 } from "@turjuman/core";
 import type { OpContext } from "@turjuman/sdk";
-import { handleMessage, type ToolSelection } from "./protocol.js";
-import {
-	allowedToolsForActor,
-	resolveMode,
-	resolveToolScope,
-} from "./scope.js";
+import { handleMessage } from "./protocol.js";
 
 /**
  * AWS Lambda entry point for the Turjuman MCP server. Works behind both an API
@@ -54,24 +49,9 @@ interface LambdaHttpEvent {
 	httpMethod?: string;
 	rawPath?: string;
 	path?: string;
-	// Function URL / API Gateway parse the query for us; `rawQueryString` is the
-	// payload-format-2.0 fallback. Used for URL tool-scoping (?tools/?groups).
-	queryStringParameters?: Record<string, string | undefined> | null;
-	rawQueryString?: string;
 	headers?: Record<string, string | undefined>;
 	body?: string | null;
 	isBase64Encoded?: boolean;
-}
-
-/** Normalise the request query into a plain object, preferring the platform's
- * parsed `queryStringParameters` and falling back to `rawQueryString`. */
-function queryFromEvent(
-	event: LambdaHttpEvent,
-): Record<string, string | undefined> | undefined {
-	if (event.queryStringParameters) return event.queryStringParameters;
-	if (event.rawQueryString)
-		return Object.fromEntries(new URLSearchParams(event.rawQueryString));
-	return undefined;
 }
 
 interface LambdaContext {
@@ -97,7 +77,6 @@ export async function handler(
 	return processRequest({
 		method,
 		path,
-		query: queryFromEvent(event),
 		headers,
 		body,
 		service: { repo, service },
@@ -116,13 +95,12 @@ export interface ProcessDeps {
 export async function processRequest(args: {
 	method: string;
 	path?: string;
-	query?: Record<string, string | undefined>;
 	headers: Record<string, string>;
 	body: string;
 	service: ProcessDeps;
 	requestId?: string;
 }): Promise<LambdaHttpResult> {
-	const { method, query, headers, body, service: deps } = args;
+	const { method, headers, body, service: deps } = args;
 	const path = args.path ?? "/";
 	const requestId = args.requestId ?? headers["x-request-id"] ?? randomUUID();
 	const startedAt = Date.now();
@@ -134,7 +112,6 @@ export async function processRequest(args: {
 		({ result, outcome } = await route({
 			method,
 			path,
-			query,
 			headers,
 			body,
 			deps,
@@ -174,14 +151,13 @@ export async function processRequest(args: {
 async function route(args: {
 	method: string;
 	path: string;
-	query?: Record<string, string | undefined>;
 	headers: Record<string, string>;
 	body: string;
 	deps: ProcessDeps;
 	requestId: string;
 	meta: { method?: string; tool?: string; keyId?: string };
 }): Promise<{ result: LambdaHttpResult; outcome: string }> {
-	const { method, path, query, headers, body, deps, requestId, meta } = args;
+	const { method, path, headers, body, deps, requestId, meta } = args;
 
 	if (method === "OPTIONS") {
 		return {
@@ -225,64 +201,6 @@ async function route(args: {
 		return { result: unauthorized(corsHeaders()), outcome: "unauthorized" };
 	meta.keyId = auth.keyId;
 
-	// Pick the connection mode (?mode=). Code mode advertises only search +
-	// describe + run_code; classic mode (default) advertises the operation toolset.
-	const mode = resolveMode(query);
-	if (typeof mode === "object") {
-		await auth.touch;
-		return {
-			result: json(400, { error: mode.error }),
-			outcome: "invalid_mode",
-		};
-	}
-
-	let selection: ToolSelection;
-	if (mode === "code") {
-		// Tool-scoping (?tools=/?groups=) only narrows the classic toolset; it is
-		// meaningless against the fixed code-mode pair, so reject the combination
-		// rather than silently ignore it.
-		if (query?.tools || query?.groups) {
-			await auth.touch;
-			return {
-				result: json(400, {
-					error:
-						"?tools= / ?groups= scoping does not apply in code mode (?mode=code).",
-				}),
-				outcome: "invalid_tool_scope",
-			};
-		}
-		// Deliberately no per-actor tool filtering here (classic mode applies
-		// `allowedToolsForActor`). The code-mode surface is the fixed set
-		// search + describe + run_code, and all are appropriate for every
-		// authenticated actor: a read-only key can legitimately use run_code for
-		// reads, and any write it attempts is still authorized by core RBAC at
-		// dispatch (the same `OpContext` the classic path uses) — hiding run_code
-		// would only break read-only code-mode use without adding a real control.
-		// The presentation filter that matters in classic mode (trimming a ~45-tool
-		// list) has no analogue for this fixed surface.
-		selection = { mode: "code" };
-	} else {
-		// Scope the advertised toolset. Two layers, both narrowing only:
-		//  1. the key's own permissions (a read-only key sees read tools; tools the
-		//     global role can never reach are hidden) — always applied;
-		//  2. an optional client request via ?tools=/?groups= query params (a typo
-		//     fails loud with 400 so it can't silently hide tools).
-		// Core RBAC still authorizes every call; this only trims what is shown.
-		const scope = resolveToolScope(query);
-		if (scope && "error" in scope) {
-			await auth.touch;
-			return {
-				result: json(400, { error: scope.error }),
-				outcome: "invalid_tool_scope",
-			};
-		}
-		const actorAllowed = allowedToolsForActor(auth.actor);
-		const allowed = scope
-			? new Set([...scope.allowed].filter((name) => actorAllowed.has(name)))
-			: actorAllowed;
-		selection = { mode: "classic", allowed };
-	}
-
 	let message: unknown;
 	try {
 		message = JSON.parse(body || "{}");
@@ -313,11 +231,7 @@ async function route(args: {
 		user: auth.user,
 		requestId,
 	};
-	const response = await handleMessage(
-		message as Record<string, unknown>,
-		ctx,
-		selection,
-	);
+	const response = await handleMessage(message as Record<string, unknown>, ctx);
 
 	// Flush the best-effort last-used stamp before returning: it started during
 	// authenticate() and has overlapped the work above, so this await costs ~0 but
