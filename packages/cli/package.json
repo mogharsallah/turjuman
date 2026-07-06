@@ -1,6 +1,6 @@
 {
 	"name": "@turjuman/cli",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"description": "Turjuman developer CLI: pull, push and build translation files in your repo and CI.",
 	"license": "MIT",
 	"author": "Turjuman contributors",

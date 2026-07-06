@@ -1,6 +1,6 @@
 {
 	"name": "@turjuman/api",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"description": "Turjuman REST API (AWS Lambda) for the developer CLI and CI sync.",
 	"license": "MIT",
 	"author": "Turjuman contributors",

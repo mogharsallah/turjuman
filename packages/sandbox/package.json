@@ -1,6 +1,6 @@
 {
 	"name": "@turjuman/sandbox",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"description": "Turjuman code-mode sandbox: an isolated QuickJS-WASM engine that runs untrusted TypeScript whose only capability is the @turjuman/sdk operation registry (via an in-process host broker).",
 	"license": "MIT",
 	"author": "Turjuman contributors",
