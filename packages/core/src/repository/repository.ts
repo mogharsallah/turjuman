@@ -864,6 +864,25 @@ export class Repository {
 	}
 
 	/**
+	 * The copy-on-write overlay every resolved read shares: walk the branch chain
+	 * (self→root) and keep the **nearest** branch's item per `keyOf` identity, so a
+	 * child branch's own rows shadow the ancestors' it never touched. Tombstone and
+	 * visibility filtering is the caller's job, applied to the resolved set.
+	 */
+	private async resolveOverlay<T>(
+		projectId: string,
+		branchId: string,
+		list: (branch: string) => Promise<T[]>,
+		keyOf: (item: T) => string,
+	): Promise<T[]> {
+		const byKey = new Map<string, T>();
+		for (const br of await this.branchChain(projectId, branchId))
+			for (const item of await list(br))
+				if (!byKey.has(keyOf(item))) byKey.set(keyOf(item), item);
+		return [...byKey.values()];
+	}
+
+	/**
 	 * Every key definition **visible** on a branch: its own rows overlaid on the
 	 * parent chain, the nearest branch winning per `keyId` (the copy-on-write
 	 * overlay). On `main` this is exactly {@link listKeyDefs}; on a child branch it
@@ -874,17 +893,16 @@ export class Repository {
 		projectId: string,
 		branchId: string,
 	): Promise<TranslationKey[]> {
-		const chain = await this.branchChain(projectId, branchId);
 		// Nearest branch decides each keyId — a live definition surfaces it, a
-		// tombstone (`deleted`) buries it even if an ancestor still has it live.
-		const decided = new Map<string, TranslationKey | null>();
-		for (const br of chain)
-			for (const row of await this.keyDefRows(projectId, br)) {
-				const id = row.id as string;
-				if (!decided.has(id))
-					decided.set(id, row.deleted === true ? null : toKey(row));
-			}
-		return [...decided.values()].filter((k): k is TranslationKey => k !== null);
+		// tombstone (`deleted`) buries it even if an ancestor still has it live (the
+		// nearest row wins the overlay, then tombstones are dropped).
+		const rows = await this.resolveOverlay(
+			projectId,
+			branchId,
+			(br) => this.keyDefRows(projectId, br),
+			(row) => row.id as string,
+		);
+		return rows.filter((row) => row.deleted !== true).map(toKey);
 	}
 
 	/**
@@ -1050,15 +1068,16 @@ export class Repository {
 		branchId: string,
 		locale: string,
 	): Promise<Translation[]> {
-		const chain = await this.branchChain(projectId, branchId);
-		const byKey = new Map<string, Translation>();
-		for (const br of chain)
-			for (const c of await this.listCellsByLocale(projectId, br, locale))
-				if (!byKey.has(c.keyId)) byKey.set(c.keyId, c); // nearest branch wins
+		const cells = await this.resolveOverlay(
+			projectId,
+			branchId,
+			(br) => this.listCellsByLocale(projectId, br, locale),
+			(c) => c.keyId,
+		);
 		const visible = new Set(
 			(await this.listKeyDefsResolved(projectId, branchId)).map((k) => k.id),
 		);
-		return [...byKey.values()].filter((c) => visible.has(c.keyId));
+		return cells.filter((c) => visible.has(c.keyId));
 	}
 
 	/** One page of a branch×locale's live cells. `cursor` is the opaque token
@@ -1119,12 +1138,12 @@ export class Repository {
 		branchId: string,
 		keyId: string,
 	): Promise<Translation[]> {
-		const chain = await this.branchChain(projectId, branchId);
-		const byLocale = new Map<string, Translation>();
-		for (const br of chain)
-			for (const c of await this.listCellsByKey(projectId, br, keyId))
-				if (!byLocale.has(c.locale)) byLocale.set(c.locale, c);
-		return [...byLocale.values()];
+		return this.resolveOverlay(
+			projectId,
+			branchId,
+			(br) => this.listCellsByKey(projectId, br, keyId),
+			(c) => c.locale,
+		);
 	}
 
 	async deleteCell(
