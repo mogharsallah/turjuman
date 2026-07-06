@@ -210,6 +210,9 @@ export class QaService extends BaseService {
 		]);
 		const activeKeys = keys.filter((k) => k.state !== "deprecated");
 		const keyById = new Map(activeKeys.map((k) => [k.id, k]));
+		// The visible key set is already resolved here — hand it to each per-locale
+		// resolved read so it isn't re-derived once per locale.
+		const visibleKeyIds = new Set(keys.map((k) => k.id));
 		const baseValue = new Map(baseCells.map((c) => [c.keyId, c.value]));
 		const nsNameOf = (namespaceId: string | undefined): string =>
 			nsNames.get(namespaceId ?? "") ?? "";
@@ -227,6 +230,7 @@ export class QaService extends BaseService {
 					projectId,
 					branch,
 					code,
+					visibleKeyIds,
 				);
 				const byKey = new Map(cells.map((c) => [c.keyId, c]));
 				// Deliverable value per cell: the working draft, or the accepted head

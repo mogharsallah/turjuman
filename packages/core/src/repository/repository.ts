@@ -1061,6 +1061,7 @@ export class Repository {
 		projectId: string,
 		branchId: string,
 		locale: string,
+		visibleKeyIds?: Set<string>,
 	): Promise<Translation[]> {
 		const cells = await this.resolveOverlay(
 			projectId,
@@ -1068,9 +1069,13 @@ export class Repository {
 			(br) => this.listCellsByLocale(projectId, br, locale),
 			(c) => c.keyId,
 		);
-		const visible = new Set(
-			(await this.listKeyDefsResolved(projectId, branchId)).map((k) => k.id),
-		);
+		// A caller that already resolved the visible key defs (export, per-locale QA)
+		// passes them in, so this doesn't re-walk the chain for the same set per call.
+		const visible =
+			visibleKeyIds ??
+			new Set(
+				(await this.listKeyDefsResolved(projectId, branchId)).map((k) => k.id),
+			);
 		return cells.filter((c) => visible.has(c.keyId));
 	}
 

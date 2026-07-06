@@ -550,6 +550,7 @@ export class FakeRepo implements RepositoryApi {
 		projectId: string,
 		branchId: string,
 		locale: string,
+		visibleKeyIds?: Set<string>,
 	): Promise<Translation[]> {
 		const byKey = new Map<string, Translation>();
 		let current: string | null | undefined = branchId;
@@ -559,9 +560,11 @@ export class FakeRepo implements RepositoryApi {
 			if (current === MAIN_BRANCH_ID) break;
 			current = this.branches.get(`${projectId}#${current}`)?.parentBranchId;
 		}
-		const visible = new Set(
-			(await this.listKeyDefsResolved(projectId, branchId)).map((k) => k.id),
-		);
+		const visible =
+			visibleKeyIds ??
+			new Set(
+				(await this.listKeyDefsResolved(projectId, branchId)).map((k) => k.id),
+			);
 		return [...byKey.values()].filter((c) => visible.has(c.keyId));
 	}
 	async listCellsByLocalePage(
