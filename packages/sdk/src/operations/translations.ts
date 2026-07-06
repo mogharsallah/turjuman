@@ -10,6 +10,7 @@ import {
 	pageLimit,
 	projectId,
 	translationSchema,
+	validation,
 	z,
 } from "../base.js";
 
@@ -46,7 +47,7 @@ export const translationOps: Operation[] = [
 					a.locale,
 					{ branch: a.branch, limit: a.limit ?? 100, cursor: a.cursor },
 				);
-			throw new Error("Provide either 'name' (for a key) or 'locale'.");
+			throw validation("Provide either 'name' (for a key) or 'locale'.");
 		},
 	}),
 	op({

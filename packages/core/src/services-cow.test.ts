@@ -205,6 +205,17 @@ describe("standalone service correctness", () => {
 		expect(cells.find((t) => t.locale === "fr")).toBeUndefined();
 	});
 
+	it("rejects a second namespace with a duplicate name (create goes through the guard)", async () => {
+		const { svc, actor, projectId } = await project();
+		await svc.namespaces.create(actor, projectId, { name: "web" });
+		// The service must route creates through the guarded transaction, not a plain
+		// overwrite — a duplicate name conflicts race-safely.
+		await expect(
+			svc.namespaces.create(actor, projectId, { name: "web" }),
+		).rejects.toMatchObject({ code: "CONFLICT" });
+		expect(await svc.namespaces.list(actor, projectId)).toHaveLength(1);
+	});
+
 	it("registers a changed base locale as a usable locale", async () => {
 		const { svc, actor, projectId } = await project();
 		await svc.projects.update(actor, projectId, { baseLocale: "es" });
