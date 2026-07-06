@@ -1,6 +1,6 @@
 {
 	"name": "@turjuman/deploy-internal",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"description": "Internal (unpublished) Turjuman deploy primitives: programmatic CDK toolkit deploy + CloudFormation helpers used by the repo's dev/e2e scripts.",
 	"license": "MIT",
 	"author": "Turjuman contributors",

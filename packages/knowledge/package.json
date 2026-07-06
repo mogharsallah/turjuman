@@ -1,6 +1,6 @@
 {
 	"name": "@turjuman/knowledge",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"description": "Turjuman's transport-agnostic knowledge layer: one searchable index over the SDK operations (typed signatures) and the docs corpus (guides, concepts, reference), powering the code-mode `search`/`get` tools.",
 	"license": "MIT",
 	"author": "Turjuman contributors",

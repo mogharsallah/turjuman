@@ -1,6 +1,6 @@
 {
 	"name": "@turjuman/sdk",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"description": "Turjuman's transport-agnostic operation layer: the single source of capability (zod-typed input/output + handlers) that the MCP server, REST API, and code-mode sandbox all project from.",
 	"license": "MIT",
 	"author": "Turjuman contributors",
