@@ -71,11 +71,9 @@ export abstract class BaseService {
 		userId?: string;
 		email?: string;
 	}): Promise<User | undefined> {
-		return ref.userId
-			? this.repo.getUser(ref.userId)
-			: ref.email
-				? this.repo.getUserByEmail(ref.email)
-				: undefined;
+		if (ref.userId) return this.repo.getUser(ref.userId);
+		if (ref.email) return this.repo.getUserByEmail(ref.email);
+		return undefined;
 	}
 
 	/** Shared user-creation used by createUser and member auto-provisioning. */

@@ -134,7 +134,7 @@ const RTL_LANGUAGES = new Set([
  * runtime's CLDR data — no authored context, no in-app model).
  */
 export function shapeForLocale(locale: string): LocaleShape {
-	const lang = (locale.toLowerCase().split(/[-_]/)[0] ?? locale) || locale;
+	const lang = locale.toLowerCase().split(/[-_]/)[0] || locale;
 	let pluralCategories: string[];
 	try {
 		pluralCategories = [

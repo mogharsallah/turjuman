@@ -415,18 +415,26 @@ export class Repository {
 	): Promise<void> {
 		const sets: string[] = ["updatedAt = :t"];
 		const values: Record<string, unknown> = { ":t": new Date().toISOString() };
-		if (patch.name !== undefined)
-			sets.push("#n = :n"), (values[":n"] = patch.name);
-		if (patch.description !== undefined)
-			sets.push("description = :d"), (values[":d"] = patch.description);
-		if (patch.baseLocale !== undefined)
-			sets.push("baseLocale = :b"), (values[":b"] = patch.baseLocale);
-		if (patch.contextRevision !== undefined)
-			sets.push("contextRevision = :cr"),
-				(values[":cr"] = patch.contextRevision);
-		if (patch.requireHumanAccept !== undefined)
-			sets.push("requireHumanAccept = :rh"),
-				(values[":rh"] = patch.requireHumanAccept);
+		if (patch.name !== undefined) {
+			sets.push("#n = :n");
+			values[":n"] = patch.name;
+		}
+		if (patch.description !== undefined) {
+			sets.push("description = :d");
+			values[":d"] = patch.description;
+		}
+		if (patch.baseLocale !== undefined) {
+			sets.push("baseLocale = :b");
+			values[":b"] = patch.baseLocale;
+		}
+		if (patch.contextRevision !== undefined) {
+			sets.push("contextRevision = :cr");
+			values[":cr"] = patch.contextRevision;
+		}
+		if (patch.requireHumanAccept !== undefined) {
+			sets.push("requireHumanAccept = :rh");
+			values[":rh"] = patch.requireHumanAccept;
+		}
 		await this.doc.send(
 			new UpdateCommand({
 				TableName: this.table,
@@ -1843,12 +1851,12 @@ export class Repository {
 		return undefined;
 	}
 
-	/** The branch ids from `branchId` up to the root, self first. */
 	/** Per-instance memo of resolved branch chains. `parentBranchId` is immutable
 	 * after creation and branch ids are never reused, so a chain that terminates at
 	 * `main` is valid for the life of the process. */
 	private readonly branchChainCache = new Map<string, string[]>();
 
+	/** The branch ids from `branchId` up to the root, self first. */
 	private async branchChain(
 		projectId: string,
 		branchId: string,
@@ -1858,18 +1866,15 @@ export class Repository {
 		if (cached) return cached;
 		const chain: string[] = [];
 		let current: string | null | undefined = branchId;
-		let complete = false;
 		while (current) {
 			chain.push(current);
-			if (current === MAIN_BRANCH_ID) {
-				complete = true;
-				break;
-			}
+			if (current === MAIN_BRANCH_ID) break;
 			current = (await this.getBranch(projectId, current))?.parentBranchId;
 		}
 		// Only memoize a chain that reaches `main`; an incomplete one (a branch row
 		// not yet visible) could still be completed by a later write.
-		if (complete) this.branchChainCache.set(cacheKey, chain);
+		if (chain.at(-1) === MAIN_BRANCH_ID)
+			this.branchChainCache.set(cacheKey, chain);
 		return chain;
 	}
 

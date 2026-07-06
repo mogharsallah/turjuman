@@ -41,7 +41,7 @@ interface BundleCtx {
  * base revision that has since moved on (`sourceRef !== key.sourceRevision`).
  * The base locale is the source and is never evaluated here.
  */
-function isStale(cell: Translation, key: TranslationKey): boolean {
+export function isStale(cell: Translation, key: TranslationKey): boolean {
 	return (
 		cell.stale ||
 		(cell.sourceRef !== undefined && cell.sourceRef !== key.sourceRevision)

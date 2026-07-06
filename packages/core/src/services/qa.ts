@@ -22,6 +22,7 @@ import {
 import type { RepositoryApi } from "../repository/index.js";
 import { BaseService } from "./base.js";
 import type { NamespaceService } from "./namespaces.js";
+import { isStale } from "./translations.js";
 
 export interface RunChecksOptions {
 	/** Limit to one locale; omit to check every non-base locale. */
@@ -53,11 +54,16 @@ export class QaService extends BaseService {
 		super(repo);
 	}
 
-	async getConfig(actor: Actor, projectId: string): Promise<QaConfig> {
-		await this.authorizeProject(actor, projectId, "project.read");
+	/** Load the stored QA config, or the project default when none is set. */
+	private async loadConfig(projectId: string): Promise<QaConfig> {
 		return (
 			(await this.repo.getQaConfig(projectId)) ?? this.defaultConfig(projectId)
 		);
+	}
+
+	async getConfig(actor: Actor, projectId: string): Promise<QaConfig> {
+		await this.authorizeProject(actor, projectId, "project.read");
+		return this.loadConfig(projectId);
 	}
 
 	async setConfig(
@@ -75,8 +81,7 @@ export class QaService extends BaseService {
 				);
 			}
 		}
-		const existing =
-			(await this.repo.getQaConfig(projectId)) ?? this.defaultConfig(projectId);
+		const existing = await this.loadConfig(projectId);
 		const merged: QaConfig = {
 			projectId,
 			checks: input.checks ?? existing.checks,
@@ -100,8 +105,7 @@ export class QaService extends BaseService {
 		if (opts.locale) await this.requireLocaleExists(projectId, opts.locale);
 		if (opts.checkIds) assertCheckIds(opts.checkIds);
 
-		const config =
-			(await this.repo.getQaConfig(projectId)) ?? this.defaultConfig(projectId);
+		const config = await this.loadConfig(projectId);
 		const checkIds = opts.checkIds ?? this.enabledCheckIds(config);
 
 		const { contexts, locales } = await this.buildContexts(project, opts);
@@ -249,7 +253,9 @@ export class QaService extends BaseService {
 					const k = keyById.get(c.keyId);
 					if (v && v.trim() !== "" && k) {
 						const id = `${nsNameOf(k.namespaceId)}#${k.name}`;
-						(localeIndex.get(v) ?? localeIndex.set(v, []).get(v)!).push(id);
+						let ids = localeIndex.get(v);
+						if (!ids) localeIndex.set(v, (ids = []));
+						ids.push(id);
 					}
 				}
 
@@ -267,10 +273,7 @@ export class QaService extends BaseService {
 							c?.lifecycle === "proposed" ||
 							c?.lifecycle === "accepted" ||
 							c?.lifecycle === "escalated",
-						stale:
-							(c?.stale ?? false) ||
-							(c?.sourceRef !== undefined &&
-								c.sourceRef !== key.sourceRevision),
+						stale: c ? isStale(c, key) : false,
 						origin: c?.origin,
 						glossary,
 						localeIndex,
