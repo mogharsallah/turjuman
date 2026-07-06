@@ -104,6 +104,25 @@ function queryLimit(raw: string | undefined): number | undefined {
 }
 
 /**
+ * The paged/unpaged fork every list route shares: when the client passes
+ * `limit`/`cursor` return one page, otherwise the complete auto-paginated list.
+ * Normalized to `{ items, nextCursor }` (cursor undefined for the full listing)
+ * so each route only builds its own response envelope, once.
+ */
+async function paginated<T>(
+	opts: { limit?: number; cursor?: string },
+	page: (p: {
+		limit?: number;
+		cursor?: string;
+	}) => Promise<{ items: T[]; nextCursor?: string }>,
+	full: () => Promise<T[]>,
+): Promise<{ items: T[]; nextCursor?: string }> {
+	if (opts.limit !== undefined || opts.cursor)
+		return page({ limit: opts.limit, cursor: opts.cursor });
+	return { items: await full() };
+}
+
+/**
  * Build an OpenAPI `responses` entry whose body is documented by `schema`.
  * `resolver` turns the shared core zod schema into the spec's JSON Schema, so the
  * documented response and what the handler returns share one definition.
@@ -504,19 +523,21 @@ export function createApp(deps: RouterDeps): Hono<Env> {
 			const actor = c.get("actor");
 			const projectId = c.req.param("id");
 			const namespace = c.req.query("namespace");
-			const cursor = c.req.query("cursor");
-			const limit = queryLimit(c.req.query("limit"));
-			if (limit !== undefined || cursor) {
-				const page = await svc.keys.listPage(actor, projectId, {
-					namespace,
-					limit,
-					cursor,
-				});
-				return c.json({ keys: page.keys, nextCursor: page.nextCursor });
-			}
-			return c.json({
-				keys: await svc.keys.list(actor, projectId, { namespace }),
-			});
+			const { items, nextCursor } = await paginated(
+				{
+					limit: queryLimit(c.req.query("limit")),
+					cursor: c.req.query("cursor"),
+				},
+				async (p) => {
+					const page = await svc.keys.listPage(actor, projectId, {
+						namespace,
+						...p,
+					});
+					return { items: page.keys, nextCursor: page.nextCursor };
+				},
+				() => svc.keys.list(actor, projectId, { namespace }),
+			);
+			return c.json({ keys: items, nextCursor });
 		},
 	);
 
@@ -592,29 +613,23 @@ export function createApp(deps: RouterDeps): Hono<Env> {
 			const projectId = c.req.param("id");
 			const locale = c.req.query("locale");
 			if (!locale) throw validation("Missing required query parameter: locale");
-			const cursor = c.req.query("cursor");
-			const limit = queryLimit(c.req.query("limit"));
-			if (limit !== undefined || cursor) {
-				const page = await svc.translations.listForLocalePage(
-					actor,
-					projectId,
-					locale,
-					{ limit, cursor },
-				);
-				return c.json({
-					locale,
-					translations: page.translations,
-					nextCursor: page.nextCursor,
-				});
-			}
-			return c.json({
-				locale,
-				translations: await svc.translations.listForLocale(
-					actor,
-					projectId,
-					locale,
-				),
-			});
+			const { items, nextCursor } = await paginated(
+				{
+					limit: queryLimit(c.req.query("limit")),
+					cursor: c.req.query("cursor"),
+				},
+				async (p) => {
+					const page = await svc.translations.listForLocalePage(
+						actor,
+						projectId,
+						locale,
+						p,
+					);
+					return { items: page.translations, nextCursor: page.nextCursor };
+				},
+				() => svc.translations.listForLocale(actor, projectId, locale),
+			);
+			return c.json({ locale, translations: items, nextCursor });
 		},
 	);
 
@@ -681,35 +696,28 @@ export function createApp(deps: RouterDeps): Hono<Env> {
 			const slot = c.req.query("slot") === "working" ? "working" : undefined;
 			const fallback = c.req.query("fallback") === "omit" ? "omit" : undefined;
 			const excludeStale = c.req.query("excludeStale") === "1";
-			const cursor = c.req.query("cursor");
-			const limit = queryLimit(c.req.query("limit"));
-			if (limit !== undefined || cursor) {
-				const page = await svc.translations.exportBundlePage(
-					actor,
-					projectId,
-					locale,
-					{
+			const { items, nextCursor } = await paginated(
+				{
+					limit: queryLimit(c.req.query("limit")),
+					cursor: c.req.query("cursor"),
+				},
+				async (p) => {
+					const page = await svc.translations.exportBundlePage(
+						actor,
+						projectId,
+						locale,
+						{ slot, fallback, excludeStale, ...p },
+					);
+					return { items: page.entries, nextCursor: page.nextCursor };
+				},
+				() =>
+					svc.translations.exportBundle(actor, projectId, locale, {
 						slot,
 						fallback,
 						excludeStale,
-						limit,
-						cursor,
-					},
-				);
-				return c.json({
-					locale,
-					entries: page.entries,
-					nextCursor: page.nextCursor,
-				});
-			}
-			return c.json({
-				locale,
-				entries: await svc.translations.exportBundle(actor, projectId, locale, {
-					slot,
-					fallback,
-					excludeStale,
-				}),
-			});
+					}),
+			);
+			return c.json({ locale, entries: items, nextCursor });
 		},
 	);
 
