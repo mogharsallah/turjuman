@@ -522,13 +522,7 @@ export class Repository {
 	/** Overwrite a namespace in place (metadata / lifecycle). The name is unchanged,
 	 * so the `NSNAME#` guard is left as-is; use {@link renameNamespace} to change it. */
 	async putNamespace(ns: Namespace): Promise<Namespace> {
-		await this.putItem({
-			PK: projectPK(ns.projectId),
-			SK: namespaceSK(ns.id),
-			entityType: "Namespace",
-			...ns,
-		});
-		return ns;
+		return this.putProjectScoped("Namespace", namespaceSK(ns.id), ns);
 	}
 
 	/**
@@ -1330,13 +1324,7 @@ export class Repository {
 	// ---- glossary -------------------------------------------------------------
 
 	async putGlossaryTerm(term: GlossaryTerm): Promise<GlossaryTerm> {
-		await this.putItem({
-			PK: projectPK(term.projectId),
-			SK: glossarySK(term.id),
-			entityType: "GlossaryTerm",
-			...term,
-		});
-		return term;
+		return this.putProjectScoped("GlossaryTerm", glossarySK(term.id), term);
 	}
 
 	async getGlossaryTerm(
@@ -1361,13 +1349,7 @@ export class Repository {
 	// ---- context rules --------------------------------------------------------
 
 	async putContextRule(rule: ContextRule): Promise<ContextRule> {
-		await this.putItem({
-			PK: projectPK(rule.projectId),
-			SK: contextRuleSK(rule.id),
-			entityType: "ContextRule",
-			...rule,
-		});
-		return rule;
+		return this.putProjectScoped("ContextRule", contextRuleSK(rule.id), rule);
 	}
 
 	async getContextRule(
@@ -1388,13 +1370,7 @@ export class Repository {
 	// ---- examples (the few-shot / translation-memory corpus) ------------------
 
 	async putExample(example: Example): Promise<Example> {
-		await this.putItem({
-			PK: projectPK(example.projectId),
-			SK: exampleSK(example.id),
-			entityType: "Example",
-			...example,
-		});
-		return example;
+		return this.putProjectScoped("Example", exampleSK(example.id), example);
 	}
 
 	async getExample(
@@ -1415,13 +1391,11 @@ export class Repository {
 	// ---- comments (branch-free, per (key, locale) string) ---------------------
 
 	async putComment(comment: Comment): Promise<Comment> {
-		await this.putItem({
-			PK: projectPK(comment.projectId),
-			SK: commentSK(comment.keyId, comment.locale, comment.id),
-			entityType: "Comment",
-			...comment,
-		});
-		return comment;
+		return this.putProjectScoped(
+			"Comment",
+			commentSK(comment.keyId, comment.locale, comment.id),
+			comment,
+		);
 	}
 
 	async listComments(
@@ -1448,13 +1422,11 @@ export class Repository {
 	// ---- escalations (the review router's human exit) -------------------------
 
 	async putEscalation(escalation: Escalation): Promise<Escalation> {
-		await this.putItem({
-			PK: projectPK(escalation.projectId),
-			SK: escalationSK(escalation.id),
-			entityType: "Escalation",
-			...escalation,
-		});
-		return escalation;
+		return this.putProjectScoped(
+			"Escalation",
+			escalationSK(escalation.id),
+			escalation,
+		);
 	}
 
 	async getEscalation(
@@ -1584,13 +1556,7 @@ export class Repository {
 	// ---- webhooks -------------------------------------------------------------
 
 	async putWebhook(webhook: Webhook): Promise<Webhook> {
-		await this.putItem({
-			PK: projectPK(webhook.projectId),
-			SK: webhookSK(webhook.id),
-			entityType: "Webhook",
-			...webhook,
-		});
-		return webhook;
+		return this.putProjectScoped("Webhook", webhookSK(webhook.id), webhook);
 	}
 
 	async getWebhook(
@@ -1627,13 +1593,7 @@ export class Repository {
 	// ---- runs (the agent write primitive) -------------------------------------
 
 	async putRun(run: TranslationRun): Promise<TranslationRun> {
-		await this.putItem({
-			PK: projectPK(run.projectId),
-			SK: runSK(run.id),
-			entityType: "TranslationRun",
-			...run,
-		});
-		return run;
+		return this.putProjectScoped("TranslationRun", runSK(run.id), run);
 	}
 
 	async getRun(
@@ -1724,13 +1684,11 @@ export class Repository {
 	// ---- field reports (production feedback) ----------------------------------
 
 	async putFieldReport(report: FieldReport): Promise<FieldReport> {
-		await this.putItem({
-			PK: projectPK(report.projectId),
-			SK: fieldReportSK(report.id),
-			entityType: "FieldReport",
-			...report,
-		});
-		return report;
+		return this.putProjectScoped(
+			"FieldReport",
+			fieldReportSK(report.id),
+			report,
+		);
 	}
 
 	async getFieldReport(
@@ -1981,6 +1939,22 @@ export class Repository {
 				...(condition ? { ConditionExpression: condition } : {}),
 			}),
 		);
+	}
+
+	/** Put a project-scoped entity in the shared `{ PK: project, SK, entityType,
+	 * ...entity }` item shape every per-project record uses; returns it for chaining. */
+	private async putProjectScoped<T extends { projectId: string }>(
+		entityType: string,
+		sk: string,
+		entity: T,
+	): Promise<T> {
+		await this.putItem({
+			PK: projectPK(entity.projectId),
+			SK: sk,
+			entityType,
+			...entity,
+		});
+		return entity;
 	}
 
 	/** Delete a single item by primary key. */
