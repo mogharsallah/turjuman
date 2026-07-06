@@ -178,7 +178,8 @@ export class EscalationService extends BaseService {
 		const now = new Date().toISOString();
 		const scope = { projectId, keyId };
 		const resolution: Escalation["resolution"] = { valueChosen: value };
-		if (input.spawnExample || input.spawnGlossary) {
+		const spawned = input.spawnExample || input.spawnGlossary;
+		if (spawned) {
 			// The example ships base → chosen value; the base is only read when an
 			// example is spawned.
 			const base = input.spawnExample
@@ -210,7 +211,7 @@ export class EscalationService extends BaseService {
 		});
 		// A spawned Example/GlossaryTerm is a context change → fan out staleness, but
 		// exclude the cell this resolution just accepted so it isn't re-staled.
-		if (input.spawnExample || input.spawnGlossary)
+		if (spawned)
 			await this.context.noteContextChange(projectId, scope, {
 				exceptBranchId: branchId,
 				exceptLocale: locale,

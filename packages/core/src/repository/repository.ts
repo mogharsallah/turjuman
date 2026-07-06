@@ -415,18 +415,26 @@ export class Repository {
 	): Promise<void> {
 		const sets: string[] = ["updatedAt = :t"];
 		const values: Record<string, unknown> = { ":t": new Date().toISOString() };
-		if (patch.name !== undefined)
-			sets.push("#n = :n"), (values[":n"] = patch.name);
-		if (patch.description !== undefined)
-			sets.push("description = :d"), (values[":d"] = patch.description);
-		if (patch.baseLocale !== undefined)
-			sets.push("baseLocale = :b"), (values[":b"] = patch.baseLocale);
-		if (patch.contextRevision !== undefined)
-			sets.push("contextRevision = :cr"),
-				(values[":cr"] = patch.contextRevision);
-		if (patch.requireHumanAccept !== undefined)
-			sets.push("requireHumanAccept = :rh"),
-				(values[":rh"] = patch.requireHumanAccept);
+		if (patch.name !== undefined) {
+			sets.push("#n = :n");
+			values[":n"] = patch.name;
+		}
+		if (patch.description !== undefined) {
+			sets.push("description = :d");
+			values[":d"] = patch.description;
+		}
+		if (patch.baseLocale !== undefined) {
+			sets.push("baseLocale = :b");
+			values[":b"] = patch.baseLocale;
+		}
+		if (patch.contextRevision !== undefined) {
+			sets.push("contextRevision = :cr");
+			values[":cr"] = patch.contextRevision;
+		}
+		if (patch.requireHumanAccept !== undefined) {
+			sets.push("requireHumanAccept = :rh");
+			values[":rh"] = patch.requireHumanAccept;
+		}
 		await this.doc.send(
 			new UpdateCommand({
 				TableName: this.table,
@@ -514,13 +522,7 @@ export class Repository {
 	/** Overwrite a namespace in place (metadata / lifecycle). The name is unchanged,
 	 * so the `NSNAME#` guard is left as-is; use {@link renameNamespace} to change it. */
 	async putNamespace(ns: Namespace): Promise<Namespace> {
-		await this.putItem({
-			PK: projectPK(ns.projectId),
-			SK: namespaceSK(ns.id),
-			entityType: "Namespace",
-			...ns,
-		});
-		return ns;
+		return this.putProjectScoped("Namespace", namespaceSK(ns.id), ns);
 	}
 
 	/**
@@ -856,6 +858,25 @@ export class Repository {
 	}
 
 	/**
+	 * The copy-on-write overlay every resolved read shares: walk the branch chain
+	 * (self→root) and keep the **nearest** branch's item per `keyOf` identity, so a
+	 * child branch's own rows shadow the ancestors' it never touched. Tombstone and
+	 * visibility filtering is the caller's job, applied to the resolved set.
+	 */
+	private async resolveOverlay<T>(
+		projectId: string,
+		branchId: string,
+		list: (branch: string) => Promise<T[]>,
+		keyOf: (item: T) => string,
+	): Promise<T[]> {
+		const byKey = new Map<string, T>();
+		for (const br of await this.branchChain(projectId, branchId))
+			for (const item of await list(br))
+				if (!byKey.has(keyOf(item))) byKey.set(keyOf(item), item);
+		return [...byKey.values()];
+	}
+
+	/**
 	 * Every key definition **visible** on a branch: its own rows overlaid on the
 	 * parent chain, the nearest branch winning per `keyId` (the copy-on-write
 	 * overlay). On `main` this is exactly {@link listKeyDefs}; on a child branch it
@@ -866,17 +887,16 @@ export class Repository {
 		projectId: string,
 		branchId: string,
 	): Promise<TranslationKey[]> {
-		const chain = await this.branchChain(projectId, branchId);
 		// Nearest branch decides each keyId — a live definition surfaces it, a
-		// tombstone (`deleted`) buries it even if an ancestor still has it live.
-		const decided = new Map<string, TranslationKey | null>();
-		for (const br of chain)
-			for (const row of await this.keyDefRows(projectId, br)) {
-				const id = row.id as string;
-				if (!decided.has(id))
-					decided.set(id, row.deleted === true ? null : toKey(row));
-			}
-		return [...decided.values()].filter((k): k is TranslationKey => k !== null);
+		// tombstone (`deleted`) buries it even if an ancestor still has it live (the
+		// nearest row wins the overlay, then tombstones are dropped).
+		const rows = await this.resolveOverlay(
+			projectId,
+			branchId,
+			(br) => this.keyDefRows(projectId, br),
+			(row) => row.id as string,
+		);
+		return rows.filter((row) => row.deleted !== true).map(toKey);
 	}
 
 	/**
@@ -1041,16 +1061,22 @@ export class Repository {
 		projectId: string,
 		branchId: string,
 		locale: string,
+		visibleKeyIds?: Set<string>,
 	): Promise<Translation[]> {
-		const chain = await this.branchChain(projectId, branchId);
-		const byKey = new Map<string, Translation>();
-		for (const br of chain)
-			for (const c of await this.listCellsByLocale(projectId, br, locale))
-				if (!byKey.has(c.keyId)) byKey.set(c.keyId, c); // nearest branch wins
-		const visible = new Set(
-			(await this.listKeyDefsResolved(projectId, branchId)).map((k) => k.id),
+		const cells = await this.resolveOverlay(
+			projectId,
+			branchId,
+			(br) => this.listCellsByLocale(projectId, br, locale),
+			(c) => c.keyId,
 		);
-		return [...byKey.values()].filter((c) => visible.has(c.keyId));
+		// A caller that already resolved the visible key defs (export, per-locale QA)
+		// passes them in, so this doesn't re-walk the chain for the same set per call.
+		const visible =
+			visibleKeyIds ??
+			new Set(
+				(await this.listKeyDefsResolved(projectId, branchId)).map((k) => k.id),
+			);
+		return cells.filter((c) => visible.has(c.keyId));
 	}
 
 	/** One page of a branch×locale's live cells. `cursor` is the opaque token
@@ -1111,12 +1137,12 @@ export class Repository {
 		branchId: string,
 		keyId: string,
 	): Promise<Translation[]> {
-		const chain = await this.branchChain(projectId, branchId);
-		const byLocale = new Map<string, Translation>();
-		for (const br of chain)
-			for (const c of await this.listCellsByKey(projectId, br, keyId))
-				if (!byLocale.has(c.locale)) byLocale.set(c.locale, c);
-		return [...byLocale.values()];
+		return this.resolveOverlay(
+			projectId,
+			branchId,
+			(br) => this.listCellsByKey(projectId, br, keyId),
+			(c) => c.locale,
+		);
 	}
 
 	async deleteCell(
@@ -1303,13 +1329,7 @@ export class Repository {
 	// ---- glossary -------------------------------------------------------------
 
 	async putGlossaryTerm(term: GlossaryTerm): Promise<GlossaryTerm> {
-		await this.putItem({
-			PK: projectPK(term.projectId),
-			SK: glossarySK(term.id),
-			entityType: "GlossaryTerm",
-			...term,
-		});
-		return term;
+		return this.putProjectScoped("GlossaryTerm", glossarySK(term.id), term);
 	}
 
 	async getGlossaryTerm(
@@ -1334,13 +1354,7 @@ export class Repository {
 	// ---- context rules --------------------------------------------------------
 
 	async putContextRule(rule: ContextRule): Promise<ContextRule> {
-		await this.putItem({
-			PK: projectPK(rule.projectId),
-			SK: contextRuleSK(rule.id),
-			entityType: "ContextRule",
-			...rule,
-		});
-		return rule;
+		return this.putProjectScoped("ContextRule", contextRuleSK(rule.id), rule);
 	}
 
 	async getContextRule(
@@ -1361,13 +1375,7 @@ export class Repository {
 	// ---- examples (the few-shot / translation-memory corpus) ------------------
 
 	async putExample(example: Example): Promise<Example> {
-		await this.putItem({
-			PK: projectPK(example.projectId),
-			SK: exampleSK(example.id),
-			entityType: "Example",
-			...example,
-		});
-		return example;
+		return this.putProjectScoped("Example", exampleSK(example.id), example);
 	}
 
 	async getExample(
@@ -1388,13 +1396,11 @@ export class Repository {
 	// ---- comments (branch-free, per (key, locale) string) ---------------------
 
 	async putComment(comment: Comment): Promise<Comment> {
-		await this.putItem({
-			PK: projectPK(comment.projectId),
-			SK: commentSK(comment.keyId, comment.locale, comment.id),
-			entityType: "Comment",
-			...comment,
-		});
-		return comment;
+		return this.putProjectScoped(
+			"Comment",
+			commentSK(comment.keyId, comment.locale, comment.id),
+			comment,
+		);
 	}
 
 	async listComments(
@@ -1421,13 +1427,11 @@ export class Repository {
 	// ---- escalations (the review router's human exit) -------------------------
 
 	async putEscalation(escalation: Escalation): Promise<Escalation> {
-		await this.putItem({
-			PK: projectPK(escalation.projectId),
-			SK: escalationSK(escalation.id),
-			entityType: "Escalation",
-			...escalation,
-		});
-		return escalation;
+		return this.putProjectScoped(
+			"Escalation",
+			escalationSK(escalation.id),
+			escalation,
+		);
 	}
 
 	async getEscalation(
@@ -1557,13 +1561,7 @@ export class Repository {
 	// ---- webhooks -------------------------------------------------------------
 
 	async putWebhook(webhook: Webhook): Promise<Webhook> {
-		await this.putItem({
-			PK: projectPK(webhook.projectId),
-			SK: webhookSK(webhook.id),
-			entityType: "Webhook",
-			...webhook,
-		});
-		return webhook;
+		return this.putProjectScoped("Webhook", webhookSK(webhook.id), webhook);
 	}
 
 	async getWebhook(
@@ -1600,13 +1598,7 @@ export class Repository {
 	// ---- runs (the agent write primitive) -------------------------------------
 
 	async putRun(run: TranslationRun): Promise<TranslationRun> {
-		await this.putItem({
-			PK: projectPK(run.projectId),
-			SK: runSK(run.id),
-			entityType: "TranslationRun",
-			...run,
-		});
-		return run;
+		return this.putProjectScoped("TranslationRun", runSK(run.id), run);
 	}
 
 	async getRun(
@@ -1697,13 +1689,11 @@ export class Repository {
 	// ---- field reports (production feedback) ----------------------------------
 
 	async putFieldReport(report: FieldReport): Promise<FieldReport> {
-		await this.putItem({
-			PK: projectPK(report.projectId),
-			SK: fieldReportSK(report.id),
-			entityType: "FieldReport",
-			...report,
-		});
-		return report;
+		return this.putProjectScoped(
+			"FieldReport",
+			fieldReportSK(report.id),
+			report,
+		);
 	}
 
 	async getFieldReport(
@@ -1843,12 +1833,12 @@ export class Repository {
 		return undefined;
 	}
 
-	/** The branch ids from `branchId` up to the root, self first. */
 	/** Per-instance memo of resolved branch chains. `parentBranchId` is immutable
 	 * after creation and branch ids are never reused, so a chain that terminates at
 	 * `main` is valid for the life of the process. */
 	private readonly branchChainCache = new Map<string, string[]>();
 
+	/** The branch ids from `branchId` up to the root, self first. */
 	private async branchChain(
 		projectId: string,
 		branchId: string,
@@ -1858,18 +1848,15 @@ export class Repository {
 		if (cached) return cached;
 		const chain: string[] = [];
 		let current: string | null | undefined = branchId;
-		let complete = false;
 		while (current) {
 			chain.push(current);
-			if (current === MAIN_BRANCH_ID) {
-				complete = true;
-				break;
-			}
+			if (current === MAIN_BRANCH_ID) break;
 			current = (await this.getBranch(projectId, current))?.parentBranchId;
 		}
 		// Only memoize a chain that reaches `main`; an incomplete one (a branch row
 		// not yet visible) could still be completed by a later write.
-		if (complete) this.branchChainCache.set(cacheKey, chain);
+		if (chain.at(-1) === MAIN_BRANCH_ID)
+			this.branchChainCache.set(cacheKey, chain);
 		return chain;
 	}
 
@@ -1957,6 +1944,22 @@ export class Repository {
 				...(condition ? { ConditionExpression: condition } : {}),
 			}),
 		);
+	}
+
+	/** Put a project-scoped entity in the shared `{ PK: project, SK, entityType,
+	 * ...entity }` item shape every per-project record uses; returns it for chaining. */
+	private async putProjectScoped<T extends { projectId: string }>(
+		entityType: string,
+		sk: string,
+		entity: T,
+	): Promise<T> {
+		await this.putItem({
+			PK: projectPK(entity.projectId),
+			SK: sk,
+			entityType,
+			...entity,
+		});
+		return entity;
 	}
 
 	/** Delete a single item by primary key. */

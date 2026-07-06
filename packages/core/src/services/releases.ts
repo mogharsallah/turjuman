@@ -37,28 +37,24 @@ export class ReleaseService extends BaseService {
 			await this.repo.listKeyDefsResolved(projectId, branch)
 		).filter((k) => k.state !== "deprecated");
 		const entries: Release["entries"] = [];
-		for (const code of locales)
+		for (const code of locales) {
+			// One resolved query per locale (own cells + fall-through, nearest branch
+			// wins) indexed by key, instead of a point-get per key×locale — a release
+			// on a large project would otherwise be O(locales × keys) round-trips.
+			const byKey = new Map(
+				(
+					await this.repo.listCellsByLocaleResolved(projectId, branch, code)
+				).map((c) => [c.keyId, c]),
+			);
 			for (const key of keys) {
-				// Resolved: pin an accepted cell inherited from the parent chain too, so
-				// a child-branch release isn't missing every value it never re-wrote.
-				// The pinned `head` seq resolves back through the chain via
-				// `getVersionResolved` (the version may live on an ancestor branch).
-				const cell = await this.repo.getCellResolved(
-					projectId,
-					branch,
-					key.id,
-					code,
-				);
 				// Pin only accepted cells (those with a head version): a release ships
 				// approved values, never drafts. The base locale now carries a head too
 				// (source writes append a version), so it is pinned like any locale.
-				if (cell?.value.head !== undefined)
-					entries.push({
-						keyId: key.id,
-						locale: code,
-						versionRef: cell.value.head,
-					});
+				const cell = byKey.get(key.id);
+				if (cell?.head !== undefined)
+					entries.push({ keyId: key.id, locale: code, versionRef: cell.head });
 			}
+		}
 		const now = new Date().toISOString();
 		const release: Release = {
 			id: newId("rel"),

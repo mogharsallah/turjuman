@@ -134,7 +134,8 @@ export class FieldReportService extends BaseService {
 		const now = new Date().toISOString();
 		const scope = { projectId, keyId };
 		const resolution: FieldReport["resolution"] = {};
-		if (input.spawnExample || input.spawnGlossary) {
+		const spawned = input.spawnExample || input.spawnGlossary;
+		if (spawned) {
 			// The example ships base → the current (fixed) cell value; the cells are
 			// read only when an example is spawned.
 			const [cell, base] = input.spawnExample
@@ -164,7 +165,7 @@ export class FieldReportService extends BaseService {
 		});
 		// Exclude the reported cell from the fan-out so the fix a run applied isn't
 		// immediately re-staled by the context this resolution spawned.
-		if (input.spawnExample || input.spawnGlossary)
+		if (spawned)
 			await this.context.noteContextChange(projectId, scope, {
 				exceptBranchId: branchId,
 				exceptLocale: locale,

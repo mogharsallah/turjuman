@@ -153,7 +153,10 @@ export class NamespaceService extends BaseService {
 		input: CreateNamespaceInput,
 	): Promise<Namespace> {
 		const now = new Date().toISOString();
-		return this.repo.putNamespace({
+		// createNamespace (not putNamespace) writes the companion NSNAME# guard in a
+		// transaction, so concurrent creates of the same name can't both win — the
+		// race-safety create() and ensure() rely on.
+		return this.repo.createNamespace({
 			id: newId("ns"),
 			projectId,
 			name: input.name,
